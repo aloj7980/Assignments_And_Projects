@@ -1,0 +1,1 @@
+Welcome to my personal projects page. In this repository I showcase the projects I have been a part of that are most relevant to the employment opportunities I'm seeking. These are by no means the only projects I have been a part of, just the ones that are the most open ended and best reflect my growing skillset at an aspiring data scientist. 
