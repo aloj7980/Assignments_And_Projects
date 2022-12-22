@@ -51,7 +51,7 @@ newDf <- newDf %>%
 View(newDf)
 
 ##Functions to build decision tree
-percintileStats = c("PER","TS%","3PAr","FTr","ORB%","DRB%","TRB%","AST%","STL%",
+percentileStats = c("PER","TS%","3PAr","FTr","ORB%","DRB%","TRB%","AST%","STL%",
                     "BLK%","TOV%","USG%","OWS","DWS","WS","WS/48","OBPM","DBPM",
                     "BPM","VORP","FG%","3P%","2P%","eFG%","FT%","ORB","DRB","TRB",
                     "AST","STL","BLK","TOV","PF","PTS")
