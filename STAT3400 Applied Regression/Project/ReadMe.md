@@ -1,0 +1,1 @@
+This project explores the prediction of heart disease using logistic regression. Note that the heart.csv file contains the data filtered for outliers so if you try to run the Project Paper 1 rmd file you will not get the same plots as they are in the pdf.
