@@ -1,0 +1,201 @@
+---
+title: "Mathematical Slope Estimation"
+author: "Dr. Kris Pruitt"
+date: "14 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce mathematical methods for conducting inferential statistical analysis on the slope parameter of a simple linear regression model. Students should leave this lesson with the ability to construct a confidence interval and to complete a hypothesis test of the slope using mathematical models based on theory.
+
+## Reason 1
+
+In the previous lesson, we constructed confidence intervals for the slope parameter using bootstrap resampling. This computational method does not require any assumptions about the characteristics of the sampling distribution. However, the slope parameter is in fact a *mean*. The slope represents the *average* change in the response variable for a one unit increase in the predictor variable. Consequently, we can apply the results of the Central Limit Theorem (CLT) so long as the independence and size assumptions for the sample are fulfilled. 
+
+When relying on the results of the CLT, many software packages will replace the Standard Normal distribution with the t-distribution when computing a critical value for the confidence interval. As we've seen previously, the t-distribution provides more conservative values than the Standard Normal when the sample size is small. However, for large sample sizes, the t-distribution and Standard Normal are nearly equivalent. Consequently, we use the following formula for a mathematical confidence interval for the true slope parameter $\beta_1$.
+
+$$
+\beta_1 \in \hat{\beta}_1 \pm t_{n-2,\alpha/2} \cdot SE_{\hat{\beta}_1}
+$$
+
+There are two interesting differences in this formula compared to previous confidence intervals we constructed. The first is that the t-distribution now has only $df=n-2$ degrees of freedom rather than $n-1$. The reason is that the estimation of the standard error requires the estimation of two other parameters ($\beta_0$ and $\beta_1$). Consequently, we lose another degree of freedom compared to confidence intervals for the population mean. The second difference in this equation is that we've used the generic notation ($SE_{\hat{\beta}_1}$) for the standard error of the estimated slope. This is because the actual formula is quite complex and involves the estimation of the standard deviation of the residuals. Typically, we leverage statistical software to compute this standard error. We'll begin the lesson by doing exactly that.
+
+## Example 1
+
+For this example, we will once again use the gestation period data from the `mosaicData` package. Load the package, import the table, and wrangle the data as we did in the previous lesson.
+
+```{r}
+#load package
+library(mosaicData)
+
+#import data
+data(Gestation)
+
+#wrangle data
+births <- Gestation %>%
+  transmute(months=gestation/30.42,
+            weight=wt/16) %>%
+  na.omit() %>%
+  filter(months>7,months<11)
+```
+
+Once again, we will fit the simple linear regression model with gestation period (months) as the predictor and birth weight (pounds) as the response.
+
+```{r}
+#fit regression model
+model <- lm(weight~months,data=births)
+
+#display model statistics
+summary(model)
+```
+
+Suppose we want a 90% confidence interval for the true slope parameter in this model. Our point estimate for the slope parameter is $\hat{\beta}_1=0.996$. The summary output for the model also provides the standard error of $SE_{\hat{\beta}_1}=0.061$. Thus, all we are missing to compute a confidence interval is the critical value from the t-distribution. We compute that directly as:
+
+```{r}
+#compute critical value
+qt(p=0.05,df=nrow(births)-2,lower.tail=FALSE)
+```
+
+Now we can put all the pieces together to complete the confidence interval.
+
+```{r}
+#compute lower bound
+0.996-1.65*0.061
+
+#compute lower bound
+0.996+1.65*0.061
+```
+
+We are 90% confident that for each additional month of gestation, the baby's birth weight will increase by between 0.895 and 1.097 pounds. We can also avoid the manual calculations by calling the `confint()` function on the regression model.
+
+```{r}
+confint(model,level=0.9)
+```
+
+Notice we get confidence intervals at the specified level for both the intercept and the slope. The interval for the slope is the same as what we computed manually (subject to rounding). Now you can compute a mathematical confidence interval.
+
+## Practice 1
+
+Construct a 95% confidence interval for the estimated slope that associates the mother's height and pre-pregnancy weight. Then answer the following questions:
+
+* What is the proper interpretation of the confidence interval, in the context of the problem?
+* How does this interval compare to what you computed in the previous lesson?
+* Why might the computational and mathematical intervals differ?
+
+------------------------------------------------------------------------
+```{r}
+model2 <- lm(wt.1~ht,data=Gestation)
+confint(model2,level=0.95)
+summary(model2)
+```
+
+
+## Reason 2
+
+In the previous section, we found that the interval $(0.895,1.097)$ is a reasonable estimate for the value of the true slope parameter, at the $\alpha=0.1$ level of significance. This interval does *not* include zero, thus we can conclude that there is some association between the gestation period of a baby and its birth weight. We can reach the same conclusion by conducting an equivalent hypothesis test. However, rather than simulating a null distribution via randomization, we will apply mathematical theory and use the t-distribution as the null.
+
+## Example 2
+
+If we let $\beta_1$ be the true slope parameter that associates gestation period and birth weight, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0: \; \beta_1=0 \\
+H_A: \; \beta_1 \neq 0
+\end{aligned}
+$$
+
+The null hypothesis suggests there is no association between the two variables, while the alternate claims there is an association. We choose $\alpha=0.1$ as the level of significance to maintain equivalence with the previous confidence interval. Our test statistic is the point estimate for the slope of $\hat{\beta}_1=0.996$. However, we are going to employ the t-distribution as the mathematical null distribution. As a result, we must standardize the test statistic to the t-distribution using the following formula:
+
+$$
+\text{t-stat}=\frac{\hat{\beta}_1-0}{SE_{\hat{\beta}_1}}
+$$
+
+The standard error for the estimated slope is available in the summary output.
+
+```{r}
+#display model coefficients
+coefficients(summary(model))
+```
+
+We can manually compute the standardized t-statistic as follows:
+
+```{r}
+#compute t-statistic
+0.996/0.061
+```
+
+However, we notice that this value is already provided in the summary output! The `t value` in the output is the standardized t-statistic, so there is no need to compute it manually. Now we can place this test statistic on the null distribution to determine its significance.
+
+```{r}
+#simulate null distribution by drawing from t-distribution
+set.seed(653)
+null_dist <- data.frame(tstat=rt(n=1000,df=nrow(births)-2))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist,aes(tstat)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=qt(p=0.05,df=nrow(births)-2,lower.tail=FALSE),
+             color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=qt(p=0.05,df=nrow(births)-2,lower.tail=TRUE),
+             color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=16.349,color='red',size=1) +
+  labs(title='Null Distribution (t-distribution)',
+       x='t-statistic',
+       y='Density') +
+  theme_bw()
+```
+
+Notice our t-distribution once again uses $df=n-2$ degrees of freedom rather than $n-1$. Our test statistic (solid red line) is well beyond the rejection threshold (dashed red lines) associated with an $\alpha=0.1$ significance level. We can directly compute the p-value associated with this test statistic as:
+
+```{r}
+#compute p-value
+pt(q=16.349,df=nrow(births)-2,lower.tail=FALSE)
+```
+
+The p-value is effectively zero. Notice in the summary output we also get a p-value in the `Pr(>|t|)` column that is very close to the order of magnitude of the p-value computed directly here. The differences are simply due to rounding. In either case, we have sufficient statistical evidence to suggest that there *is* an association between the gestation period of a baby and its birth wweight. Now you can complete a mathematical hypothesis test for the slope parameter.
+
+## Practice 2
+
+Complete a mathematical hypothesis test for the slope parameter that estimates the association between a mother's height and pre-pregnancy weight. Use a significance level of $\alpha=0.05$. Then answer the following questions:
+
+* What is the conclusion of your test, in the context of the problem?
+* How does this result compare to your confidence interval from the previous section?
+* How does the interpretation of the test results differ from that of R-squared?
+
+```{r}
+coefficients(summary(model2))
+```
+
+
+
+```{r}
+#simulate null distribution by drawing from t-distribution
+set.seed(653)
+null_dist <- data.frame(tstat=rt(n=1000,df=nrow(Gestation)-2))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist,aes(tstat)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=qt(p=0.025,df=nrow(Gestation)-2,lower.tail=FALSE),
+             color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=qt(p=0.025,df=nrow(Gestation)-2,lower.tail=TRUE),
+             color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=16.736,color='red',size=1) +
+  labs(title='Null Distribution (t-distribution)',
+       x='t-statistic',
+       y='Density') +
+  theme_bw()
+```
+

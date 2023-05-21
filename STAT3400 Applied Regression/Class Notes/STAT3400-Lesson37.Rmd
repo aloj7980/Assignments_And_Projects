@@ -1,0 +1,230 @@
+---
+title: "Inference for Multiple Regression"
+author: "Dr. Kris Pruitt"
+date: "21 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to conduct inferential statistical analyses of a multiple linear regression model. Students should leave this lesson with the ability to construct confidence intervals and complete hypothesis tests on the slope parameters of a multiple linear regression model.
+
+
+## Reason 1
+
+In previous lessons, we constructed confidence intervals and completed hypothesis tests on the sole slope parameter of a simple linear regression model. For this lesson, we extend those concepts to the multiple slope parameters of the model shown below.
+
+$$
+y=\beta_0 + \beta_1x_1 + \beta_2x_2 + ... + \beta_kx_k + \epsilon
+$$
+
+We are typically uninterested in making inferences about the intercept parameter, since it often has no real-world interpretation. Instead, we focus on the $k$ slope parameters, since they indicate the change in the response for a one unit increase in the associated predictor (all other predictors held constant). Our inferential analysis of these parameters begins with an analysis of variance (ANOVA) to determine if *any* of the predictors are significant.
+
+## Example 1
+
+In order to demonstrate an ANOVA for the slope parameters of a multiple linear regression model we will use a sample of National Basketball Association (NBA) games from the 2017-2019 seasons. Specifically, we will fit a model for margin of victory (`MOV`) as a function of free-throw percentage (`X1PP`), two-point percentage (`X2PP`), and three-point percentage (`X3PP`). Import and wrangle the data below.
+
+```{r}
+#import data
+nba <- read.csv('data/nba_data.csv') %>%
+  select(MOV,X1PP,X2PP,X3PP)
+```
+
+Let's fit a multiple linear regression model and investigate the ANOVA that is automatically included in the summary output.
+
+```{r}
+#fit model
+model <- lm(MOV~.,data=nba)
+
+#display model output
+summary(model)
+```
+
+Notice the last line of output includes an F-statistic. This F-statistic is associated with an ANOVA hypothesis test. The hypotheses associated with the test are:
+
+$$
+\begin{aligned}
+H_0:& \; \beta_1=\beta_2=...=\beta_k=0 \\
+H_A:& \; \text{At least one} \; \beta_i \neq 0
+\end{aligned}
+$$
+
+The test statistic resulting from the data is $F=163$. When we compare this test statistic to the null distribution (F-distribution) we obtain a p-value that is effectively zero. Thus, we reject the null hypothesis of the ANOVA. There is sufficient statistical evidence to suggest that at least of the predictor variables has a non-zero coefficient. In other words, at least one of the shooting percentages is a useful predictor of margin of victory. In order to determine which one(s), we must refer to the individual hypothesis tests on each parameter.
+
+Within the `Coefficients` table we have test statistics (`t value`) and p-values (`Pr(>|t|)`) for the three slope parameters. For each parameter $\beta_i$, the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \beta_i=0 \\
+H_A:& \; \beta_i \neq 0
+\end{aligned}
+$$
+
+While we use an F-distribution for the ANOVA test, we use a t-distribution for the individual parameter tests. The p-values for the hypothesis tests on the two-point and three-point parameters are effectively zero. The p-value for free-throws is larger, but still below most reasonable levels of significance (e.g., $\alpha=0.01$). Hence, we reject the null hypothesis for each of the three individual hypothesis tests. In other words, there is significant statistical evidence to suggest *all* of the parameter values differ from zero. All three shooting percentages are useful predictors of margin of victory. 
+
+Now you can practice hypothesis testing on a different regression model.
+
+## Practice 1
+
+Load the `mdsr` package and import the `MLB_teams` data table. Based on this Major League Baseball (MLB) data, fit a linear regression model to predict fan attendance based on the total payroll and win percentage of the team. Then answer the following questions:
+
+* What is the correct interpretation of the ANOVA, in the context of the problem?
+* What is the correct interpretation of the individual t-tests, in the context of the problem?
+* Do the results of the hypothesis tests make intuitive real-world sense?
+
+------------------------------------------------------------------------
+```{r}
+library(mdsr)
+data(MLB_teams)
+```
+```{r}
+#fit model
+model2 <- lm(attendance~payroll+WPct,data=MLB_teams)
+
+#display model output
+summary(model2)
+```
+
+
+## Reason 2
+
+Hypothesis tests on the parameters of a regression model are not the only type of inference we've learned. We can also construct confidence intervals for the true value of the parameters that are found to be significant. The mathematical formula for a confidence interval on a multiple regression parameter is similar to the simple regression case:
+
+$$
+\beta_i \in \hat{\beta}_i \pm t_{n-(k+1),\alpha/2} \cdot SE_{\hat{\beta}_i}
+$$
+
+Notice, however, that we adjust the degrees of freedom for the t-distribution based on the total number of predictors ($k$) in the model. The computation of standard error for the estimated parameter also adjusts for the existence of multiple predictors, but we will leverage the software for this calculation. Let's continue the lesson by computing and interpreting confidence intervals for coefficients of significant predictor variables.
+
+## Example 2
+
+In the NBA example, we found that all three shooting percentages are significant predictors of a team's margin of victory. Now we might be interested in estimating the value of a one-percentage-point increase in each type of shot. The model output provides the point estimates and standard errors for each predictor coefficient.
+
+```{r}
+#display coefficient output
+coefficients(summary(model))
+```
+
+So, if we wanted a confidence interval for any individual coefficient, we just need to determine the critical value. Suppose we want a 95% confidence interval for the coefficient on three-point shooting percentage. The critical value is calculated as follows:
+
+```{r}
+#compute critical value
+qt(p=0.025,df=nrow(nba)-4,lower.tail=FALSE)
+```
+
+Thus, the bounds for the confidence interval are:
+
+```{r}
+#compute lower bound
+66.975-1.962*4.145
+
+#compute upper bound
+66.975+1.962*4.145
+```
+
+We are 95% confident that for every percentage-point increase in three-point shooting percentage a team's margin of victory will increase by between 0.588 and 0.751 points. This assumes free-throw percentage and two-point percentage are held constant. Notice also that we needed to adjust decimal places to account for the reference to "percentage-point" increase.
+
+Keep in mind that the critical value and standard error calculations demonstrated above rely on mathematical theory (e.g., t-distribution). If the required assumptions are not in place, then we must pursue computational (rather than mathematical) approaches to constructing the confidence intervals. We'll check the linear regression assumptions in the next section. However, if the assumptions are met, we can employ the `confint()` function to obtain the confidence intervals rather than computing them manually.
+
+```{r}
+#compute confidence intervals
+confint(model,level=0.95)
+```
+
+Now you can practice constructing confidence intervals in a different problem context.
+
+## Practice 2
+
+Using your model from the previous practice, construct a 90% confidence interval for the coefficient on the team's winning percentage. Compute the interval manually at first and then check your answer using the `confint()` function. Afterward, answer the following questions:
+
+* What is the proper interpretation of your confidence interval, in the context of the problem?
+* What does this interpretation assume about the team's payroll?
+* If you increased your confidence level to 99%, what would happen to the width of the interval?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+In order for our inferences regarding slope parameters to be valid, we must meet the four assumptions of linear regression:
+
+* Linearity
+* Independence
+* Normality
+* Equal variance
+
+Let's check each of these assumptions using diagnostic plots regarding the residuals of the model.
+
+## Example 3
+
+For the NBA model, we cannot assess the linearity of the model based on a scatter plot of the raw data. There are too many dimensions for such a visualization. However, we can evaluate linearity using a Residuals versus Fitted plot.
+
+```{r}
+#plot residuals versus fitted values
+plot(model,which=1)
+```
+
+Based on this plot, there is no obvious increasing or decreasing pattern in the residuals. They appear to be relatively evenly distributed above and below the fitted "line" (i.e., hyperplane), which suggests that a linear model is appropriate for associating the shooting percentages with margin of victory.
+
+Next, we check for serial correlation (i.e., lack of independence) by visualizing the residuals as a function of individual predictors. For example, we can generate a scatter plot of the residuals as a function of free-throw percentage.
+
+```{r}
+#add residuals to data
+nba_resid <- nba %>%
+  mutate(residuals=resid(model))
+
+#plot residuals versus free throws
+ggplot(data=nba_resid,aes(x=X1PP,y=residuals)) +
+  geom_point() +
+  geom_hline(yintercept=0,color='red',linetype='dashed') +
+  labs(x='Free-Throw Percentage (decimal)',
+       y='Residual Error (points)') +
+  theme_bw()
+```
+
+We see no serial correlation here. As free-throw percentage increases, there is no increasing or decreasing pattern in consecutive residuals. The same is true for the other two shooting percentages (check this on your own!). Thus, the independence assumption appears to be fulfilled.
+
+Next, we check the Normality assumption based on a Q-Q plot of the residuals.
+
+```{r}
+#plot Normal Q-Q for residuals
+plot(model,which=2)
+```
+
+With the exception of two or three observations, the residuals appear almost perfectly Normally distributed. Observations 953 and 110 might warrant further investigation as outliers, but they are not extreme enough to put the Normality assumption in jeopardy. In addition the the residuals being Normally distributed, we also assume they are centered on zero. Visually, we can see this in the previous Residuals versus Fitted plot, but we could also check the validity of this assumption by directly computing the mean.
+
+```{r}
+#compute mean of residuals
+mean(nba_resid$residuals)
+```
+
+This value is close enough to zero for our purposes! The final condition for our linear regression model is that the variance of the residuals is constant across all predicted values. We can visually check this assumption using a Scale-Location plot.
+
+```{r}
+#plot scale-location
+plot(model,which=3)
+```
+
+Here we are looking for any sort of increasing or decreasing pattern in the standardized residuals. Other than a negligible increase at the end, we see no such pattern. This suggests the variability of the residuals remains constant. We can extract the residual standard error directly from the model output.
+
+```{r}
+#extract sigma
+summary(model)$sigma
+```
+
+The combination of the last two conditions tells us that the residuals are Normally distributed with a mean of 0 and a standard deviation of 11.8 points. All four technical conditions appear to be satisfied, so we can feel confident in the inferential analysis conducted in the previous two sections of the lesson. Now you can check the assumptions of linear regression on your own model.
+
+## Practice 3
+
+Using your MLB model from previous practices, check all four assumptions of linear regression. Comment on whether each condition is fulfilled. If any condition is not fulfilled, what options do you have for alternative approaches?
+

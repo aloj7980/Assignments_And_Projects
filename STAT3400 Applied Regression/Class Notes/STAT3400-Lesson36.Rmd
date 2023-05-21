@@ -1,0 +1,302 @@
+---
+title: "Model Conditions"
+author: "Dr. Kris Pruitt"
+date: "17 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce methods for checking the four technical conditions (assumptions) of linear regression. Students should leave this lesson with the ability to investigate and diagnose violations of linearity, independence, Normality, and equal variance (LINE).
+
+
+## Reason 1
+
+The first technical condition for fitting a linear regression model is, appropriately, **linearity**. A simple linear regression model attempts to estimate the parameters of the following function:
+
+$$
+y=\beta_0 + \beta_1x + \epsilon
+$$
+
+This function is inherently linear, so it would make no sense to attempt to fit such a model to a nonlinear association. We'll begin the lesson by exploring diagnostic methods for checking the linearity assumption.
+
+## Example 1
+
+For this example, we will employ a sample of fish caught in a lake in Finland. The data includes the fish species, height, weight, width, and various lengths to different parts of the tail. The weights are in grams and all other measurements are in centimeters.
+
+```{r}
+#import fish data
+fish <- read.csv('data/fish_data.csv') %>%
+  filter(Weight>0)
+```
+
+Suppose we are interested in the association between a fish's length (predictor) and its weight (response). We might begin the analysis of this association with a scatter plot.
+
+```{r}
+#plot length versus weight
+ggplot(data=fish,aes(x=Length1,y=Weight)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  scale_x_continuous(limits=c(5,45),breaks=seq(5,45,5)) +
+  scale_y_continuous(limits=c(0,1200),breaks=seq(0,1200,100)) +
+  labs(title='Fish Caught in Finland',
+       x='Length (cm)',
+       y='Weight (g)',
+       caption='Brofeldt (1917)') +
+  theme_bw()
+```
+
+Clearly length and weight are associated in a nonlinear manner. It seems almost silly to try and fit a linear function (blue line) to this data. Notice all of the observations start out above the regression line, then they are almost exclusively below the line, then they are once again all above the line. This is a clear indication that the linearity assumption is violated.
+
+Another visual method for assessing linearity is to use a diagnostic plot of the residuals after fitting the regression line. Let's fit a linear model and generate the first default diagnostic plot.
+
+```{r}
+#fit linear regression model
+model1 <- lm(Weight~Length1,data=fish)
+
+#display first diagnostic plot
+plot(model1,which=1)
+```
+
+This diagnostic is called a Residuals versus Fitted plot. The purpose of this plot is to look for patterns in the residual values across the range of predicted (fitted) values. Ideally, there would be *no* pattern. We need the residuals to vary randomly above and below the average value of zero. This is equivalent to the observations varying randomly above and below the fitted line. But we do not see that behavior here. Instead, the red line in the plot indicates a nonlinear pattern in the residuals, which in turn suggests a nonlinear relationship in the original data.
+
+Based on two separate visual diagnostics, the association between a fish's length and weight violates the linearity assumption. Thus, we are using the **wrong model**. We could try to remedy this by transforming the response variable (e.g., square root) or by pursuing more advanced nonlinear models. Instead, we'll continue the investigation of the other linear modeling conditions. But first, you can practice checking the linearity assumption.
+
+## Practice 1
+
+Based on a scatter plot and a diagnostic plot, evaluate the legitimacy of the linearity assumption for a model that associates a fish's width (predictor) and its length (response). Then answer the following questions:
+
+* How would you describe the shape, direction, and strength of association between the variables?
+* Does this association make intuitive sense in the context of the problem?
+* Based on your two plots, do you believe the linearity condition is legitimate?
+
+------------------------------------------------------------------------
+```{r}
+#plot length versus weight
+ggplot(data=fish,aes(x=Width,y=Length1)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  scale_x_continuous(limits=c(0,10),breaks=seq(0,10,1)) +
+  scale_y_continuous(limits=c(0,100),breaks=seq(0,100,10)) +
+  labs(title='Fish Caught in Finland',
+       x='Width (cm)',
+       y='Length (cm)',
+       caption='Brofeldt (1917)') +
+  theme_bw()
+```
+```{r}
+#fit linear regression model
+model2 <- lm(Length1~Width,data=fish)
+
+#display first diagnostic plot
+plot(model2,which=1)
+```
+
+
+## Reason 2
+
+The second model condition in the LINE acronym is **independence**. As with almost all of the statistical techniques we've studied in this course, the observations in the sample must be independent of one another. Otherwise, our parameter estimates could be biased and unrepresentative of the true association in the population. For regression, the independence actually refers to the residuals, but the idea is the same. Common sources of dependence are:
+
+* Proximity in time
+* Proximity in space
+* Repetition
+
+If sample observations are gathered in such a way that they are close in time or space, then the residuals often violate independence. Similarly, if observations are frequently repeated via administrative errors, then the residuals could be dependent. The best method for avoiding violations of independence is to gather a random sample. However, *truly random* samples can be difficult to obtain. We'll continue the lesson by discussing logical and analytical methods for evaluating independence.
+
+## Example 2
+
+Returning to the fish example, we first consider logical assessments of independence. In other words, does it make sense that the measurements of one fish in this Finnish lake would influence the measurements of another fish? Possibly yes! There is obviously proximity in space. All of these fish live in the same lake, so it is possible that some of them are from the same bloodline. If a larger fish is more likely to produce larger offspring, then the measurements of some fish could be dependent. Similarly, if all of the fish were caught within a short time frame (i.e., days or weeks), then there could be seasonal patterns that violate independence due to proximity in time.
+
+Conceptually, it can be difficult to determine violations of independence after the fact. We might like to ask the people who caught the fish, but given this study was conducted in Finland in 1917 that would be challenging to say the least. Ideally, we could have controlled this experiment by randomly choosing different locations on the lake at different times and seasons. However, we do not have that luxury. Instead, we must decide whether the potential violations are significant enough to invalidate our results. Though conceptual thought experiments are a good start, we would also like more objective methods for assessing independence.
+
+When dealing with time series data (i.e., time is a predictor variable), independence is often violated due to autocorrelation (aka serial correlation). This issue appears when the response variable changes over time in some predictable manner. One common analytical method for testing for autocorrelation is the Durbin-Watson test. The Durbin-Watson method is a hypothesis test that assumes no serial correlation in the residuals (null) and then looks for evidence of correlation using time lags (alternate). However, this method is not appropriate in our case, because we have no concept of time lags in our data.
+
+For non-time series data like ours, we can look for patterns in the residuals as a function of the predictor variable(s). If the residuals consistently have the same sign (positive or negative) for a particular range of predictor values, then independence could be violated. In our case, we want to review a plot of the weight of the fish versus the residual error.
+
+```{r}
+#add residuals to data
+fish_resid <- fish %>%
+  mutate(residuals=resid(model1))
+
+#plot weight versus residuals
+ggplot(data=fish_resid,aes(x=Length1,y=residuals)) +
+  geom_point() +
+  geom_hline(yintercept=0,color='red',linetype='dashed') +
+  labs(x='Length (cm)',
+       y='Residual Error (g)') +
+  theme_bw()
+```
+
+The plot depicts a clear violation of the independent residuals assumption, which results in a **biased model**. Consecutive residuals are correlated with one another when sorted by fish length. For fish less than about 25 cm long, the residuals are negatively correlated. For fish greater than 25 cm long, the residuals are positively correlated. If the residuals were independent, they would instead be randomly distributed above and below zero (red dashed line), regardless of the length value. In this particular case, the independence violation is likely caused by the linearity violation. There is a pattern in the residuals because the linear fit was inappropriate in the first place. This example demonstrates how the violations of technical conditions can compound.
+
+Now you can check the independent residuals assumption for a different model.
+
+## Practice 2
+
+Based on your model of fish width (predictor) versus length (response), create a plot of width versus residual error. Then answer the following questions:
+
+* Do you notice any *clear* patterns in consecutive residuals?
+* Why might the independence of your model differ from that of the example?
+* What are some real-world consequences of using a model with correlated residuals?
+
+------------------------------------------------------------------------
+```{r}
+#add residuals to data
+fish_resid2 <- fish %>%
+  mutate(residuals=resid(model2))
+
+#plot weight versus residuals
+ggplot(data=fish_resid2,aes(x=Width,y=residuals)) +
+  geom_point() +
+  geom_hline(yintercept=0,color='red',linetype='dashed') +
+  labs(x='Width (cm)',
+       y='Residual Error (cm)') +
+  theme_bw()
+```
+
+
+## Reason 3
+
+The third critical assumption of linear regression is that the residuals are **Normally distributed** with a mean of zero. Visually, this appears as most of the observations being close to the fitted line and the remaining observations becoming less and less frequent as we move away from the line (above and below). In other words, for a given value of the predictor variable, the observed values for the response should be Normally distributed with a mean centered on the fitted regression line. Though large sample sizes reduce the importance of the Normality assumption, due to the Central Limit Theorem (CLT), it remains critical when constructing prediction intervals for the true response value. We'll explore prediction interval in future lessons. For now, let's continue the lesson by diagnosing the Normality of the residuals.
+
+## Example 3
+
+For this example, we'll continue to employ the fish model that associates length and weight. As an initial check on the Normality of the residuals, we could simply plot a histogram along with the mean and median.
+
+```{r}
+#plot histogram of residuals
+ggplot(data=fish_resid,aes(x=residuals)) +
+  geom_histogram(color='black',fill='sky blue',bins=12) +
+  geom_vline(xintercept=mean(fish_resid$residuals),
+             color='red',size=1) +
+  geom_vline(xintercept=median(fish_resid$residuals),
+             color='red',size=1,linetype='dashed') +
+  labs(x='Residual Error (g)',
+       y='Count') +
+  theme_bw()
+```
+
+The mean (solid red line) of the residuals does appear to be zero, as required. However, the median (dashed red line) is less than the mean, which indicates a slight positive (right) skew. The shape of the histogram confirms this minor lack of symmetry. So, we might have some minor concerns with Normality. Another method to assess the Normality of the residuals is a built-in diagnostic plot called a Normal Quantile-Quantile (Q-Q) plot. Let's generate this plot for the fish model.
+
+```{r}
+#display second diagnostic plot
+plot(model1,which=2)
+```
+
+In a Normal Q-Q plot, the $x$-axis indicates what the quantile values *should be* if the residuals are in fact Normally distributed. These theoretical quantiles are based on the known structure of the Normal distribution (e.g., 68-95-99.7 Rule). The $y$-axis indicates what the quantiles values *actually are* for the observed residuals. If the residuals were perfectly Normally distributed, then every observed value (point in the plot) should be located exactly on the diagonal dashed line that equates theory with reality. In practice, even data sampled directly from a Normal distribution will vary a little from theory due to natural variability. So, we are not looking for perfection here. Instead, we look for significant deviations from the dashed line.
+
+The Normal Q-Q plot for the fish residuals follows the dashed line relatively well, except for the left tail of the distribution. The observed residuals stray above the dashed line, indicating larger (less negative) values than we would expect if the residuals were Normal. In other words, the left tail is not as long as we would expect for a Normal distribution. This confirms what we observed in the right-skewed histogram. Residual values are accumulated closer to the mean, rather than stretching out into the left tail as they should. That said, the deviation from Normality is not what we would consider significant. In terms of standard error, the residuals in the left tail deviate from what we would expect by less than a full standard error (-1.5 versus -2). There is no set rule for exactly how much the residuals have to deviate from Normality in the Q-Q plot before we label that assumption as violated. An analyst must use a bit of judgement in determining what should be considered "significant."
+
+Keep in mind that the Normal residuals assumption is only required when employing theoretical approaches to statistical inference, because we use named sampling (null) distributions like the Standard Normal or t-distribution. In those situations, a violation of the Normality assumption leads to **poorly estimated standard errors** because they do not represent the distribution in use. When applying computational methods, such as bootstrap or randomization, we do *not* require the Normality condition because we do not assume any named distribution. Now you can practice checking the Normality condition.
+
+## Practice 3
+
+Based on your model of fish width (predictor) versus length (response), create a histogram of the residuals and a Normal Q-Q plot. Then answer the following questions:
+
+* Do you detect any obvious skew in the histogram?
+* Does the Q-Q plot indicate any deviation from Normality?
+* How could you diagnose the Normality of residuals in your original scatter plot?
+
+------------------------------------------------------------------------
+```{r}
+#plot histogram of residuals
+ggplot(data=fish_resid2,aes(x=residuals)) +
+  geom_histogram(color='black',fill='sky blue',bins=12) +
+  geom_vline(xintercept=mean(fish_resid2$residuals),
+             color='red',size=1) +
+  geom_vline(xintercept=median(fish_resid2$residuals),
+             color='red',size=1,linetype='dashed') +
+  labs(x='Residual Error (cm)',
+       y='Count') +
+  theme_bw()
+```
+```{r}
+#display second diagnostic plot
+plot(model2,which=2)
+```
+
+
+## Reason 4
+
+The final condition in the LINE acronym is **equal variance**. This assumption of linear regression refers to the variance of the residuals across all values of the predictor variable. In many texts, constant variance is referred to as *homoskedasticity*. In some ways, this technical condition is a continuation of the previous. In order to conduct inferential statistical analysis on the parameters of a regression model, we assume that the residuals are Normally distributed with a mean of 0 and a constant standard deviation of $\sigma$. By constant, we mean that $\sigma$ is the same regardless of the input value for the predictor variable. We often refer to $\sigma$ as the residual standard error and we estimate it from the sample as:
+
+$$
+\hat{\sigma}=\sqrt{\frac{1}{n-2} \sum_{i=1}^n (y_i-\hat{y}_i)^2}
+$$
+
+This estimate of the residual standard error is applied throughout all of the inferential analyses on the regression model. So, if the residuals exhibit non-constant variance, then the inferences on the model parameters will be invalid. We'll finish the lesson by investigating the constant variance assumption.
+
+## Example 4
+
+In order to de-couple the multiple issues we've encountered with our fish model, suppose we correct the linearity violation by transforming the response (weight). Based on the following scatter plot, the length of a fish does appear to be linearly associated with the *square root* of weight.
+
+```{r}
+#plot length versus square-root weight
+ggplot(data=fish,aes(x=Length1,y=sqrt(Weight))) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  scale_x_continuous(limits=c(5,45),breaks=seq(5,45,5)) +
+  scale_y_continuous(limits=c(0,35),breaks=seq(0,35,5)) +
+  labs(title='Fish Caught in Finland',
+       x='Length (cm)',
+       y='Square-Root Weight (g)',
+       caption='Brofeldt (1917)') +
+  theme_bw()
+```
+
+With the linearity condition resolved, we can focus more clearly on the assessment of the constant variance assumption. As we follow along the blue regression line, we check to see if the average distance of the observations from the line stays relatively constant. It's a bit subtle in this case, but there does appear to be a slight increase in residual standard error as the length increases. This is easier to visualize in a Residuals versus Fitted values diagnostic plot.
+
+```{r}
+#fit linear regression model
+model2 <- lm(sqrt(Weight)~Length1,data=fish)
+
+#display first diagnostic plot
+plot(model2,which=1)
+```
+
+Notice first that we dramatically improved the linearity of the model compared to the non-transformed version. But secondly, we also see a classic visual indicator of non-constant variance (aka heteroskedasticity). There is a clear "cone" shape in the plot, with the average residual getting larger (in absolute value) as the fitted values increase. In other words, the error of our estimate is increasing as the size of the fish increases. This is a violation of the constant variance assumption. We want a model that has roughly the same residual standard error, regardless of the size of the fish. But this is not the case. In fact, we can extract the estimated residual standard error from the model summary to check its validity.
+
+```{r}
+#extract estimated sigma
+summary(model2)$sigma
+```
+
+The average error for our model's estimate of a fish's weight based on its length is about 1.6 grams. This might be a valid average *overall*, but its accuracy clearly depends on the size of the fish. As we review the Residuals versus Fitted plot from left to right, we see that the average error starts out less that 1.6 and grows to more than 1.6. Thus, the accuracy of the estimated error is *not* constant. Another diagnostic plot specifically designed to detect heteroskedasticity is the Scale-Location plot.
+
+```{r}
+#plot scale-location
+plot(model2,which=3)
+```
+
+In this plot, we still see the fitted values on the $x$-axis. However, the $y$-axis now employs the square-root of the absolute value of the *standardized* residuals. We standardize to eliminate units unique to the problem, then focus solely on the magnitude of the error using absolute value, and finally take the square-root in order to not overly penalize very large residual values. Ideally, the red line in this plot would be flat. A relatively flat line indicates no significant change in the magnitude of the errors. Instead, we see that the error increases as the fitted values increase from 0 to about 22, before leveling off. This increasing error agree with what we observed in the previous two plots.
+
+One final method for checking the constant variance assumption, is a hypothesis test known as the Breusch-Pagan Test. The null hypothesis of the test is constant variance (homoskedasticity) and the alternate hypothesis is non-constant variance (heteroskedasticity). Let's run the test using the `bptest()` function from the `lmtest` package.
+
+```{r}
+#load lmtest package
+library(lmtest)
+
+#conduct Breusch-Pagan test
+bptest(model2)
+```
+
+The very small p-value suggests we should reject the null hypothesis. In other words, the residuals have non-constant variance. All of our methods for assessing the equal variance assumption agree that the condition is violated. As a result, any inferential analyses we conduct on the parameters of the regression model using mathematical theory (e.g., Central Limit Theorem) are invalid. Instead, we must apply computational approaches (e.g., bootstrap) that do not require equal variance. Now you can practice assessing this condition.
+
+## Practice 4
+
+Based on your model of fish width (predictor) versus length (response), create a Scale-Location diagnostic plot and complete the Breusch-Pagan Test. Then answer the following questions:
+
+* What do your visual and analytical assessments suggest about the equal variance assumption?
+* Based on your previous answer, should you use mathematical or computational methods for inference?
+* What is the test statistic and null distribution for the Breusch-Pagan Test? Do some research!
+

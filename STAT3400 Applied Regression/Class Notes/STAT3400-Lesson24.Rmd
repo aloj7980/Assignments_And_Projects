@@ -1,0 +1,256 @@
+---
+title: "Confidence Intervals"
+author: "Dr. Kris Pruitt"
+date: "13 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to demonstrate confidence intervals for a population proportion using the results of the Central Limit Theorem. Students should leave this lesson with the ability to formulate, evaluate, and interpret a one-sided or two-sided confidence interval for a proportion using a random sample.
+
+
+## Reason 1
+
+The Central Limit Theorem (CLT) suggests that the sampling distribution of the **proportion** will be approximately Normally distributed if two conditions hold:
+
+* The observations in the sample are independent
+* The sample is sufficiently large
+
+If the sample is random, then the first requirement is generally met. If the sample includes at least 10 *expected* successes and 10 expected failures, then the second requirement is generally met. If both conditions are met, the CLT provides the three components we need to construct a confidence interval
+
+* Point estimate: Sample proportion ($\hat{p}$)
+* Critical value: Percentiles of Normal distribution ($z_{\alpha/2}$)
+* Standard error: Standard deviation of sample proportion ($\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}$)
+
+With these components, we construct a **two-sided confidence interval** in the following manner:
+
+$$
+\hat{p} \pm z_{\alpha/2} \cdot \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+$$
+
+We will begin the lesson by demonstrating the construction of this confidence interval.
+
+## Example 1
+
+Suppose we are at a basketball game and a friend asks how often NBA teams have more than 12 turnovers in a game. We aren't sure how to answer this question, so we decide to construct a confidence interval for the true proportion of games that NBA teams have more than 12 turnovers. First we import and wrangle the appropriate data from the course site.
+
+```{r}
+#import and filter data
+nba <- read.csv('data/nba_data.csv') %>%
+  transmute(turnover=ifelse(TO>12,1,0))
+```
+
+Now we have a sample of games and an indicator of whether one of the teams in that game had more than 12 turnovers. The first step of constructing a confidence interval is to calculate the point estimate. In this case, it is the sample proportion ($\hat{p}$).
+
+```{r}
+#compute sample proportion
+point <- mean(nba$turnover)
+point
+```
+
+The point estimate suggests that teams have more than 12 turnovers per game about 59% of the time. However, rather than putting all our faith in this single number, we prefer a range of numbers along with a confidence level. The appropriate confidence level depends entirely on the significance of the results and how they will be implemented. For a trivial discussion about basketball, we can choose a lower confidence level like 90%. A 90% confidence level is equivalent to an $\alpha=0.10$ level of significance, which is used to compute the critical value ($z_{\alpha/2}$).
+
+```{r}
+#compute quantile of standard normal distribution
+critical <- qnorm(p=0.05,mean=0,sd=1,lower.tail=FALSE)
+critical
+```
+
+Notice in the `qnorm()` function we used $\alpha/2=0.05$, rather than $\alpha=0.10$, because the significance is split into the two sides of the interval (lower and upper). The CLT is what allows us to calculate this critical value from the Standard Normal ($z$) distribution. The final piece we need to construct the interval is the standard error.
+
+```{r}
+#compute standard error of sample proportion
+sterr <- sqrt(point*(1-point)/nrow(nba))
+sterr
+```
+
+Now we can finally aggregate all of the components of the confidence interval.
+
+```{r}
+#construct confidence interval
+lower <- point-critical*sterr
+upper <- point+critical*sterr
+lower
+upper
+```
+
+Thus, we are 90% confident that the true mean proportion of NBA teams that commit more than 12 turnovers in a game is between 0.566 and 0.617. Said another way, the likelihood of a team committing more than 12 turnovers in a given game is between 56.6% and 61.7%. If we like, we could also visualize this interval using the sampling distribution that is dictated by the CLT.
+
+```{r}
+#simulate sampling distribution
+set.seed(653)
+null_dist <- data.frame(tos=rnorm(n=1000,mean=point,sd=sterr))
+
+#plot sampling distribution and interval bounds
+ggplot(data=null_dist,aes(x=tos)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=lower,color='red',size=1) +
+  geom_vline(xintercept=upper,color='red',size=1) +
+  scale_x_continuous(limits=c(0.54,0.65),breaks=seq(0.54,0.65,0.01)) +
+  labs(title='Sampling Distribution',
+       x='Sample Proportion (Turnovers>12)',
+       y='Density') +
+  theme_bw()
+```
+
+The area under the sampling distribution (blue density curve) between the interval bounds (red lines) represents 90% of the proportion values we would expect to observe over multiple samples. Now you can practice constructing a two-sided confidence interval.
+
+## Practice 1
+
+Construct a 95% confidence interval for the true proportion of NBA teams that have fewer than 8 offensive rebounds in a game. Then answer the following questions:
+
+```{r}
+nba <- read.csv('data/nba_data.csv') %>%
+  transmute(orb=ifelse(OREB<8,1,0))
+#compute sample proportion
+point <- mean(nba$orb)
+point
+```
+
+```{r}
+#compute quantile of standard normal distribution
+critical <- qnorm(p=0.025,mean=0,sd=1,lower.tail=FALSE)
+critical
+```
+
+```{r}
+#compute standard error of sample proportion
+sterr <- sqrt(point*(1-point)/nrow(nba))
+sterr
+```
+
+```{r}
+#construct confidence interval
+lower <- point-critical*sterr
+upper <- point+critical*sterr
+lower
+upper
+```
+
+
+* What is the correct interpretation of this interval in the context of the problem?
+
+We are 95% confident that the true proportion of times a team grabs fewer that 8 offensive rebounds in a game is between 0.204 and 0.256.
+
+* TRUE or FALSE: If we collect a different sample of games, we are guaranteed to get the same confidence bounds.
+
+False
+
+* If we decrease the sample size, the interval width will increase.
+* If we increase the confidence level, the interval width will increase.
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we constructed a two-sided confidence interval. This was appropriate because we were interested in capturing the true proportion between upper and lower bounds. However, for other applications we might only be interested in one of those two bounds. The primary impact of this adjustment is that all of the confidence is placed on a single side of a bound, rather than between two bounds. Specifically, if we want to construct a **lower confidence bound**, we use the following formula:
+
+$$
+\hat{p} - z_{\alpha} \cdot \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+$$
+
+Notice two important differences in this formula compared to the two-sided interval formula. First, we only include the "minus" part of the margin of error. Second, the critical value no longer splits the significance $\alpha$ into two tails of the sampling distribution. Now all of the significance is solely in the lower tail. In a similar manner, we construct an **upper confidence bound**, using the following formula:
+
+$$
+\hat{p} + z_{\alpha} \cdot \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+$$
+
+We'll demonstrate both of these bounds in an example and practice.
+
+## Example 2
+
+Returning to the 12 turnovers example from the previous section, suppose we only want a lower confidence bound. In other words, we desire a 90% lower bound on the likelihood that a team has more than 12 turnovers in a given game. Nothing has changed with the point estimate and standard error.
+
+```{r}
+#display point estimate and standard error
+point
+sterr
+```
+
+But we do need to compute a different critical value to reflect that the entire significance level $\alpha=0.1$ is in one tail of the sampling distribution.
+
+```{r}
+#compute one-sided critical value
+critical_low <- qnorm(p=0.1,mean=0,sd=1,lower.tail=FALSE)
+critical_low
+```
+With the new critical value, we can construct the lower confidence bound.
+
+```{r}
+#construct confidence bound
+low_bound <- point-critical_low*sterr
+low_bound
+```
+
+Thus, we are 90% confident that the true proportion of NBA teams that commit more than 12 turnovers in a game is *at least* 0.572. In other words, the likelihood of a team committing more than 12 turnovers in a given game is at least 57.2%. This individual lower bound is greater than the lower bound for the two-sided interval we computed in the previous section. Mathematically, this is due to all of the significance being isolated to one side versus two. Conceptually this provides a less conservative lower bound because all of our focus (confidence) is on one side. AS before, we can visualize this on the sampling distribution. 
+
+```{r}
+#simulate sampling distribution
+set.seed(653)
+null_dist <- data.frame(tos=rnorm(n=1000,mean=point,sd=sterr))
+
+#plot sampling distribution and interval bounds
+ggplot(data=null_dist,aes(x=tos)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=low_bound,color='red',size=1) +
+  scale_x_continuous(limits=c(0.54,0.65),breaks=seq(0.54,0.65,0.01)) +
+  labs(title='Sampling Distribution',
+       x='Sample Proportion (Turnovers>12)',
+       y='Density') +
+  theme_bw()
+```
+
+The area under the sampling distribution (blue density curve) to the right of the bound (red line) represents 90% of the proportion values we would expect to observe over multiple samples. Now you can practice constructing a one-sided confidence bound. 
+
+## Practice 2
+
+Returning to your data from the previous practice, construct a 95% upper confidence bound for the proportion of teams that achieve fewer than 8 offensive rebounds in a game. Then answer the following questions:
+
+```{r}
+nba <- read.csv('data/nba_data.csv') %>%
+  transmute(orb=ifelse(OREB<8,1,0))
+#compute sample proportion
+point <- mean(nba$orb)
+point
+```
+
+```{r}
+#compute quantile of standard normal distribution
+critical <- qnorm(p=0.05,mean=0,sd=1,lower.tail=FALSE)
+critical
+```
+
+```{r}
+#compute standard error of sample proportion
+sterr <- sqrt(point*(1-point)/nrow(nba))
+sterr
+```
+
+```{r}
+#construct confidence interval
+upper <- point+critical*sterr
+upper
+```
+
+
+* What is the correct interpretation of this bound in the context of the problem?
+
+We are 95% confident that the true proportion of times a team grabs fewer that 8 offensive rebounds in a game is below 0.252.
+
+* TRUE or FALSE: The one-sided upper bound will always be less than the two-sided upper bound.
+
+True
+
+* For a fixed sample size, the standard error is largest when $\hat{p}$ equals 0.5.

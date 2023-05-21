@@ -1,0 +1,262 @@
+---
+title: "Hypothesis Testing 2"
+author: "Dr. Kris Pruitt"
+date: "10 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to demonstrate a one-sided hypothesis test of the population proportion (and difference in proportions) using the results of the Central Limit Theorem. Students should leave this lesson with the ability to formulate, evaluate, and interpret a hypothesis test of a proportion (and difference in proportions) using a random sample.
+
+
+## Reason 1
+
+The Central Limit Theorem (CLT) suggests that the sampling distribution of the proportion will be approximately Normally distributed if two conditions hold:
+
+* The observations in the sample are independent
+* The sample is sufficiently large
+
+If the sample is random, then the first requirement is generally met. If the sample includes at least 10 *expected* successes and 10 expected failures, then the second requirement is generally met. If both conditions are met, the CLT also dictates the parameters of the Normal distribution.
+
+* Center: The true proportion ($p$)
+* Spread: The true standard error ($\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}$)
+
+Since we do not know the true proportion ($p$), we estimate it with the sample proportion ($\hat{p}$). Ultimately, the CLT provides a mathematical model for the sampling distribution that can be applied to confidence intervals or the null distribution that can be applied to hypothesis testing. For this lesson, we'll demonstrate its use in a hypothesis test.
+
+## Example 1
+
+Imagine you meet a friend at Starbucks and they claim that more than half of Grande size drinks are over 225 calories. You are skeptical of this claim, so you decide to conduct a hypothesis test using the sample data imported below.
+
+```{r}
+#import and filter data
+starbucks <- read.csv('data/starbucks_data.csv') %>%
+  filter(Size=='Grande') %>%
+  select(Calories)
+```
+
+The first step of the test is to define the hypotheses. If we let $p$ be the true proportion of Grande size drinks over 225 calories, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; p=0.5 \\
+H_A:& \; p > 0.5
+\end{aligned}
+$$
+
+Notice that our null hypothesis is that the true proportion is equal to 50% (rather than less than 50%). This demonstrates that the focus of the test is to look for evidence of our friend's claim. We have no need to show that the proportion is *less than* 50% The burden of proof is on our friend, not us. If we find no evidence that the proportion is *greater than* 50%, then that is sufficient to refute our friend's claim.
+
+The next step is to decide on a level of significance. Since coffee calories are not a particularly profound issue, we'll choose $\alpha=0.10$ or equivalently 90% confidence. Now we need a test statistic. Because our parameter of interest is the population proportion, we'll use the sample proportion as the test statistic.
+
+```{r}
+#calculate sample proportion
+mean(starbucks$Calories>225)
+```
+
+The sample proportion of Grande size drinks greater than 225 calories is about 52%. Our point estimate is greater than 50%, but is it *enough* greater to believe that the *true* proportion is greater than 50%? That is why we need to compare the test statistic to the null distribution. Since we meet the conditions of the CLT (check this!), the null distribution is approximately Normally distribution with a mean of $p=0.5$ and a standard error of $\sqrt{\hat{p}(1-\hat{p})/n}$. Let's visualize this distribution, along with the test statistic.
+
+```{r}
+#calculate standard error
+sterr <- sqrt((mean(starbucks$Calories>225)*(1-mean(starbucks$Calories>225)))/nrow(starbucks))
+
+#simulate null distribution by drawing from Normal distribution
+set.seed(653)
+null_dist <- data.frame(cals=rnorm(n=1000,mean=0.5,sd=sterr))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=mean(starbucks$Calories>225),color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Sample Proportion (Calories>225)',
+       y='Density') +
+  theme_bw()
+```
+
+If the true proportion is exactly 50%, then it doesn't seem all that unlikely that we would observe a proportion of 52% in a sample of only 73 drinks. Now we must quantify this using a p-value. In this case, the p-value represents the area under the null distribution (blue density plot) to the *right* of the test statistic (red line). We only care about the area to the right because the alternate hypothesis only addressed being *greater than* the null value. The p-value answers the question, "What are the chances we would have seen a sample proportion of 52% (or greater) if the true proportion is only 50%?". The answer is:
+
+```{r}
+#calculate p-value
+pnorm(q=mean(starbucks$Calories>225),
+      mean=0.5,
+      sd=sterr,
+      lower.tail=FALSE)
+```
+
+So, if the true proportion of Grande size drinks with more than 225 calories is 50%, then there is a 0.36 chance we would have observed a sample proportion of 52% (or greater). Our level of significance was 0.10. Since our p-value is greater than our level of significance we *fail to reject* the null hypothesis. There is no statistically significant evidence to support our friend's claim. It does *not* appear that more than 50% of Grande drinks have more than 225 calories.
+
+## Practice 1
+
+Suppose instead that our friend claimed that less than half of Venti drinks are under 40 grams of sugar. Complete a hypothesis test of this claim.
+
+* Hypotheses
+* Level of significance
+* Test statistic
+* Null distribution
+* p-value
+* Conclusion
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+The previous section applied the Central Limit Theorem (CLT) to a hypothesis test of a single proportion. We can also use the CLT to conduct a hypothesis test on the *difference* in proportions. We have the same requirements for independence and size. However, we must now meet the requirements *within and across each group*. If both conditions are met, the CLT dictates the parameters of the Normal distribution.
+
+* Center: The difference in true proportions ($p_1, p_2$)
+* Spread: The true standard error ($\sqrt{\frac{\hat{p}_1(1-\hat{p}_1)}{n_1}+\frac{\hat{p}_2(1-\hat{p}_2)}{n_2}}$)
+
+Using these conditions and parameters, let's conduct an example hypothesis test.
+
+## Example 2
+
+Suppose our Starbucks friend is still obsessed with calories and they claim that a higher proportion of soy milk drinks exceed 225 calories than nonfat milk drinks. Luckily we have the data to once again test the claim.
+
+```{r}
+#import and filter data
+starbucks <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv') %>%
+  filter(Beverage_prep %in% c('Nonfat Milk','Soymilk')) %>%
+  select(Beverage_prep,Calories)
+```
+
+If we let $p_1$ and $p_2$ represent the true proportion of soy and nonfat milk drinks that exceed 225 calories then the null and alternate hypotheses for this test are:
+
+$$
+\begin{aligned}
+H_0:& \; p_1-p_2=0 \\
+H_A:& \; p_1-p_2 > 0
+\end{aligned}
+$$
+
+Given our friend's insistence on making claims about coffee, we decide to increase our confidence level to 95% ($\alpha=0.05$). This way our level of significance is better aligned with the importance they seem to be placing on coffee calories. Next we need a test statistic. Because our parameter of interest is the difference in population proportions, we'll use the difference in sample proportions as the test statistic.
+
+```{r}
+#summarize group size and proportion by milk prep
+coffee_sum <- starbucks %>%
+  group_by(Beverage_prep) %>%
+  summarize(count=n(),
+            prop=mean(Calories>225)) %>%
+  ungroup()
+
+#calculate difference in proportions
+test_stat <- coffee_sum[2,3]-coffee_sum[1,3]
+test_stat
+```
+
+The sample proportion of soy milk drinks is about 8 percentage-points greater than the sample proportion of nonfat milk drinks. Our point estimate is greater than 0, but is it *enough* greater to believe that the *true* difference in proportions is greater than 0? Let's visualize the null distribution and the test statistic to find out.
+
+```{r}
+#calculate standard error
+sterr2 <- sqrt((coffee_sum[2,3]*(1-coffee_sum[2,3])/coffee_sum[2,2])+
+               (coffee_sum[1,3])*(1-coffee_sum[1,3])/coffee_sum[1,2])
+
+#simulate null distribution by drawing from Normal distribution
+set.seed(653)
+null_dist2 <- data.frame(cals=rnorm(n=1000,mean=0,sd=sterr2$prop))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist2,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=test_stat$prop,color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Difference in Sample Proportions (Calories>225)',
+       y='Density') +
+  theme_bw()
+```
+
+If the true difference in proportions is exactly 0, then it doesn't seem all that unlikely that we would observe a difference of 0.08 in our sample. Now we must quantify this using a p-value. The p-value answers the question, "What are the chances we would have seen a sample difference of 0.08 (or greater) if the true difference is 0?". The answer is:
+
+```{r}
+#calculate p-value
+pnorm(q=test_stat$prop,
+      mean=0,
+      sd=sterr2$prop,
+      lower.tail=FALSE)
+```
+
+If there is truly no difference between the proportions of soy and nonfat milk drinks, then there is a 0.16 chance we would have observed a difference of 8 percentage-points (or greater). Our level of significance was 0.05. Since our p-value is greater than our level of significance we *fail to reject* the null hypothesis. There is no statistically significant evidence to support our friend's claim. It does *not* appear there is any difference between soy and nonfat milk drinks in terms of exceeding 225 calories.
+
+## Practice 2
+
+Suppose instead that our friend claimed the proportion of soy milk drinks with more than 8 grams of protein is less than the same proportion for nonfat milk drinks. Complete a hypothesis test of this claim.
+
+* Hypotheses
+
+$$
+\begin{aligned}
+H_0:& \; p_1-p_2=0 \\
+H_A:& \; p_1-p_2 < 0
+\end{aligned}
+$$
+
+* Level of significance
+
+alpha = 0.05
+
+* Test statistic
+
+```{r}
+#import and filter data
+starbucks <- read.csv('data/starbucks_data.csv') %>%
+  filter(Beverage_prep %in% c('Nonfat Milk','Soymilk')) %>%
+  select(Beverage_prep,`Protein..g.`)
+
+#summarize group size and proportion by milk prep
+coffee_sum <- starbucks %>%
+  group_by(Beverage_prep) %>%
+  summarize(count=n(),
+            prop=mean(`Protein..g.`>8)) %>%
+  ungroup()
+
+#calculate difference in proportions
+test_stat <- coffee_sum[2,3]-coffee_sum[1,3]
+test_stat
+```
+
+
+* Null distribution
+
+```{r}
+#calculate standard error
+sterr2 <- sqrt((coffee_sum[2,3]*(1-coffee_sum[2,3])/coffee_sum[2,2])+
+               (coffee_sum[1,3])*(1-coffee_sum[1,3])/coffee_sum[1,2])
+
+#simulate null distribution by drawing from Normal distribution
+set.seed(653)
+null_dist2 <- data.frame(cals=rnorm(n=1000,mean=0,sd=sterr2$prop))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist2,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=test_stat$prop,color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Difference in Sample Proportions (Protein > 8g)',
+       y='Density') +
+  theme_bw()
+```
+
+
+* p-value
+
+```{r}
+#calculate p-value
+pnorm(q=test_stat$prop,
+      mean=0,
+      sd=sterr2$prop,
+      lower.tail=TRUE)
+```
+
+
+* Conclusion
+
+If there is truly no difference between the proportions of soy and nonfat milk drinks, then there is a 0.36 chance we would have observed a difference of 2.8 percentage-points (or greater). Our level of significance was 0.05. Since our p-value is greater than our level of significance we *fail to reject* the null hypothesis. There is no statistically significant evidence to support our friend's claim. It does *not* appear there is any difference between soy and nonfat milk drinks in terms of exceeding 8 grams of protein.

@@ -1,0 +1,121 @@
+---
+title: "Hypothesis Testing 1"
+author: "Dr. Kris Pruitt"
+date: "8 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to demonstrate a one-sided hypothesis test of the population mean using the results of the Central Limit Theorem. Students should leave this lesson with the ability to formulate, evaluate, and interpret a hypothesis test of a mean using a random sample.
+
+
+## Reason 1
+
+The Central Limit Theorem (CLT) suggests that the sampling distribution of the mean will be approximately Normally distributed if two conditions hold:
+
+* The observations in the sample are independent
+* The sample is sufficiently large
+
+If the sample is random, then the first requirement is generally met. If the sample size is at least 30, then the second requirement is generally met. Although, if the sample includes significant outliers or skew, then a sample size of 60 or more may be necessary. If both conditions are met, the CLT also dictates the parameters of the Normal distribution.
+
+* Center: The true mean ($\mu$)
+* Spread: The true standard error ($\sigma/\sqrt{n}$)
+
+Since we do not know the true standard deviation ($\sigma$), we estimate it with the sample standard deviation ($s$). Ultimately, the CLT provides a mathematical model for the sampling distribution that can be applied to confidence intervals or the null distribution that can be applied to hypothesis testing. For this lesson, we'll demonstrate its use in a hypothesis test.
+
+## Example 1
+
+Imagine you meet a friend at Starbucks and they claim that Grande size drinks average more than 200 calories. You are skeptical of this claim, so you decide to conduct a hypothesis test using the sample data imported below.
+
+```{r}
+starbucks <- read.csv('data/starbucks_data.csv') %>%
+  filter(Size=='Grande') %>%
+  select(Calories)
+```
+
+The first step of the test is to define the hypotheses. If we let $\mu$ be the true mean calories of Grande size Starbucks drinks, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu=200 \\
+H_A:& \; \mu > 200
+\end{aligned}
+$$
+
+Notice that our null hypothesis is that the calories are equal to 200 (rather than less than 200). This demonstrates that the focus of the test is to look for evidence of our friend's claim. We have no need to show that the calories are *less than* 200. The burden of proof is on our friend, not us. If we find no evidence that the average calories are *greater than* 200, then that is sufficient to refute our friend's claim.
+
+The next step is to decide on a level of significance. Since coffee calories are not a particularly profound issue, we'll choose $\alpha=0.10$ or equivalently 90% confidence. Now we need a test statistic. Because our parameter of interest is the population mean, we'll use the sample mean as the test statistic.
+
+```{r}
+mean(starbucks$Calories)
+```
+
+The sample mean calories of Grande size Starbucks drinks is about 216. Our point estimate is greater than 200, but is it *enough* greater to believe that the *true* mean calories are greater than 200? That is why we need to compare the test statistic to the null distribution. Since we meet the conditions of the CLT (check this!), the null distribution is approximately Normally distribution with a mean of $\mu=200$ and a standard error of $s/\sqrt{n}$. Let's visualize this distribution, along with the test statistic.
+
+```{r}
+set.seed(653)
+null_dist <- data.frame(cals=rnorm(n=1000,
+                                   mean=200,
+                                   sd=sd(starbucks$Calories)/sqrt(nrow(starbucks))))
+
+ggplot(data=null_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=mean(starbucks$Calories),color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Sample Mean Calories',
+       y='Density') +
+  theme_bw()
+```
+
+Now we must computer a p-value. In this case, the p-value represents the area under the null distribution (blue density plot) to the *right* of the test statistic (red line). We only care about the area to the right because the alternate hypothesis only addressed being *greater than* the null value. The p-value answers the question, "What are the chances we would have seen a sample mean of 216 (over greater) if in fact the true mean is only 200?". The answer is:
+
+```{r}
+pnorm(q=mean(starbucks$Calories),
+      mean=200,
+      sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+      lower.tail=FALSE)
+```
+
+So, if the true mean calories of Grande size drinks is 200, then there is only a 5% chance we would have observed a sample mean of 216 (or greater). Our level of significance was 10%. Since our p-value is less than our level of significance we *reject* the null hypothesis in favor of the alternate hypothesis. It appears our friend was correct. Grande size drinks at Starbucks do average more than 200 calories.
+
+## Practice 1
+
+Suppose instead that your friend claimed that Venti drinks have less than 10 grams of protein, on average. Complete a hypothesis test of this claim.
+
+$$
+\begin{aligned}
+H_0:& \; \mu=10 \\
+H_A:& \; \mu < 10
+\end{aligned}
+$$
+
+```{r}
+mean(starbucks$`Protein..g.`)
+```
+
+```{r}
+starbucks <- read.csv('starbucks_data.csv') %>%
+  filter(Size=='Venti') %>%
+  select(`Protein..g.`)
+
+pnorm(q=mean(starbucks$`Protein..g.`),
+      mean=10,
+      sd=sd(starbucks$`Protein..g.`)/sqrt(nrow(starbucks)),
+      lower.tail=TRUE)
+```
+
+So, if the true mean grams of protein of Venti size drinks is 10, then there is only a 8.5% chance we would have observed a sample mean of 9.06 (or less). Our level of significance was 10%. Since our p-value is less than our level of significance we *reject* the null hypothesis in favor of the alternate hypothesis. It appears our friend was correct. Venti size drinks at Starbucks do average fewer than 10 grams of protein.
+
+
+
