@@ -1,1 +1,1 @@
-These R markdown files were used for in class demonstrations. The practice problems were not assigned and graded for the vast majority of them.
+These R markdown files were used for in class demonstrations. The practice problems were not assigned and graded for the vast majority of them. Refer to the objectives and schedule png files to find which file corresponds with which concept.
