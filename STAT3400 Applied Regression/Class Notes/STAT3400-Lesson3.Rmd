@@ -1,0 +1,184 @@
+---
+title: "Numerical Data"
+author: "Dr. Kris Pruitt"
+date: "23 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to explore numerical variables using summaries and visualizations. Students should leave this lesson with the ability to create and interpret summary statistic tables, histograms, density plots, and scatter plots for discrete and continuous variables.
+
+
+## Reason 1
+
+There is a much wider variety of statistics available for numerical variables compared to categorical. But, the majority are attempting to estimate two characteristics of a variable: centrality and spread. Centrality is an indicator of the most common, most likely, or middle value for the variable. Spread measures how far the values tend to be from the central value or how extreme the largest and smallest values might be. We introduced percentiles in the previous lesson in the section on box plots. The median (50th percentile) was a measure of centrality and the interquartile range (difference between 75th and 25th percentiles) was a measure of spread. In this lesson we'll add the mean and mode (centrality) along with the range and standard deviation (spread).
+
+
+## Example 1
+
+For this example we will use the data frame `bodyfat_data.csv` from the course website. This data comes from a study on body composition and includes measurements for males between the ages of 22 and 81. Save the file to your computer, import it into `RStudio`, and then view the data.
+
+```{r}
+bodyfat <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/bodyfat_data.csv')
+```
+
+There are 252 observations (males) with 15 body measurement variables. All of the variables are continuous, given they are measurements of space and time. We could debate whether age is discrete or continuous, since it is always reported as an integer. However, this is solely a matter of convenience. Age could be reported to whatever level of fidelity we have the desire and capability to measure. Therefore, it is continuous. A simple function for calculating many of the common statistics for numerical variables is the `summary()` function.
+
+```{r}
+summary(bodyfat)
+```
+
+For every numerical variable in the data frame, this function automatically calculates all of the quartiles for the variable and the mean (average) value. Notice that the mean and median are not the same. This is because the mean is sensitive to outliers, but the median is not. If there are extraordinarily large values (positive skew), then the mean will tend to be larger than the median. If there are extraordinarily small values (negative skew), then the mean will tend to be smaller than the median.
+
+If we would like to calculate other statistics for each variable, we can use the `sapply()` function. For example, if we want the standard deviation for each variable, we list the data frame as the first argument and the `sd()` function as the second argument.
+
+```{r}
+sapply(bodyfat,sd)
+```
+
+Now we have the standard deviation for each variable. Recall, the standard deviation can be thought of as the average distance of the observations from the mean value. So, a large standard deviation indicates that the observations tend to be further away from the mean (i.e., spread out). By contrast, a small standard deviation suggests the observations tend to be closer to the mean (i.e., condensed).
+
+The `summary()` and `sapply()` functions are great if we want to calculate statistics for all of the numerical variables at once. But, often we are just interested in a single variable at a time. In these cases, we can simply reference the column of interest directly. For example, if we want to know the 25th percentile (0.25 quantile) for the body weight of males we can calculate it with the following code.
+
+```{r}
+quantile(bodyfat$Weight,0.25)
+```
+
+So, 25% of males have a body weight below 159 pounds. Notice this is the same value as the 1st quartile listed in the summary statistics. These are all terms used to reference the same value. Similarly, the median, 50th percentile, 0.5 quantile, and 2nd quartile are all the same value. Now you'll have the chance to calculate and interpret some statistics on your own.
+
+
+## Practice 1
+
+Calculate the mean, median, standard deviation, and interquartile range for the ankle and wrist measurements (these are in units of centimeters). Then answer the following questions.
+
+* Do males appear to have bigger wrists or ankles, in general?
+* Does there appear to be more variation in the size of wrists or ankles, in general?
+* Suppose two new observations (40, 41) were added to the ankle data. Would you expect the mean or median to change more?
+* Suppose two new observations (10, 25) were added to the wrist data. Would you expect the standard deviation or the interquartile range to change more?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+Just as with categorical variables, it can be difficult to detect distributions or associations for numerical variables from tables of values. It is often more insightful to explore the characteristics of numerical variables via a graphic. Histograms, density plots, and box plots are common graphics for visualizing the distribution of a numerical variable. Identifying a variable's distribution is critical to many approaches in regression, so we'll continue the lesson by exploring this concept.
+
+
+## Example 2
+
+Although the mean (median) and standard deviation (interquartile range) are useful statistics for explaining the center and spread of a variable, they do not provide a complete description of the possible (and probable) values. A visual depiction of the frequency of observed values (i.e., the distribution) provides much more information. Let's start with a histogram of body weights.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Weight)) +
+  geom_histogram(binwidth=20,closed='right',boundary=100,
+                 color='black',fill='sky blue') +
+  scale_x_continuous(limits=c(100,400),breaks=seq(100,400,20),
+                     name='Body Weight') +
+  scale_y_continuous(limits=c(0,80),breaks=seq(0,80,10),
+                     name='Count') +
+  theme_bw()
+```
+
+Histograms provide a count of the number of observations within a range of values. In this case, we specified bin widths of 20 pounds, so the height of each bar represents the number of males with a body weight in a specific 20-pound range. We see that the most common range of weights is between 160 and 180 pounds. Furthermore, we see that weights below 140 or above 220 pounds are uncommon. Finally, we observe that there is one male with an extremely large body weight that appears to be an outlier in the sample.
+
+The selection of bin widths, and therefore the number of bins, is as much art as science. Too few or too many bins can obscure the true distribution of the variable. A common rule is that the number of bins should be close to the square root of the number of observations. For our example, this would be about 16 bins across the range of values from about 100 to 400 pounds. Splitting a range of 300 pounds into 16 bins would suggest a width of about 19 pounds. However, we use 20 pounds instead because that will be more intuitive for the viewer of the graphic.
+
+A histogram is a useful depiction of the distribution of the sample data. But, we would like to use the distribution of the sample to infer the distribution of the entire population. A population with billions of observations would suggest a histogram with millions of bins. With so many bins, the histogram would appear much smoother and less jagged. We can simulate this behavior with a density plot.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Weight)) +
+  geom_density(bw=10,fill='sky blue') +
+  scale_x_continuous(limits=c(100,400),breaks=seq(100,400,20),
+                     name='Body Weight') +
+  scale_y_continuous(limits=c(0,0.015),breaks=seq(0,0.015,0.005),
+                     name='Density') +
+  theme_bw()
+```
+
+The density plot is a smoothed version of the histogram, which looks much more like a probability density function (pdf). Recall, a pdf can be used to calculate the probability that a variable takes on a range of values based on the area under the curve. The amount of smoothing is controlled by the bandwidth (`bw`) parameter, where larger values provide more smoothing. With the exception of the one outlier, the distribution appears relatively symmetric around the central value. We can make this even more obvious by adding the mean and standard deviation to the graph.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Weight)) +
+  geom_density(bw=10,fill='sky blue') +
+  geom_vline(xintercept=178.9,color='red') +
+  geom_vline(xintercept=208.3,color='red',linetype='dashed') +
+  geom_vline(xintercept=149.5,color='red',linetype='dashed') +
+  scale_x_continuous(limits=c(100,400),breaks=seq(100,400,20),
+                     name='Body Weight') +
+  scale_y_continuous(limits=c(0,0.015),breaks=seq(0,0.015,0.005),
+                     name='Density') +
+  theme_bw()
+```
+
+The symmetry definitely is not perfect! Hence why we described it as "relatively" symmetric. The mean appears slightly to the right of the center of the distribution (i.e., positively skewed). This is due, at least in part, to the positive outlier that "pulls" the mean to the right. Still, the mean is close to the center and the majority of the distribution is within one standard deviation. So, a reasonable description of the body weight of an adult male would be that it typically falls between 150 and 208 pounds. Later in the course we will formalize such interval estimates using a special type of symmetric distribution called the Normal distribution. For now, let's practice visualizing and interpreting your own distributions.
+
+
+## Practice 2
+
+Build density plots for ankle and wrist circumference on the *same* graph. Then answer the following questions. Hint: Use different fill colors for each variable and add the option `alpha=0.3` to each density function.
+
+* How would you describe the symmetry or skew of each distribution?
+* What does the location and height of the center of each distribution tell you about the circumference of ankles versus wrists?
+* What does the overlap between the two distributions indicate?
+* Do you think it would be easier to predict the circumference of wrists or ankles?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In addition to the distribution of a numerical variable, we are often interested in the association between two variables. This is generally depicted in a scatter plot. By convention, we place the explanatory variable on the $x$-axis and the response variable on the $y$-axis. In other words, the $y$-axis measures the variable we are trying to predict or explain using the variable measured on the $x$-axis. We'll finish the lesson by generating and interpreting scatter plots.
+
+
+## Example 3
+
+Suppose we were interested in the association between a male's abdomen circumference and body fat percentage. We'll treat body fat percentage as the response variable and abdomen circumference as the explanatory variable. A scatter plot of these two variables is depicted below.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Abdomen,y=BodyFat)) +
+  geom_point() +
+  scale_x_continuous(limits=c(65,150),breaks=seq(65,150,5),
+                     name='Abdomen Circumference (cm)') +
+  scale_y_continuous(limits=c(0,50),breaks=seq(0,50,5),
+                     name='Body Fat (%)') +
+  theme_bw()
+```
+
+Looking purely at the $y$-axis, we see that body fat varies between 0% and nearly 50%. If we wanted to guess a random male's body fat percentage, we might simply guess the mean within this range (i.e., about 19%). However, we would be ignoring the valuable information provided by knowing the male's abdomen circumference. The trend apparent in the scatter plot is that body fat increases as abdomen circumference increases. This makes intuitive sense because a male with a larger waist will generally have a higher body fat percentage. The average body fat of 19% might be a reasonable guess for a male with an abdomen circumference around 90 cm, but it would be a poor guess for a male with a much smaller or much larger waist. So, abdomen circumference is helpful in explaining the variance in body fat percentage among males.
+
+When examining a scatter plot, it is useful to describe the shape, direction, and strength of the association between the two variables. Shape refers to whether the trend is linear (straight line) or nonlinear (curved). With the exception of the large outlier for abdomen circumference, our scatter plot indicates a linear shape. The direction of the association refers to whether the trend has a positive (increasing) or negative (decreasing) slope. For our graph, the association is clearly positive since body fat increases as abdomen circumference increases. Finally, strength refers to how compact the points are along the trend. With the exception of a few points, the association in our graph is very strong. A weak association would appear as a "shot gun blast" with little to no clear pattern. 
+
+The ability to interpret scatter plots like this is the pre-cursor to regression analysis. In this course, we will learn how to estimate a functional relationship between two or more variables. In the case of our body fat example, that function would be a straight line. We can add this line to the scatter plot with the `geom_smooth()` function along with the `method='lm'` option.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Abdomen,y=BodyFat)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  scale_x_continuous(limits=c(65,150),breaks=seq(65,150,5),
+                     name='Abdomen Circumference (cm)') +
+  scale_y_continuous(limits=c(0,50),breaks=seq(0,50,5),
+                     name='Body Fat (%)') +
+  theme_bw()
+```
+
+The grey shaded region along the line indicates how much the surrounding observations vary from the trend. It is common for the points to follow the trend closely in the middle but start to stray for very small or very large values, just as we see here. Later in the course, we'll learn how this impacts our ability to make predictions for the response variable. In the meantime, you can practice creating and interpreting your own scatter plot.
+
+
+## Practice 3
+
+Create a scatter plot with ankle circumference as the response variable and wrist circumference as the explanatory variable. Include the best-fit line and answer the following questions.
+
+* How would you describe the shape, direction, and strength of the association between the two variables?
+* Does the association depicted in the graph make intuitive sense in real-world context?
+* Two observations have ankle measurements above 30 cm. How do these compare to other males with similar wrist sizes?
+* Suppose a new observation has a wrist circumference of 20 cm. What would the best-fit line suggest for an ankle circumference?

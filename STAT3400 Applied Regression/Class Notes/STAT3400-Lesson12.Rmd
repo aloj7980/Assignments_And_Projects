@@ -1,0 +1,182 @@
+---
+title: "Group Prevalence"
+author: "Dr. Kris Pruitt"
+date: "13 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the impact of group prevalence on classification accuracy in logistic regression. Students should leave this lesson with the ability to calculate and explain the accuracy of a model based on various classification thresholds.
+
+
+## Reason 1
+
+In previous lessons on logistic regression, we used data that had a relatively equal number of observations in each response category. However, this will not always be the case. Often we will want to predict an outcome that is relatively rare (i.e., less prevalent). When the prevalence within the binary response groups is asymmetric, we must be more careful with our classification threshold. We'll begin the exploration of this idea by fitting a logistic regression model to predict an asymmetric response.
+
+
+## Example 1
+
+For this example, we will use a data set with measurements of different freshwater fish species. Import the data set and add a new column using the code below.
+
+```{r}
+fish <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/fish_data.csv') %>%
+  mutate(Bream=ifelse(Species=='Bream',1,0))
+```
+
+The new binary variable in the previous code splits fish species into Bream and not Bream. This will act as our response variable. Before fitting a model, we should check the prevalence of Bream fish in the data set.
+
+```{r}
+mean(fish$Bream)
+```
+
+About 25% of the fish in the sample are Bream. So, imagine we were handed a fish and asked to predict whether or not it was a Bream, with no model or expert fish knowledge. Given only 25% of fish in the sample are Bream, we would simply guess that any fish we encounter is *not* Bream. With this "always guess not Bream" strategy, we would expect to be correct about 75% of the time. So, any model we build must have a classification accuracy greater than 75% to be valuable.
+
+Let's fit a model to predict the Bream species based solely on its length (in cm) from nose to tail (`Length3`).
+
+```{r}
+model <- glm(Bream~Length3,data=fish,family='binomial')
+coefficients(summary(model))
+```
+
+Using these estimated coefficients, we can write the following predicted probability function.
+
+$$
+\hat{p}=\frac{e^{-6.968+0.178 \cdot \text{Length}}}{1+e^{-6.968+0.178 \cdot \text{Length}}}
+$$
+
+Rather than manually calculating predicted probabilities with this function, we can employ the `predict()` function to estimate the probability that each fish in the sample is a Bream.
+
+```{r}
+fish_pred <- fish %>%
+  cbind(Bream_prob=predict(model,newdata=data.frame(Length3=fish$Length3),type='response'))
+```
+
+After viewing this new data frame, we see that each fish now has a predicted probability of being a Bream. Now let's classify any fish with more than a 0.5 probability as a Bream and see how often the classification matches reality.
+
+```{r}
+fish_pred %>%
+  summarize(Accuracy=mean((Bream_prob>0.5)==Bream))
+```
+
+Using the fish-length model, we can classify Breams with a little *less than* 75% accuracy. Thus, it would appear that this model is no better than our "always guess not Bream" strategy. We'll soon see that this is largely driven by the chosen classification threshold. For now, practice fitting your own model and calculating the accuracy.
+
+
+## Practice 1
+
+Fit a logistic regression model to estimate the probability that a fish is a Bream based solely on the `Length1` predictor. Then answer the following questions:
+
+* What is the estimated probability equation?
+* Using a threshold of 0.5, what is the classification accuracy of your model?
+* What is the classification accuracy of your model if you increase the threshold to 0.75?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous example, we classified each observation using the default probability threshold of 0.5. However, this is not always the best threshold, particularly when the group prevalence is dramatically skewed toward one group. When trying to predict a relatively rare event, it is common to adjust the classification threshold to achieve better accuracy. We'll continue the lesson by examining the impact of various thresholds.
+
+
+## Example 2
+
+Let's calculate and visualize the classification accuracy of the `Length3` model with a wide range of thresholds.
+
+```{r}
+#initiate vectors
+thresholds <- seq(0,1,0.05)
+accuracy <- rep(0,21)
+j <- 1
+
+#loop through thresholds and calculate accuracy
+for(i in thresholds){
+  
+  accuracy[j] <- fish_pred %>%
+    summarize(mean((Bream_prob>i)==Bream)) %>%
+    pull()
+  
+  j <- j+1
+}
+
+#graph accuracy versus threshold
+data.frame(thresh=thresholds,accur=accuracy) %>%
+  ggplot(aes(x=thresh,y=accur)) +
+  geom_line(color='blue',size=1) +
+  geom_hline(yintercept=0.75,linetype='dashed',
+             color='red',size=0.75) +
+  labs(x='Classification Threshold',
+       y='Classification Accuracy') +
+  scale_x_continuous(limits=c(0,1),breaks=seq(0,1,0.1)) +
+  scale_y_continuous(limits=c(0,1),breaks=seq(0,1,0.1)) +
+  theme_bw()
+```
+
+Based on these results, it appears the optimal threshold is somewhere around 0.25. Notice where the accuracy curve begins and ends. A 0.0 threshold is equivalent to an "always guess Bream" strategy, which results in an accuracy of 25%. This makes sense because the overall prevalence of Breams in 25%. Similarly, a 1.0 threshold is equivalent to an "always guess not Bream" strategy, which results in an accuracy of 75%.
+
+The lower threshold (below 0.5) makes intuitive sense given that Breams are relatively rare. The threshold determines the strength of evidence we require to label a fish a Bream. When trying to detect a rare event, we are often willing to accept weaker evidence (lower threshold) since any evidence at all can be difficult to come by. Now you'll create your own threshold versus accuracy graph.
+
+
+## Practice 2
+
+Using your model from the first practice section, generate a threshold versus accuracy graph similar to the one in the example. Then answer the following questions:
+
+* What range of threshold values provide the most accurate classification?
+* Does this range of values make intuitive sense, in the context of the problem?
+* Does `Length1` or `Length3` appear to be a more accurate predictor?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The overall accuracy of a classification model isn't the only metric we might be interested in. For certain contexts, the conditional accuracy (true positive or true negative rate) could be just as important as the overall accuracy. We'll finish this lesson by exploring the impact that the classification threshold has on the conditional accuracy of the model.
+
+
+## Example 3
+
+Let's create a **contingency table** (aka confusion matrix) that compares our predictions to reality. We'll start with the default 0.5 threshold. The `table()` function assigns the first argument to the rows and the second argument to the columns.
+
+```{r}
+fish_class <- fish_pred %>%
+  mutate(Bream_class=if_else(Bream_prob>0.5,1,0))
+
+table(fish_class$Bream,fish_class$Bream_class)
+```
+
+The rows of the table count the actual number of Breams (1) and not Breams (0). The columns count the predicted number of Breams (1) and not Breams (0). If we add the main diagonal (106) we get the total number of fish that are correctly classified. We then determine the overall accuracy by dividing by the 142 total fish. This provide the 74.6% accuracy we computed previously.
+
+However, we can now calculate conditional accuracies as well. For example, given a fish was actually a Bream, how often did we correctly classify it as a Bream? The condition (actually a Bream) refers to the 35 fish in the bottom row of the table. The question refers to the 15 we predicted correctly. The 15 out of 35 (43%) represents the **true positive rate**. So, if a fish is actually a Bream we only have a 43% chance of identifying it with the current model and threshold. That doesn't seem very good!
+
+How about the **true negative rate**? In other words, if a fish is actually *not* a Bream then how often will we classify it as *not* a Bream? The condition refers to the 107 fish in the first row and the question refers to the 91 we classified correctly. The 91 out of 107 represents an 85% true negative rate. So, this model and threshold is much better at identifying fish that are not Bream than vice-versa.
+
+There is no one right answer as to whether accuracy, true positive rate, or true negative rate is most important. The focus depends entirely on the context of the problem. For example, think about COVID testing. Is it better to make sure a sick person tests positive or that a well person tests negative? Or we could think about the context of pregnancy testing. Is it worse for a pregnant woman to test negative or for a non-pregnant woman to test positive? The answers to these questions all depend on context.
+
+Now let's lower the classification threshold to the 0.25 we found as most accurate in the previous example. What impact will that have on the conditional accuracies?
+
+```{r}
+fish_class <- fish_pred %>%
+  mutate(Bream_class=if_else(Bream_prob>0.25,1,0))
+
+table(fish_class$Bream,fish_class$Bream_class)
+```
+
+The overall accuracy is 82%, the true positive rate is 91%, and the true negative rate is 79%. By sacrificing 6 percentage-points on the true negative rate, we gained 48 percentage-points on the true positive rate! This seems like a very favorable trade-off we would be likely to accept. Later in the course we will dig even deeper into conditional accuracy. For now, you can practice constructing your own contingency table and computing the accuracy.
+
+
+## Practice 3
+
+Using your model and optimal threshold from the previous practice, construct a contingency table. Then answer the following questions:
+
+* What is the overall accuracy?
+* What are the true positive and true negative rates?
+* Given you classified a fish as Bream, what are the chances it is actually a Bream?

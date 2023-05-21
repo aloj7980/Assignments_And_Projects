@@ -1,0 +1,167 @@
+---
+title: "Variance Inflation Factor"
+author: "Dr. Kris Pruitt"
+date: "24 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to assess the impact of multicollinearity in multiple linear regression models. Students should leave this lesson with the ability to identify multicollinearity (visually and analytically) and measure its effect via the variance inflation factor.
+
+
+## Reason 1
+
+When two predictor variables are correlated with one another, we say they are **collinear**. A model with multiple instances of correlated predictor variables is said to suffer from **multicollinearity**. Often we see these two terms used interchangeably, but the statistical issues are the same. When two predictor variables are correlated with one another, it is difficult to isolate the true effect that a single predictor has on the response. In some sense, including both collinear variables is like "double-counting" the impact on the response. We'll begin the lesson with a refresher on identifying collinearity and then move on to evalutaing its effect.
+
+## Example 1
+
+For this example, we will return to the body composition data found in the file `bodyfat_data.csv` on the course site. Import and wrangle the data using the code below.
+
+```{r}
+#import data
+body <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/bodyfat_data.csv') %>%
+  filter(Height>60,Weight<300) %>%
+  transmute(BodyFat,Age,Weight,Abdominal=Abdomen*0.3937)
+```
+
+Imagine we are interested in predicting a person's body fat percentage based on their age (years), weight (pounds), and abdominal circumference (inches). Previously, we learned to visually check for collinearity using a matrix of scatter plots. Let's start with a scatter plot matrix for our body composition data.
+
+```{r}
+#create scatter plot matrix
+pairs(body)
+```
+
+The scatter plots reveal good news and bad news! The good news is that all three predictors appear to have a positive, linear association with the response. This makes intuitive sense because we would expect older, heavier people with a larger waistline to have higher body fat. The bad news is that weight and abdominal circumference appear to be strongly correlated with one another. This also makes intuitive sense, but it complicates any inferences we might want to make regarding the influence on body fat percentage. We can similarly check for collinearity using a correlation matrix.
+
+```{r}
+#create correlation matrix
+cor(body)
+```
+
+The numerical results align with our visual results. The positive linear association with the response is weak for age, moderate for weight, and strong for abdominal circumference. Age has no clear association with weight or abdominal circumference, so we have no concerns for collinearity with that predictor. However, there is a very strong (87%), positive, linear association between weight and abdominal circumference. Consequently, we would not want to use both of those predictors in an inferential model of body fat percentage.
+
+Before demonstrating the analytical impact of including collinear variables, practice identifying collinearity on your own.
+
+## Practice 1
+
+Replace abdominal circumference with neck circumference in the body composition model. Generate matrices of scatter plots and correlation cofficients. Then answer the following questions:
+
+* Based on the scatter plots, how would you describe the *shape* and *direction* of association between all pairs of variables?
+* Based on the correlation coefficients, how would you describe the *strength* of association?
+* Should you include all three predictor variables in an inferential model? If not, which should you remove?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+Once we've identified collinear pairs of variables, we can evaluate the impact of including both in an inferential model. From a mathematical standpoint, the issue regards the standard error for the slope coefficients. Recall, we use the following formula to construct a confidence interval for each slope parameter in a multiple linear regression model.
+
+$$
+\beta_i \in \hat{\beta}_i \pm t_{n-(k+1),\alpha/2} \cdot SE_{\hat{\beta}_i}
+$$
+
+For a given parameter $\beta_i$, the standard error $SE_{\hat{\beta}_i}$ is greater when a collinear variable exists in the model. As a result, the margin of error is greater than it should be, even at the same level of confidence. We'll continue the lesson by demonstrating this phenomenon in an example.
+
+## Example 2
+
+In the previous section, we saw that weight and abdominal circumference are strongly correlated. So, we do not want to keep both in the regression model. But, which one should we keep? One simple rule is to keep the predictor that is most strongly correlated with the response. In our case, that is the abdominal circumference variable. There are more sophisticated variable selection methods than this, but the correlation-based method is sufficient for our demonstration here. Let's fit the model of body fat percentage with all three predictors and determine the standard error for the abdominal circumference estimate.
+
+```{r}
+#fit model with weight
+model1 <- lm(BodyFat~.,data=body)
+
+#extract coefficient statistics
+coefficients(summary(model1))
+```
+
+The standard error for the predictor we want to keep in the model (i.e., abdominal circumference) is 0.168. Now, let's compute the standard error for this predictor when the collinear predictor (i.e., weight) is removed.
+
+```{r}
+#fit model without weight
+model2 <- lm(BodyFat~Age+Abdominal,data=body)
+
+#extract coefficient statistics
+coefficients(summary(model2))
+```
+
+The standard error for the abdominal circumference predictor decreased to 0.076. This is less than half of the standard error before! Let's compare the margin of error for 95% confidence intervals in both cases.
+
+```{r}
+#compute margin of error with weight
+qt(p=0.025,df=nrow(body)-4,lower.tail=FALSE)*0.168
+
+#compute margin of error without weight
+qt(p=0.025,df=nrow(body)-3,lower.tail=FALSE)*0.076
+```
+
+The margin of error for a confidence interval on the abdominal circumference coefficient is 0.33 body fat percentage-points per inch of circumference when weight is included in the model. Without weight in the model, the margin of error is reduced to 0.15. Thus, removing the collinear variable improves the precision of our estimate for the effect of abdominal circumference on body fat percentage.
+
+For purposes of comparison, observe the difference in standard error for the age predictor between the two models. There is very little difference (0.026 versus 0.024) with or without weight in the model. This is a strong indicator that age is *not* collinear with weight, because the existence of weight in the model has no impact on the estimate of standard error for age. Now you can practice evaluating the impact of collinearity on standard error in your own model.
+
+## Practice 2
+
+Using your model with neck circumference, fit models with and without weight as a predictor. Then answer the following questions:
+
+* What is the margin of error for a 90% confidence interval on the neck circumference predictor when weight is in the model?
+* What is the margin of error for a 90% confidence interval on the neck circumference predictor when weight is *not* in the model?
+* How does the standard error for the age predictor change between the two models? What does this indicate?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+A more comprehensive method to check for multicollinearity among *all* the predictors in the model is to compute a **variance inflation factor (VIF)**. The VIF measures the total increase in standard error across all predictors when another potentially-collinear predictor is included in the model. For the $i$th predictor variable, the VIF is calculated as:
+
+$$
+VIF=\frac{1}{1-R_i^2}
+$$
+
+where $R_i^2$ is the R-squared value obtained by fitting a regression model with the $i$th variable as the response and the remaining explanatory variables as predictors. If $R_i^2$ is large, then the $i$th predictor variable is highly correlated with some or all of the other predictors. A large $R_i^2$ results in a relatively large $VIF$ and an indication of multicollinearity. There are no agreed-upon rule for how large of a $VIF$ is *too* large. However, a common threshold is a value of 5. Let's finish the lesson by computed the $VIF$ for predictor variables.
+
+## Example 3
+
+Let's begin the example by fitting a model with weight as the response and with age and abdominal circumference as predictors.
+
+```{r}
+#fit model
+model3 <- lm(Weight~Age+Abdominal,data=body)
+
+#extract R-squared
+summary(model3)$r.squared
+```
+
+The model indicates $R_i^2=0.819$ when weight is treated as the $i$th predictor variable. Using the appropriate formula, this is equivalent to $VIF=5.517$. Because this $VIF$ value exceeds 5, we have concern for multicollinearity in the model associated with the weight predictor. Since $VIF$ is connected to one predictor at a time, we would need to repeat this process for every predictor. Luckily, there are packages for `R` that complete this repetitive task for us.
+
+```{r}
+#load car package
+library(car)
+
+#compute VIF for all predictors
+vif(model1)
+```
+
+The output of the `vif()` function from the `car` package is the same $R_i^2$ calculation we completed manually. For the weight predictor, we once again obtain 5.517. However, we also get the same calculation for the other predictors. As we've suspected all along, there is no issue with multicollinearity regarding the age predictor. But there *are* issues for both weight and abdominal circumference because they are collinear with one another. So, one of them should be removed from the model if we hope to obtain accurate confidence intervals on the slope parameters.
+
+Because the primary impact of multicollinearity is the inflation of variability surrounding the slope parameter estimates, it is most worrisome when conducting inference. If our primary focus is on *prediction*, then there is less of a concern for multicollinearity. This is due to differences in performance metrics. When conducting inference, we want precise estimates of the slope parameters (i.e., small margin of error) for the predictor variables. When pursuing prediction, we only care about the accuracy of the estimates for the response variable. So, if a collinear model is more accurate, in terms of prediction, we may choose to ignore the variance inflation. Now you can practice computing the $VIF$.
+
+## Practice 3
+
+Using your model with neck circumference, manually compute the $VIF$ for the weight predictor. Then answer the following questions:
+
+* Does your $VIF$ value exceed 5? What does this mean about the weight predictor?
+* Compare your manually-calculated value with what you obtain using the `vif()` function. Are they the same?
+* What do the $VIF$ values for the other two predictors suggest about multicollinearity?
+

@@ -1,0 +1,179 @@
+---
+title: "Computational Slope Estimation"
+author: "Dr. Kris Pruitt"
+date: "12 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce computational methods for conducting inferential statistical analysis on the slope parameter of a simple linear regression model. Students should leave this lesson with the ability to construct a confidence interval for the slope based on a bootstrap sampling distribution and to complete a hypothesis test of the slope using randomization.
+
+## Reason 1
+
+For a number of lessons, we have explored statistical methods for estimating the value of a population parameter using sample data. When fitting a regression model using sample data, the slope is a statistic intended to estimate the true slope in the population. Thus, we are estimating a population parameter, just like any other. Consequently, all of our previously studied methods for constructing confidence intervals and completing hypothesis tests apply to regression as well.
+
+Rather than reporting a single point estimate of the slope, we prefer to provide a range of likely values along with a confidence level. We can do this using computational or theoretical methods. For this lesson, we will focus on computational approaches and construct a bootstrap confidence interval for the slope.
+
+## Example 1
+
+For this example, we will use a data set regarding the gestation period of babies from the early 1960s. Load the `mosaicData` package and import the `Gestation` data frame. The study associated with this data was originally conducted to research the impact of the mother's smoking habits on the health of the baby.
+
+```{r}
+#load package
+library(mosaicData)
+
+#import data
+data(Gestation)
+```
+
+Suppose we are interested in the association between gestation period (months) and birth weight (pounds). We'll begin by wrangling the data and visualizing the association in a scatter plot.
+
+```{r}
+#wrangle data
+births <- Gestation %>%
+  transmute(months=gestation/30.42,
+            weight=wt/16) %>%
+  na.omit() %>%
+  filter(months>7,months<11)
+  
+#plot gestation versus weight
+ggplot(data=births,aes(x=months,y=weight)) +
+  geom_point(position='jitter',alpha=0.3) +
+  geom_smooth(method='lm',se=TRUE) +
+  scale_x_continuous(limits=c(7,11),breaks=seq(7,11,0.5)) +
+  scale_y_continuous(limits=c(3.5,11),breaks=seq(3.5,11,1)) +
+  labs(x='Gestation Period (months)',
+       y='Birth Weight (pounds)') +
+  theme_bw()
+```
+
+There does appear to be a weak, increasing, linear association between gestation period and birth weight. This makes intuitive sense, because the longer a baby has to grow in the womb, the heavier we would expect it to be upon birth, on average. As we've done in the past, we can fit a linear regression model of this association using the `lm()` function.
+
+```{r}
+#fit regression model
+model <- lm(weight~months,data=births)
+
+#display model statistics
+summary(model)
+```
+
+The point estimate for the slope is about 1 pound per month. Though gestation period is a significant predictor, the R-squared value indicates that only 18% of the variation in birth weight can be explained by gestation period. Clearly, many other factors impact the birth weight of a baby. However, there is value in knowing the gestation period.
+
+We have a point estimate for the slope of 0.996, but how well does this single value estimate the true slope in the population of all births? To answer this question, we need a confidence interval for the slope. We can construct this interval computationally by repeatedly resampling births and estimating the slope for each resample. Then we can construct a bootstrap sampling distribution for the slope. Let's execute this method.
+
+```{r}
+#initiate empty vector
+results <- data.frame(slope=rep(NA,1000))
+
+#repeat resampling 1000 times and save estimated slopes
+for(i in 1:1000){
+  
+  set.seed(i)
+  rows <- sample(x=nrow(births),size=nrow(births),replace=TRUE)
+  resample <- births[rows,]
+  
+  remodel <- lm(weight~months,data=resample)
+  results$slope[i] <- coefficients(summary(remodel))[2,1]
+  
+}
+
+#plot null distribution
+ggplot(data=results,aes(x=slope)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=quantile(results$slope,probs=0.05),
+             color='red', size=1) +
+  geom_vline(xintercept=quantile(results$slope,probs=0.95),
+             color='red', size=1) +
+  labs(title='Bootstrap Sampling Distribution (90% confidence interval)',
+       x='Estimated Slope (pounds per month)',y='Count') +
+  theme_bw()
+```
+
+The bootstrap sampling distribution appears relatively symmetric, bell-shaped, and centered on a value of 1 pound per month. However, slopes as low as 0.8 or as high as 1.2 are also plausible. Based on the bounds (red lines) in the plot, we are 90% confident that the true slope is between about 0.87 and 1.12. Said another way, we are 90% confident that for every additional month of gestation a baby's birth weight increases by between 0.87 and 1.12 pounds.
+
+Now you can construct your own bootstrap confidence interval for the slope parameter of a simple linear regression.
+
+## Practice 1
+
+Construct a 95% bootstrap confidence interval for the estimated slope that associates the mother's height and pre-pregnancy weight. Then answer the following questions:
+
+* How would you describe the visual association between these two variables?
+* What is the proper interpretation of the confidence interval, in the context of the problem?
+* What are the necessary assumptions for using the bootstrap method?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+In the previous section, we constructed a confidence interval for the slope parameter of a regression model using bootstrap resampling. Just as with any other population parameter, we can also conduct hypothesis tests on the slope parameter. If we let $\beta_1$ represent the slope parameter, then the most common hypotheses are:
+
+$$
+\begin{aligned}
+H_0: \; \beta_1=0 \\
+H_A: \; \beta_1 \neq 0
+\end{aligned}
+$$
+
+Let's think carefully about the meaning of the null hypothesis. If the slope parameter is equal to zero, then there is *no association* between the predictor variable and the response. Visually, a slope of zero implies a flat regression line. A flat regression line suggests that the response variable has the same average value regardless of the predictor value. By contrast, if the slope is not zero, then there is *some association* between the predictor and the response. We'll continue this lesson by completing a test of these hypotheses using randomization.
+
+## Example 2
+
+Returning to the gestation period example, we will define $\beta_1$ as the true slope parameter in units of pounds per month. Our null hypothesis suggests this slope is equal to zero, while the alternate claims it is not equal to zero. We'll choose a significance level of $\alpha=0.05$ and we already know from the previous section that the test statistic is $\hat{\beta}_1=0.996$. Clearly the test statistic is non-zero, but we must compare this value to a null distribution in order to assess how significantly it differs from zero.
+
+We can construct a null distribution using the randomization method we've employed in other tests. If we hold the predictor variable column static and shuffle the values in the response variable column, then we are simulating *no association* between the two variables. If a certain gestation period (months) can be assigned any birth weight (pounds) within the range of the sample, then there is no clear relationship between the two. Let's conduct this randomization and generate a null distribution.
+
+```{r}
+#initiate empty vector
+results2 <- data.frame(slope=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  shuffle <- births %>%
+    transmute(months,weight,
+              Shuffle_wt=sample(births$weight,replace=FALSE))
+  
+  remodel2 <- lm(Shuffle_wt~months,data=shuffle)
+  results2$slope[i] <- coefficients(summary(remodel2))[2,1]
+  
+}
+
+#compute rejection thresholds
+threshold1 <- as.numeric(quantile(results2$slope,0.025))
+threshold2 <- as.numeric(quantile(results2$slope,0.975))
+
+#plot null distribution
+ggplot(data=results2,aes(x=slope)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=threshold1,color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=threshold2,color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=0.996,color='red',size=1) +
+  labs(title='Null Distribution and Test Statistic',
+       x='Estimated Slope (pounds per month)',y='Count') +
+  theme_bw()
+```
+
+Our computational null distribution is centered on zero, as we would expect. Based on the rejection thresholds, we would reject the null hypothesis for any observed slope beyond about $\pm 0.15$. Since our observed slope is nearly 1 with a p-value of effectively zero, we clearly reject the null hypothesis. There is significant statistical evidence to suggest that the true slope parameter is *not* zero. In other words, there *is* some association between gestation period and birth weight. Now you can conduct your own hypothesis test.
+
+## Practice 2
+
+Complete a hypothesis test for the slope parameter that estimates the association between a mother's height and pre-pregnancy weight. Use a significance level of $\alpha=0.1$. Then answer the following questions:
+
+* How would you describe the shape of the null distribution?
+* What is the conclusion of your test, in the context of the problem?
+* How does the interpretation of this test differ from that of the correlation coefficient (or R-squared)?
+
+

@@ -1,0 +1,195 @@
+---
+title: "Analysis of Variance"
+author: "Dr. Kris Pruitt"
+date: "7 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the methodology for the analysis of variance (ANOVA). Students should leave this lesson with the ability to formulate and execute a computational hypothesis test to compare the means of three or more populations.
+
+## Reason 1
+
+In previous lessons, we've demonstrated inferential statistics techniques for a single population parameter or to compare two population parameters. In this lesson, we will explore the comparison of three or more population parameters. Specifically, we will conduct a hypothesis test to compare three or more population *means*. Such hypothesis tests are often referred to as the analysis of variance (ANOVA) because they consider the variability both between and within populations. An ANOVA test requires three assumptions:
+
+* Observations are independent both between and within groups (populations)
+* Response values are roughly Normally distributed within groups
+* Response values have roughly equal variance between groups
+
+Like any hypothesis test, ANOVA requires null and alternate hypotheses. If we let $\mu_i$ be the true mean of population $i$, then the hypotheses for $k$ total populations are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_1=\mu_2=\mu_3=...=\mu_k \\
+H_A:& \; \text{At least one} \; \mu_i \; \text{differs from the others}
+\end{aligned}
+$$
+
+With these hypotheses, it is not immediately clear what the appropriate test statistic and null distribution might be. Given the multiple combinations of populations under consideration, we need a new method involving the F-distribution. We'll being this lesson by introducing the concept and computation of an F-statistic.
+
+## Example 1
+
+For this example, we will compare the mean flipper length of the three species of penguins from the Palmer Archipelago. Load the `palmerpenguins` library and import the `penguins` data table.
+
+```{r}
+#load Palmer penguins package
+library(palmerpenguins)
+
+#import penguins data
+data(penguins)
+
+#remove missing flipper values
+penguins2 <- penguins %>%
+  transmute(species,flipper=flipper_length_mm) %>%
+  na.omit()
+```
+
+As an initial check of the assumptions, we produce comparative boxplots for each species.
+
+```{r,echo=FALSE}
+#plot flipper length by species
+ggplot(data=penguins2,aes(x=flipper,y=species)) +
+  geom_boxplot(fill='sky blue') +
+  geom_vline(xintercept=mean(penguins2$flipper),color='red',size=1) +
+  labs(title='Palmer Archipelago Penguins',
+       x='Flipper Length (mm)',
+       y='Species') +
+  theme_bw()
+```
+
+We have no reason to believe that the flipper length of one penguin would influence that of another, either between or within species. The only conceivable exception might be the offspring of one penguin having similar flipper length as its parents, but we do not have access to this information. Within each species, the distribution appears relatively symmetric and bell shaped. We'll learn more objective measures of Normality in future lessons, but a visual inspection will suffice for now. Finally, the variability looks very similar between species based on the box plots. But we can also perform a quick numerical check below to confirm that the groups have similar variances.
+
+```{r}
+#compute standard deviation by species
+penguins2 %>%
+  group_by(species) %>%
+  summarize(stdev=sd(flipper)) %>%
+  ungroup()
+```
+
+Based on a purely visual inspection, it appears that Gentoo penguins have significantly longer flippers than the other two species. Thus, we would expect the true mean flipper length to differ for Gentoos. However, we should resist the temptation to draw purely visual conclusions such as this. ANOVA provides a structured method for assessing differences in population parameters in order to draw more objective conclusions.
+
+There are two types of variability involved in ANOVA: between groups and within groups. The variability between groups is sometimes referred to as the **mean square between groups (MSG)** and is calculated as:
+
+$$
+MSG=\frac{\sum_{i=1}^kn_i(\bar{x}_i-\bar{x})^2}{k-1}
+$$
+
+In this case, $n_i$ is the number of observations in group $i$, $\bar{x}_i$ is the mean within group $i$, and $\bar{x}$ is the overall mean. In the box plot, we can think of $MSG$ as how far, on average, the middle of each box is from the red line (overall mean). A large $MSG$ would appear as spread out boxes, whereas a small $MSG$ would appear as relatively aligned boxes.
+
+The variability within groups is often referred to as the **mean square error (MSE)** and is calculated as:
+
+$$
+MSE=\frac{\sum_{i=1}^k(n_i-1)s_i^2}{n-k}
+$$
+
+The variance within each group is represented as $s_i^2$ and the total number of observations is $n$. In the box plot, we can think of $MSE$ as how wide or narrow, on average, the boxes are. A large $MSE$ would appear as relatively wide boxes, while a small $MSE$ would appear as relatively narrow boxes.
+
+Combining these two sources of variation, we arrive at what is known as the F-statistic.
+
+$$
+F=\frac{MSG}{MSE}
+$$
+
+Think carefully about what would lead to large versus small values for the F-statistic. A large $MSG$ (spread out boxes) and small $MSE$ (narrow boxes) would produce large F-statistic values. Large F-statistic values indicate very *different* populations. By contrast, a small $MSG$ (aligned boxes) and large $MSE$ (wide boxes) would produce small F-statistic values. Small F-statistic values suggest very *similar* populations.
+
+Let's calculate the F-statistic for our flipper length data. Luckily, we don't need to do it by hand. We can take advantage of the `aov()` function in `R`.
+
+```{r}
+#compute ANOVA stats
+anova <- aov(flipper~species,data=penguins2)
+
+#display ANOVA stats
+summary(anova)
+```
+
+For now, we will only focus on the `Mean Sq` column of the resulting table. Since the penguins are grouped by species, the $MSG$ is the first row (26,237). The error is represented by residuals, so the $MSE$ is the second row (44). The ratio of these two values is the `F value` provided in the subsequent column. We can also access the F-statistic directly as:
+
+```{r}
+#extract F-statistic
+summary(anova)[[1]][1,4]
+```
+
+So, we have an F-statistic of about 595. Should we consider this large? We'll answer this question in the next section. For now, practice making a box plot and calculating an F-statistic to compare means.
+
+## Practice 1
+
+Using bill length (as opposed to flipper length), complete the following steps.
+
+* Construct a comparative box plot that includes the overall mean.
+* Check the three assumptions of ANOVA.
+* Compute the F-statistic for your test to compare the three means.
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+In previous lessons on hypothesis testing, we demonstrated both computational and theoretical methods for producing null distributions. ANOVA is no different. We can generate a computational F-distribution using the same randomization technique we applied to a difference in two means. With this computational null distribution, we can determine if the F-statistic observed in the data is likely or unlikely under the null hypothesis. We'll continue the lesson by generating a null distribution via randomization.
+
+## Example 2
+
+Let $\mu_1$,$\mu_2$, and $\mu_3$ be the true mean flipper lengths for Adelie, Chinstrap, and Gentoo penguins, respectively. Then the **null and alternate hypotheses** for the ANOVA are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_1=\mu_2=\mu_3 \\
+H_A:& \; \text{At least one species differs}
+\end{aligned}
+$$
+
+We'll choose a **significance level** of $\alpha=0.1$ and we already know our **test statistic** is 595 from the previous section. Now we need to generate a **null distribution** to determine the likelihood of this test statistic under the null hypothesis. Thus, we'll repeatedly shuffle the flipper length values across the three species and compute an F-statistic each time. This will give us an idea of the F-statistic values we might expect under the null hypothesis.
+
+```{r}
+#initiate empty vector
+results <- data.frame(fstat=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  shuffle <- penguins2 %>%
+    transmute(species,
+              flipper=sample(penguins2$flipper,replace=FALSE))
+  
+  anova_sim <- aov(flipper~species,data=shuffle)
+  
+  results$fstat[i] <- summary(anova_sim)[[1]][1,4]
+  
+}
+
+#compute rejection threshold
+threshold <- as.numeric(quantile(results$fstat,0.95))
+
+#plot null distribution
+ggplot(data=results,aes(x=fstat)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=threshold,color='red',size=1,linetype='dashed') +
+  labs(title='Null Distribution and Rejection Threshold',
+       x='F-statistic Value',y='Count') +
+  theme_bw()
+```
+
+A few interesting characteristics for the null distributions appear. First, we notice that the F-distribution is highly skewed to the right. Second, we notice that the most likely values under the null hypothesis are near 1. Thus, when the populations have very similar means, we expect to see F-statistics close to 1. Based on our significance level, we would choose to reject the null hypothesis for any F-statistic greater than about 3. Our observed F-statistic was 595! Consequently, the **p-value** is effectively zero.
+
+The results of the ANOVA test suggest we **reject the null hypothesis**. We have significant statistical evidence to suggest that at least one penguin species differs in terms of mean flipper length. Now you can practice the same complete hypothesis test.
+
+## Practice 2
+
+Complete an ANOVA hypothesis test to compare the true mean bill length across the three species of penguins. Then answer the following questions.
+
+* What is the shape and mode of your resulting null distribution?
+* What is the conclusion of your test, in the context of the problem?
+* What lingering question do you have regarding the difference in bill length across penguin species?
+

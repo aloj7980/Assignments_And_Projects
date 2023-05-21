@@ -1,0 +1,249 @@
+---
+title: "Margin of Error"
+author: "Dr. Kris Pruitt"
+date: "6 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to quantify the variability of a statistic using the Normal distribution. Students should leave this lesson with the ability to compute and interpret the margin of error for a population mean and proportion.
+
+
+## Reason 1
+
+In previous lessons we discussed the value of an interval estimate for a population parameter, as opposed to a single point estimate. An interval estimate's value is derived from the fact that statistics vary depending on the sample from which they are calculated. Thus, any individual point estimate is unlikely to be equivalent to the true parameter. To acknowledge this, we provide a **margin of error** for any point estimate that captures the variability of the statistic. We'll begin this lesson by discussing one of the key components of the margin of error: **standard error**.
+
+## Example 1
+
+An important distinction in inferential statistics is the difference between the standard deviation of a variable and the standard error for a statistic related to that variable. We'll demonstrate this difference using a data set related to the online clothing store Myntra. Download and import the `shirts_data.csv` file from the course site.
+
+```{r}
+shirts <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/shirt_data.csv')
+```
+
+Suppose we are interested in estimating the average chest circumference (in cm) of T-shirts listed as size medium. Let's filter the data to focus on the appropriate information.
+
+```{r}
+medium <- shirts %>%
+  filter(Brand.Size=='M',
+         Chest.cm.>90,Chest.cm.<120) %>%
+  transmute(Chest=Chest.cm.)
+```
+
+The sample now consists of 149 chest measurements for medium T-shirts. An initial review of the data reveals two outliers that are almost certainly mistakes. While the majority of the measurements are between 90 and 120 cm, there was one shirt at half this range and one that was ten-times this range. So, these two shirts were removed. We can visualize the distribution of individual T-shirt measurements, along with the sample mean and standard deviation.
+
+```{r}
+ggplot(data=medium,aes(x=Chest)) +
+  geom_histogram(color='black',fill='sky blue',
+                 bins=12) +
+  geom_vline(xintercept=mean(medium$Chest),color='red',size=1) +
+  geom_vline(xintercept=mean(medium$Chest)+sd(medium$Chest),color='red',size=1,
+             linetype='dashed') +
+  geom_vline(xintercept=mean(medium$Chest)-sd(medium$Chest),color='red',size=1,
+             linetype='dashed') +
+  scale_x_continuous(limits=c(90,120),breaks=seq(90,120,5)) +
+  labs(x='Chest Circumference (cm)',
+       y='Count') +
+  theme_bw()
+```
+
+The sample of 149 medium shirts has a mean of 106.46 cm and a standard deviation of 4.20 cm. The sample is also relatively symmetric about the mean. However, we must be careful with the proper interpretation. The histogram above is an estimate of the distribution of *individual* shirt measurements. It is not the distribution of the *average* shirt measurement. In order to visualize the distribution of average shirt measurement, we need to generate a **sampling distribution** either computationally or via the Central Limit Theorem (CLT). We'll generate both and compare them.
+
+Let's create the sampling distribution for mean chest circumference using bootstrap resampling.
+
+```{r}
+#initiate empty vector
+results <- data.frame(avg=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results$avg[i] <- mean(sample(medium$Chest,size=149,replace=TRUE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results,aes(x=avg)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=mean(results$avg),color='red',size=1) +
+  geom_vline(xintercept=mean(results$avg)+sd(results$avg),color='red',size=1,
+             linetype='dashed') +
+  geom_vline(xintercept=mean(results$avg)-sd(results$avg),color='red',size=1,
+             linetype='dashed') +
+  labs(x='Sample Mean Chest Circumference (cm)',
+       y='Count') +
+  scale_x_continuous(limits=c(105,108),breaks=seq(105,108,0.5)) +
+  theme_bw()
+```
+
+The sampling distribution is relatively symmetric with a mean of 106.47 cm and a standard deviation of 0.34 cm. While the means of the previous two distributions are very similar, the standard deviations are dramatically different. The standard deviation of the sampling distribution, known as the **standard error**, is an order of magnitude smaller than the standard deviation of the original data. This is a well-known phenomenon provided by the CLT.
+
+The CLT indicates that the standard error for the sample mean can be estimated as,
+
+$$
+\text{standard error}=\frac{s}{\sqrt{n}}
+$$
+
+where $s$ is the standard deviation of the original data and $n$ is the sample size. Consequently, it is no surprise that the standard error is smaller than the original standard deviation. By the CLT, it *must* be smaller! Based on the sample we know that $s=4.20$ and $n=149$, so we can estimate the standard error directly.
+
+```{r}
+4.20/sqrt(149)
+```
+
+As expected, we obtain the same standard error of $0.34$ that resulted from the bootstrap resampling. Now you can practice distinguishing standard deviation from standard error.
+
+## Practice 1
+
+Based on the shoulder width measurement of T-shirts, complete the following tasks.
+
+* Estimate the standard error of mean shoulder width using bootstrap resampling.
+* Estimate the standard error of mean shoulder width using the CLT.
+* What is an intuitive explanation for why standard error is less than standard deviation?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we demonstrated that the standard error of the sample mean is smaller than the standard deviation of the original sample. This result is not unique to estimating the mean. We'll continue the lesson by demonstrating the same result for a proportion.
+
+## Example 2
+
+Imagine we are interested in estimating the proportion of T-shirts that are size medium. Let's limit the sample to this data.
+
+```{r}
+medium_bin <- shirts %>%
+  transmute(med=ifelse(Brand.Size=='M',1,0))
+```
+
+We've calculated the mean of a binary response to obtain the proportion in prior applications, but we can also calculate the standard deviation.
+
+```{r}
+mean(medium_bin$med)
+sd(medium_bin$med)
+```
+
+Thus, the sample proportion of medium shirts is 0.18 with a standard deviation of 0.39. It's not as intuitive to try and plot the distribution of a binary response, but we can plot the sampling distribution of the proportion using the bootstrap.
+
+```{r}
+#initiate empty vector
+results2 <- data.frame(prop=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results2$prop[i] <- mean(sample(medium_bin$med,size=834,replace=TRUE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results2,aes(x=prop)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=mean(results2$prop),color='red',size=1) +
+  geom_vline(xintercept=mean(results2$prop)+sd(results2$prop),color='red',size=1,
+             linetype='dashed') +
+  geom_vline(xintercept=mean(results2$prop)-sd(results2$prop),color='red',size=1,
+             linetype='dashed') +
+  labs(x='Sample Proportion of Medium Shirts',
+       y='Count') +
+  scale_x_continuous(limits=c(0.13,0.23),breaks=seq(0.13,0.23,0.01)) +
+  theme_bw()
+```
+
+We obtain similar results for the proportion as we did with the mean. The sampling distribution is centered on 18% medium shirts, which is the same as the observed proportion in the original sample. However, the standard error is much smaller than the original standard deviation of 0.39. In fact, the standard error is only 1.3%.
+
+```{r}
+mean(results2$prop)
+sd(results2$prop)
+```
+
+AS with the sample mean, we could have predicted this outcome based on the CLT. The CLT dictates that the standard error of a sample proportion is equal to,
+
+$$
+\text{standard error}=\sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+$$
+
+where $\hat{p}$ is the sample proportion and $n$ is the sample size. With a sample proportion of $\hat{p}=0.18$ and a sample size of $n=834$, we can directly calculate the standard error.
+
+```{r}
+sqrt((0.18*(1-0.18))/834)
+```
+
+As expected, we obtain the same standard error of 1.3% that we witnessed from the bootstrap resampling. Now you can practice calculating the standard error of a sample proportion.
+
+## Practice 2
+
+Based on small shirt size, complete the following tasks.
+
+* Estimate the standard error of the proportion of small shirts using bootstrap resampling.
+* Estimate the standard error of the proportion of small shirts using the CLT.
+* How much of the sampling distribution should be within one standard error of the center?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The standard error is a key component for determining the **margin of error**. But we must also assign a level of confidence in our estimate of the associated parameter in order to make the leap to a margin of error. The level of confidence defines a critical value on the Normal distribution which determines the number of standard errors required. In other words,
+
+$$
+\text{margin of error}=\text{critical value} \cdot \text{standard error}
+$$
+
+We'll finish this lesson by computing margins or error for our T-shirt estimates.
+
+## Example 3
+
+The critical values of the Normal distribution are determined using the `qnorm()` function. More specifically, we use the Standard Normal distribution so we don't have to change the mean and standard deviation for every application. Let's compute the critical values associated with 90%, 95%, and 99% levels of confidence.
+
+```{r}
+qnorm(p=0.05,mean=0,sd=1,lower.tail=FALSE)
+qnorm(p=0.025,mean=0,sd=1,lower.tail=FALSE)
+qnorm(p=0.005,mean=0,sd=1,lower.tail=FALSE)
+```
+
+So, if we want to create a margin of error associated with 90% confidence, then we require 1.64 standard errors. Similarly, if we want a margin of error associated with 95% (99%) confidence, then we require 1.96 (2.58) standard errors. Let's put all of this together using the mean chest circumference example.
+
+Recall the sample mean, standard deviation, and size for chest circumference of shirts are 106.46 cm, 4.20 cm, and 149 shirts. The CLT states that a 95% confidence interval for mean chest circumference is:
+
+$$
+\begin{aligned}
+106.46 &\pm 1.96 \cdot \frac{4.20}{\sqrt{149}} \\
+106.46 &\pm 0.67
+\end{aligned}
+$$
+
+Thus, the margin of error associated with 95% confidence in our estimate is 0.67 cm. More generally, the CLT states that a $100 \cdot (1-\alpha)$% confidence interval for the population mean is calculated as,
+
+$$
+\bar{x} \pm z_{\alpha/2} \cdot \frac{s}{\sqrt{n}}
+$$
+
+where $z_{\alpha/2}$ is the right-tail (positive) critical value on the Standard Normal distribution associated with $100 \cdot (1-\alpha)$% confidence. The CLT provides a similar formula for estimating the population proportion.
+
+$$
+\hat{p} \pm z_{\alpha/2} \cdot \sqrt{\frac{\hat{p}(1-\hat{p})}{n}}
+$$
+
+In either case, the margin of error is the amount we must vary ($\pm$) from the point estimate in order to obtain the desired level of confidence. Now you can finish the lesson by calculating your own margins of error.
+
+## Practice 3
+
+Using results from the previous two practice sections, answer the following questions.
+
+* What is the margin of error for an estimate of mean shoulder width at 90% confidence?
+* What is the margin of error for an estimate of the proportion of small shirts at 99% confidence?
+* What are the two requirements that permit you to use the CLT for these estimates?

@@ -1,0 +1,208 @@
+---
+title: "Adjusted R-Squared"
+author: "Dr. Kris Pruitt"
+date: "3 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to estimate, interpret, and evaluate a linear regression model with multiple predictor (explanatory) variables. Students should leave this lesson with an understanding of how multiple predictor coefficients are estimated in a single model and how to properly interpret these coefficients in the context of the problem. Students should also understand how to evaluate the quality of fit for a multiple regression model and why adjustments to R-squared are beneficial for such models.
+
+
+## Reason 1
+
+In our last lesson, we discussed a multiple linear regression model where the predictors were categorical indicator variables. We can also fit a model where multiple predictors are continuous numerical variables (or a mix of the two types). In general, our multiple linear regression model is:
+
+$$
+y=\beta_0 +\beta_1 x_1 +\beta_2 x_2 + ...+ \beta_{k} x_{k} + \epsilon
+$$
+
+Just as with simple linear regression, we seek estimates ($\hat{\beta}_i$) for the coefficients that minimize the sum of the squared residuals. In other words, if $y_i$ is the actual response value for the $i$th observation and $\hat{y}_i$ is the fitted value, then we want to choose $(\hat{\beta}_0,\hat{\beta}_1,...,\hat{\beta}_k)$ such that the following objective function is as small as possible.
+
+$$
+\sum_{i=1}^n (y_i-\hat{y}_i)^2
+$$
+
+So, nothing has changed in the way `R` estimates the coefficients. The methodology is still least-squares regression and we just have more coefficient estimates than before. However, the way we *interpret* these coefficients is subtly different than in the simple regression context. We'll begin the lesson by exploring this difference via an example.
+
+
+## Example 1
+
+Let's refer to the data set regarding the body composition of adult males for this example. Import the file `bodyfat_data.csv` and view the data frame as a refresher.
+
+```{r}
+bodyfat <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/bodyfat_data.csv')
+```
+
+We'll start with a simple linear regression model for a point of comparison. Imagine we want to predict a male's body fat percentage based on his abdominal circumference. As a result, we fit the following model:
+
+```{r}
+model1 <- lm(BodyFat~Abdomen,data=bodyfat)
+coefficients(summary(model1))
+```
+
+The estimated regression equation is $\text{BodyFat}=0.631 \cdot \text{Abdomen}-39.280$. Recall, the appropriate interpretation of the slope coefficient is that for every 1 cm increase in abdominal circumference, we expect a 0.631 percentage-point increase in average body fat.
+
+Now, suppose we also believe a male's chest and thigh circumferences have predictive value for estimating body fat. We can add these two variables to the model simply using the plus sign.
+
+```{r}
+model2 <- lm(BodyFat~Abdomen+Chest+Thigh,data=bodyfat)
+coefficients(summary(model2))
+```
+
+Just as before, we use the coefficient estimates to write the regression equation as:
+
+$$
+\text{BodyFat}=0.884 \cdot \text{Abdomen}-0.237 \cdot \text{Chest}-0.222 \cdot \text{Thigh}-25.582
+$$
+
+The coefficients for each predictor variable are still an estimate of their impact on the response variable. However, that numerical impact is only valid when the other predictor variable values are held *constant*. So, the proper interpretation would be: When chest and thigh circumference are held *constant*, every 1 cm increase in abdominal circumference is expected to result in a 0.884 percentage-point increase in average body fat. 
+
+Why did the affect of abdominal circumference on body fat change from the simple linear regression model? The fact that this impact changed when we added chest and thigh circumference suggests that they are associated (correlated) with abdominal circumference. In other words, these measurements are not all independent of one another. Males with a larger abdomen generally have a larger chest and thighs. We can see this visually if we generate a pairwise scatter plot of all the model variables.
+
+```{r}
+model_vars <- bodyfat %>%
+  select(BodyFat,Abdomen,Chest,Thigh)
+
+pairs(model_vars)
+```
+
+Now we can see that not only are the predictors linearly correlated with the response, but they are also linearly correlated with one another. This phenomenon is called **collinearity** and it presents problems when we try to properly interpret the estimated coefficients. Later in the course we will spend quite a bit of time learning how to identify and overcome this issue. For now, it is best to check for collinearity visually and avoid including predictors that are associated with one another. Let's practice fitting and interpreting a different multiple linear regression model.
+
+
+## Practice 1
+
+Fit a multiple linear regression model with body fat as the response and chest, hip, and ankle circumference as predictors. Then answer the following questions.
+
+* What is the estimated regression equation?
+* What is the proper interpretation of the coefficient for hip circumference?
+* Compare the estimated coefficient for chest circumference in this model to that of the example model. How do they differ and what explanation can you think of for what you observe?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we highlighted the importance of not including collinear predictors in a multiple regression model. In practice, we should check for collinearity *before* we fit the model, rather than discovering it afterward. We'll continue the lesson by demonstrating one method for identifying and avoiding collinearity prior to fitting a model. Again, we'll explore this extensively later in the course.
+
+
+## Example 2
+
+For this example, we will use the NBA team statistics in the file `nba_data.csv` on the course website. Download and view the data frame.
+
+```{r}
+nba <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/nba_data.csv')
+```
+
+Suppose we want to explore the impact of a team's performance statistics (shooting percentages, assists, turnovers, etc.) on its margin of victory. It is tempting to just throw in all of the available predictors. However, if we want to be able to properly interpret the estimated coefficients, we need to check for collinearity. In the last section we presented a visual method for checking with scatter plots. Another good option is a correlation matrix like the one below.
+
+```{r}
+nba_vars <- nba %>%
+  select(-season,-game_id,-team)
+
+cor(nba_vars)
+```
+
+This matrix provides the Pearson correlation coefficient for all pairs of numerical variables in the data frame. If we look along the bottom row, we can see how the predictors are correlated with the response (`MOV`). Two-point percentage, three-point percentage, and assists all have a weak correlation (individually) with margin of victory. So, we might like to include all three predictors in a multiple regression model. However, assists is also weakly correlated with the two different shooting percentages! This makes sense if you follow basketball, because an assist cannot happen without someone scoring a two or three-point shot. So, we should not include assists in a model with the other two variables. Including it would be like "double counting" the affect.
+
+Luckily, the two shooting percentages are not correlated with one another, so it is safe to put both in a model. Let's fit a model with margin of victory as the response and the two shooting percentages as the predictors.
+
+```{r}
+model3 <- lm(MOV~X2PP+X3PP,data=nba)
+coefficients(summary(model3))
+```
+
+Our estimated model is $\text{MOV}=75.575 \cdot \text{X2PP}+67.419 \cdot \text{X3PP}-61.665$. How should we interpret the coefficient on two-point shooting percentage? We always have to be extra careful when dealing with percentages in decimal form. The proper interpretation is: For a fixed three-point shooting percentage, every 1 percentage-point increase in two-point shooting percentage is expected to produce a 0.756 point increase in margin of victory. Notice we had to adjust decimal places to make this correct. Now you can practice checking for collinearity.
+
+
+## Practice 2
+
+Import the file `starbucks_data.csv` from the course website. Suppose you are interested in fitting a multiple linear regression model with calories as the response variable. You are considering carbohydrates, protein, sugars, and calcium as potential predictor variables. Based on this scenario, complete the following steps and answer the associated questions.
+
+* Create pair-wise scatter plots for the five variables mentioned in the prompt. Which predictors, if any, appear to be strongly correlated with the response?
+* Create a correlation matrix for the five variables mentioned in the prompt. Which predictors, if any, have a moderate or strong correlation with one another?
+* Based on your responses to the previous two questions, which predictors should you include in your model? Fit this model, write the estimated regression equation, and properly interpret the coefficients.
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous lesson, we introduced R-squared as a performance metric for a linear regression model. Recall that R-squared represents the proportion of variation in the response that can be explained by its linear association with the predictor(s). Thus, R-squared values close to 1 indicate a model that is very useful in understanding the behavior of the response variable. This metric is calculated as
+
+$$
+R^2 = 1- \frac{SSE}{SST}
+$$
+
+where $SSE$ is the sum of squared errors if we use the model and $SST$ is the sum of squared errors if we always guess the average response value (rather than using the model). It turns out that this calculation of R-squared produces a biased estimate of the explained variation when we have multiple predictors in the model. So, in the multiple linear regression setting, it is common practice to adjust the calculation in the following way:
+
+$$
+\text{adjusted} \: R^2 = 1- \frac{SSE}{SST} \cdot \frac{n-1}{n-1-k}
+$$
+
+In this adjusted formula $n$ is the number of observations and $k$ is the number of predictor variables. Notice what happens as the number of predictors increases, if all else is constant. As $k$ increases, the adjusted R-squared value decreases. The ultimate effect is that the adjustment penalizes a model for adding predictors that don't improve the explained variation. We'll finish this lesson by demonstrating the impact of the R-squared adjustment.
+
+
+## Example 3
+
+In the previous section we fit a model (`model3`) with margin of victory as the response and the two shooting percentages as predictors. Let's find the R-squared value for this model.
+
+```{r}
+summary(model3)$r.squared
+```
+
+We see that about 32% of the variation in margin of victory can be explained by its linear association with two-point and three-point shooting percentages. This may seem like a poor model but there is a *lot* of variability in sports, so every little bit of explanatory capability is useful. We can find the adjusted R-squared value in the same way.
+
+```{r}
+summary(model3)$adj.r.squared
+```
+
+Notice it is a little bit smaller than the "regular" R-squared. We could have just as easily made the adjustment manually, since we know the model includes $n=999$ observations and $k=2$ predictors.
+
+```{r}
+1-((1-summary(model3)$r.squared)*(999-1)/(999-1-2))
+```
+
+The difference between the regular and adjusted R-squared is relatively small, but that will not always be the case. Mathematically we can see that the bias correction is dependent on the number of predictors relative to the number of observations.
+
+The greater value of adjusted R-squared is revealed when we want to compare the performance of models with differing numbers of predictor variables. The regular R-squared value will *always* increase if we add more predictor variables. By contrast, adjusted R-squared will only increase if the additional variables provide explanatory value. We can demonstrate this by adding a completely random predictor variable to our margin of victory model. Let's add a column of random numbers drawn from a Uniform(0,1) distribution to the data frame. We use the `set.seed()` function here just to guarantee the same random numbers are generated on all of our computers. That does not change the impact of the results we'll witness.
+
+```{r}
+set.seed(303)
+
+nba_plus <- nba %>%
+  cbind(rando=runif(n=999,min=0,max=1))
+```
+
+Now let's treat this new variable `rando` as a predictor. Pause and think about this for a moment. There is no way that this random number could help predict a team's margin of victory! It should *not* improve our model's ability to explain the variation in margin of victory. Let's see what impact it has on regular and adjusted R-squared.
+
+```{r}
+model4 <- lm(MOV~X2PP+X3PP+rando,data=nba_plus)
+
+summary(model4)$r.squared
+summary(model4)$adj.r.squared
+```
+
+If we were using regular R-squared to compare the performance of the models with and without the random predictor, then we would report an *increase* in explanatory ability from 0.324493 to 0.3249034! How could a random number help us predict margin of victory?! The fact is that it does not help. This is just demonstrating the bias in regular R-squared when there are multiple predictors. Regular R-squared will always look better with more predictors, even if they are worthless.
+
+If instead we compared the two models based on adjusted R-squared, then we see a *decrease* from 0.3231366 to 0.3228679. This is what we would expect. Not only does adding a random predictor not help the model, it actually hurts it. We do not want to include explanatory variables in our model that have no predictive value. In the next lesson we'll discuss an organized process for removing useless predictors such as this. For now, you'll finish the lesson by calculating adjusted R-squared on your own.
+
+
+## Practice 3
+
+Import the built-in Motor Trend data set (`mtcars`) regarding the performance of cars in the year 1974. Fit a multiple linear regression model with fuel efficiency as the response variable and with vehicle weight and quarter-mile time as predictor variables. Then answer the following questions.
+
+* What is the estimated regression equation for this model?
+* What is the regular R-squared value for this model and what is its meaning in the context of the problem?
+* What is the adjusted R-squared value for this model? Calculate adjusted R-squared manually from regular R-squared first. Then verify your answer by retrieving the value directly from `R`.

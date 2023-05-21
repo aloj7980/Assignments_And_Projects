@@ -1,0 +1,186 @@
+---
+title: "Analysis of Variance 2"
+author: "Dr. Kris Pruitt"
+date: "10 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to continue the presentation of the analysis of variance (ANOVA). Students should leave this lesson with the ability to formulate and execute a hypothesis test to compare the means of three or more populations using a theoretical null distribution.
+
+## Reason 1
+
+In the last lesson, we carefully developed the foundations of the F-distribution as the null distribution. We visualized this null distribution computationally using randomization. In this lesson, we will apply mathematical theory rather than computation and generate a continuous F-distribution as the null. This is analogous to when we applied the Central Limit Theorem and the Normal distribution for a test of two population means. Similarly, we will employ a theoretical F-distribution rather than a computational one. Our ANOVA test still requires three assumptions:
+
+* Independence - always a concern within and between groupings
+* Normality - mostly a concern when the groupings have *small* sample sizes
+* Equal Variance - mostly a concern when the groupings have *different* sample sizes
+
+We'll begin the lesson by completing a full ANOVA using a theoretical F-distribution.
+
+## Example 1
+
+For this example, we will compare the mean strikeout rate of Major League Baseball (MLB) pitchers across the most recent four decades. We will limit our population to only players who pitched at least 80 innings in a given season and sample a total of 1,000 pitchers over the four decades.
+
+```{r}
+#load Lahman package
+library(Lahman)
+
+#import batting data
+data(Pitching)
+
+#wrangle pitching data
+pitchers <- Pitching %>%
+  filter(yearID>=1980,
+         yearID<=2019,
+         IPouts>=240) %>%
+  transmute(playerID,yearID,teamID,BFP,BB,SO,
+            SOR=SO/BFP,BBR=BB/BFP,
+            decade=case_when(
+              yearID>=1980 & yearID<=1989 ~ '1980s',
+              yearID>=1990 & yearID<=1999 ~ '1990s',
+              yearID>=2000 & yearID<=2009 ~ '2000s',
+              TRUE ~ '2010s'
+            )) %>%
+  na.omit()
+
+#sample 1,000 pitchers
+set.seed(719)
+rows <- sample(x=nrow(pitchers),size=1000,replace=FALSE)
+
+sample1 <- pitchers[rows,]
+```
+
+Because we randomly sampled from the population, the independence assumption should be fulfilled. We can initially check the normality and variance assumptions in a box plot.
+
+```{r,echo=FALSE}
+#plot strikeout rate by decade
+ggplot(data=sample1,aes(x=SOR,y=decade)) +
+  geom_boxplot(fill='sky blue') +
+  geom_vline(xintercept=mean(sample1$SOR),color='red',size=1) +
+  labs(title='MLB Pitchers (1980-2019)',
+       x='Strikeout Rate',
+       y='Decade') +
+  theme_bw()
+```
+
+There does appear to be some right skew in all of the groupings (decades). However, because the group sample sizes are all relatively large (200+), the skew is not as concerning. The variances all appear relatively equal across groupings, but we can check with a numerical summary.
+
+```{r}
+#compute sample statistics
+sample1 %>%
+  group_by(decade) %>%
+  summarize(count=n(),
+            average=mean(SOR),
+            stdev=sd(SOR)) %>%
+  ungroup()
+```
+
+All of the decades have a standard deviation around 0.05 and the group sample sizes are relatively similar, except for perhaps the 1990s. So, the equal variance assumption should be fulfilled. From the box plot and the summary statistics, we notice that the 2010s appear to have a larger strikeout rate than the previous three decades. However, we should conduct an ANOVA to determine if any differences between the populations are statistically significant.
+
+Let $\mu_1$, $\mu_2$, $\mu_3$, and $\mu_4$ represent the true mean strikeout rate for pitchers in the 1980s, 1990s, 2000s, and 2010s, respectively. Then, the null and alternate hypotheses for the test are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_1=\mu_2=\mu_3=\mu_4 \\
+H_A:& \; \text{At least one decade differs}
+\end{aligned}
+$$
+
+We will choose a significance level of $\alpha=0.1$. Rather than calculate the test statistic (F-statistic) manually, we will use the `aov()` function.
+
+```{r}
+#complete ANOVA
+anova <- aov(SOR~decade,data=sample1)
+
+#view summary output
+summary(anova)
+```
+
+The test statistic for the ANOVA is $F=67.71$. The output from the `aov()` function actually provides the p-value for this test statistic when compared to an F-distribution. It is effectively 0, so we could technically stop here and reject the null hypothesis. However, just to be sure we understand the meaning of this p-value, let's visualize a continuous F-distribution, along with the rejection threshold. 
+
+```{r}
+#simulate null distribution by drawing from F-distribution
+set.seed(653)
+null_dist <- data.frame(fstat=rf(n=10000,df1=3,df2=996))
+
+#plot null distribution along with threshold
+ggplot(data=null_dist,aes(x=fstat)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=qf(p=0.9,df1=3,df2=996),
+             color='red',size=1,linetype='dashed') +
+  labs(title='Null Distribution (F-distribution)',
+       x='F-statistic',
+       y='Density') +
+  theme_bw()
+```
+
+The F-distribution has two separate degrees of freedom that define its shape. The degrees of freedom associated with the mean square between groups ($MSG$) is $df_1=k-1$, where $k$ is the number of groupings. The degrees of freedom associated with the mean square error ($MSE$) is $df_2=n-k$, where $n$ is the total sample size. Both of these values are provided in the ANOVA output.
+
+As we can see from the null distribution, we would reject the null hypothesis for any test statistic greater than about 2. Since our observed test statistic is almost 68, we clearly reject. We arrive at the same conclusion by directly computing the p-value associated with a test statistic of $F=67.71$ on an F-distribution with degrees of freedom $df_1=3$ and $df_2=996$. 
+
+```{r}
+#compute p-value
+pf(q=67.71,df1=3,df2=996,lower.tail=FALSE)
+```
+
+With a p-value of effectively zero, we reject the null hypothesis that the decades are the same. There is sufficient statistical evidence to suggest that at least one decade has a difference mean strikeout rate. Now you can repeat the ANOVA for a different set of parameters.
+
+## Practice 1
+
+Complete an ANOVA test to determine if there is any evidence that *walk rate* differs by decade. Then answer the following questions.
+
+* Are all three of the assumptions of ANOVA reasonably met?
+* What is the conclusion of your test, in the context of the problem?
+* What remaining questions do you have regarding the conclusion of the test?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+At the end of the previous section, we found that at least one of the population means differed from the others. However, ANOVA does not tell us which one (or ones) of the populations differs. We can speculate based on box plots and summary statistics, but this is not a sounds method. Instead, we will use what is known as **Tukey's Honestly Significant Differences (HSD) test**.
+
+## Example 2
+
+When trying to determine which population or populations differ from the others, we might suggest a difference in means hypothesis test for every possible pairing of populations. However, this methodology is dangerous because it inflates the chances of committing a Type 1 error. For example, with four different MLB decades, there are six possible pairings. Suppose we conduct individual hypothesis tests at the $\alpha=0.1$ significance level for each of these pairings. For each test we have a 90% chance of *not* committing a Type 1 error. But, what are the chances of not committing a Type 1 error in *all six* tests? The answer is 53% ($0.9^6$). By taking the complement of this value, we have a **47% chance of committing a Type 1 error** in at least one of the six tests!
+
+This is referred to as the multiple comparisons problem. Even though each individual difference in means test (comparison) only has a 10% chance of committing a Type 1 error, there is a 47% chance that at least one of six tests will commit a Type 1 error. This error inflation explains why we cannot simply conduct individual tests. A statistician named John Tukey solved this problem by developing a test that accounts for error inflation. It is called Tukey's Honestly Significant Differences (HSD) test.
+
+The Tukey HSD test adjusts the significance within each individual pairing to ensure that the overall level of significance achieves the specified value. For our pitching example, we specified $\alpha=0.1$ so we want the overall significance across across all six tests to be 10%. We can leverage the `TukeyHSD()` function within `R` to execute the proper adjustments.
+
+```{r}
+#conduct Tukey test with 10% significance level
+TukeyHSD(x=anova,conf.level=0.90)
+```
+
+Notice we provided the completed ANOVA model as the first argument and the overall confidence level as the second argument. A confidence level of 90% is equivalent to a significance level of $\alpha=0.1$. The output provides confidence intervals for all of the pair-wise comparisons of decades. For example, the first row suggests that the difference in mean strikeout rate between the 1990s and 1980s is between 0.004 and 0.024. Since zero is not in the interval, we can conclude that the two decades are different. The p-value of 0.0098 provides the same conclusion (i.e., reject the null hypothesis that the decades are the same).
+
+The Tukey HSD method adjusts the significance level for each of these individual tests to ensure that the overall level of significance across all six tests is $\alpha=0.1$, as specified. Based on this output, it appears that only the 2000s and 1990s fail to reject the null hypothesis that the decades are the same. Thus, we do not have evidence to suggest that the mean strikeout rate of pitchers in the 2000s is any different from that of the 1990s. We can also create a visual of the confidence intervals using the `plot()` function.
+
+```{r}
+#plot Tukey intervals
+plot(TukeyHSD(anova,conf.level=0.90),las=1)
+```
+
+This plot allows us to quickly discern that the 2000s-1990s are similar decades, but the 2010s-1980s are very different. Now you can conduct a Tukey HSD test of your own.
+
+## Practice 2
+
+Complete and plot a Tukey HSD test using your ANOVA from the previous practice. Then answer the following questions.
+
+* Which decades appear to have significantly different mean walk rates?
+* Which pair of decades is the most different?
+* Do any decades not have significantly different mean walk rates?
+

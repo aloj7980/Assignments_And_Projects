@@ -1,0 +1,200 @@
+---
+title: "Model Selection"
+author: "Dr. Kris Pruitt"
+date: "6 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to explore common variable selection methods for multiple regression models. Students should leave this lesson with the ability to explain and execute forward and backward stepwise selection methods both manually and automatically using built-in `R` packages.
+
+
+## Reason 1
+
+When constructing a multiple linear regression model, we will typically have many predictor variables to choose from. However, not every predictor variable will necessarily provide added value in explaining the behavior of the response variable. In fact, including unrelated predictors in a model can actually *reduce* our ability to explain the response. But it is not as simple as just choosing the predictors that are individually correlated with the response. When multiple predictors are included in a model there are synergies that can impact the explanatory value of a predictor compared to its individual value. Thus, we need a systematic approach to determining which combination of predictors provides the best model. We'll begin the lesson by exploring a method known as **backward stepwise selection**.
+
+
+## Example 1
+
+For this example, we will use a data set regarding home sales in Ames, Iowa from the early 2000s. Download the data set `housing_data.csv` from the course website and use the code chunk below to import and wrangle the data.
+
+```{r}
+housing <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/housing_data.csv') %>%
+  select(SalePrice,X1stFlrSF,X2ndFlrSF,RoofStyle,MoSold,YrSold) %>%
+  filter(X2ndFlrSF>0) %>%
+  na.omit()
+```
+
+The wrangled data provides the sales month, year, and price for 627 different two-story homes. It also includes the square footage of the 1st and 2nd floors, along with the style of roof. We are interested in building a model to explain the variation in sales price for homes in Ames, Iowa using the other available variables. Would it be best to use all of the other variables or some subset? What do we mean by best? The process of model selection is focused on answering these questions.
+
+The process of backward stepwise selection begins with all the available predictors in the model. Then variables are removed, one at a time, if their removal improves the model. There are a variety of improvement metrics available, but a common one is adjusted R-squared. Let's begin by fitting the model with all the variables and determine the baseline adjusted R-squared value. Notice we use a period as the shortcut for adding all six of the explanatory variables in the data frame.
+
+```{r}
+model <- lm(SalePrice~.,data=housing)
+summary(model)$adj.r.squared
+```
+
+We find that 62.61% of the variation in home sales price can be explained by its linear association with 1st floor square footage, 2nd floor square footage, roof style, sales month, and sales year. Can we improve on the explanatory capabilities of this model by removing one of the predictors? If so, which one? For backward stepwise selection we must try each of the possible variables we can remove, one at a time, and calculate the adjusted R-squared of the new model. We can remove predictors from the model using the minus sign.
+
+```{r}
+model1a <- lm(SalePrice~.-X1stFlrSF,data=housing)
+model1b <- lm(SalePrice~.-X2ndFlrSF,data=housing)
+model1c <- lm(SalePrice~.-RoofStyle,data=housing)
+model1d <- lm(SalePrice~.-MoSold,data=housing)
+model1e <- lm(SalePrice~.-YrSold,data=housing)
+
+summary(model1a)$adj.r.squared
+summary(model1b)$adj.r.squared
+summary(model1c)$adj.r.squared
+summary(model1d)$adj.r.squared
+summary(model1e)$adj.r.squared
+```
+
+Compared to the baseline adjusted R-squared, removing either of the square footage variables dramatically reduces our ability to explain the variation in sales price. This makes intuitive sense because real estate prices are largely driven by the size of the house. Removing roof style also hurts the model, but not by as much. However, removing either sales month or sales year actually improves the model, as measured by the increase in adjusted R-squared. This indicates that the time period in which a home is sold does not have a strong capability to explain its sales price. In fact, those variables appear to be negatively impacting our explanatory capability. 
+
+This does not mean we should immediately remove *both* sales month and year! Stepwise means we remove one variable at a time. It is possible in some cases for a variable without significant explanatory capability to reverse status when other variables are eliminated. When faced with multiple variables that can be removed, we choose the one that provides the greatest increase in adjusted R-squared (i.e., sales month). Thus, the model which removes sales month is our new current model and 62.67% is our new baseline adjusted R-squared.
+
+Should we remove any more variables? Let's repeat the previous procedure and see if the removal of additional variables can improve the model. Be careful to keep sales month out of all the models as we continue. That predictor has been permanently removed from the process.
+
+```{r}
+model2a <- lm(SalePrice~.-MoSold-X1stFlrSF,data=housing)
+model2b <- lm(SalePrice~.-MoSold-X2ndFlrSF,data=housing)
+model2c <- lm(SalePrice~.-MoSold-RoofStyle,data=housing)
+model2d <- lm(SalePrice~.-MoSold-YrSold,data=housing)
+
+summary(model2a)$adj.r.squared
+summary(model2b)$adj.r.squared
+summary(model2c)$adj.r.squared
+summary(model2d)$adj.r.squared
+```
+
+Again we see that the removal of any of the first three predictors hurts the model. However, the removal of sales year does still improve the model. By removing the sales year predictor, we increase our ability to explain the variation in sales price to 62.72%. So, in this case, we do end up removing a variable identified in the first round, but this will not always be the case. Now you'll get a chance to continue this process yourself.
+
+
+## Practice 1
+
+Continue the backward stepwise selection process to determine if it is beneficial to remove any more variables. Stop when the model can no longer be improved. Then answer the following questions:
+
+* What is the equation of the final regression model?
+* How much of the variation in sales price can be explained by its linear association with the remaining predictors?
+* Do the estimated parameters for final model make intuitive sense in the context of home sales prices?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we selected the best model by starting with all of the available predictors and removing one variable at a time until the model could no longer be improved. The process for **forward stepwise selection** is exactly the opposite. For forward stepwise, we begin with no predictors and *add* them one at a time until the model can no longer be improved. We'll continue the lesson by executing this procedure on the same data set.
+
+
+## Example 2
+
+The baseline adjusted R-squared for a model with no predictors is zero. This is equivalent to simply guessing the average sales price and not attempting to use any other information. So, when adding the first predictor variable, we are trying to improve upon an adjusted R-squared of zero. We construct six different simple linear regression models, each with one of the potential predictors.
+
+```{r}
+modelf1a <- lm(SalePrice~X1stFlrSF,data=housing)
+modelf1b <- lm(SalePrice~X2ndFlrSF,data=housing)
+modelf1c <- lm(SalePrice~RoofStyle,data=housing)
+modelf1d <- lm(SalePrice~MoSold,data=housing)
+modelf1e <- lm(SalePrice~YrSold,data=housing)
+
+summary(modelf1a)$adj.r.squared
+summary(modelf1b)$adj.r.squared
+summary(modelf1c)$adj.r.squared
+summary(modelf1d)$adj.r.squared
+summary(modelf1e)$adj.r.squared
+```
+
+We can improve on the baseline model (no predictors) by including any of the predictors except for sales month. We would rather use nothing than use sales month! Given our other options, adding 1st floor square footage provides the largest improvement in adjusted R-squared. We see that 45.24% of the variation in sales price can be explained by its linear association with 1st floor square footage. That's a big improvement from zero explanatory capability.
+
+Should we add more predictors? Let's try adding each of the remaining variables one at a time. Be sure to leave 1st floor square footage in every model. That predictor is now permanently included in the process.
+
+```{r}
+modelf2a <- lm(SalePrice~X1stFlrSF+X2ndFlrSF,data=housing)
+modelf2b <- lm(SalePrice~X1stFlrSF+RoofStyle,data=housing)
+modelf2c <- lm(SalePrice~X1stFlrSF+MoSold,data=housing)
+modelf2d <- lm(SalePrice~X1stFlrSF+YrSold,data=housing)
+
+summary(modelf2a)$adj.r.squared
+summary(modelf2b)$adj.r.squared
+summary(modelf2c)$adj.r.squared
+summary(modelf2d)$adj.r.squared
+```
+
+We can improve our model the most by adding 2nd floor square footage. By adding 2nd floor square footage, we increase our explanatory capability to 61.63%. Now you can continue practicing forward stepwise selection on your own.
+
+
+## Practice 2
+
+Continue the forward stepwise selection process to determine if it is beneficial to add any more variables. Stop when the model can no longer be improved. Then answer the following questions:
+
+* What is the equation of the final regression model?
+* How does this model compare to the backward stepwise model?
+* Do you think your comparison between the two models will hold for all data?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The manual execution of stepwise methods is beneficial for understanding the methodology behind the process. However, there are packages within `R` that automate the procedure so that the analyst can focus on the proper interpretation of the results. We'll finish the lesson by leveraging one such package for stepwise model selection.
+
+
+## Example 3
+
+For this example we'll use the `leaps` package and the built-in `regsubsets()` function to perform model selection. Install and load the `leaps` library.
+
+```{r}
+library(leaps)
+```
+
+Then execute a backward stepwise selection using the following code.
+
+```{r}
+model_bwd <- regsubsets(SalePrice~.,data=housing,method='backward',nvmax=19)
+```
+
+The `regsubsets()` is playing the role of the `lm()` function we used previously. So, the notation for defining the variables and the data frame is the same. However, there are two additional parameters. First, we must specify whether we want to perform forward or backward stepwise selection. Second, we must specify the maximum number of explanatory variables (`nvmax`) to consider. The default maximum number of variables is eight.
+
+You might be asking yourself why we specified 19 explanatory variables. After all, we have only been considering five explanatory variables. Be careful! The roof style and sales month are categorical variables. Recall from previous lessons how `R` handles categorical variables by creating a binary indicator variable for each category (minus the baseline). So, the roof style variable actually requires five indicators to handle the six styles. The sales month variable requires eleven indicators to handle the twelve months. Therefore, there are a total of 19 explanatory variables when `R` fits the full model.
+
+As a consequence of the categorical variables, the automated backward stepwise method in `R` is much more detailed than what we executed manually. Each indicator is treated as an individual explanatory variable that can be considered for removal at each step of the algorithm. We can retrieve the full sequence of adjusted R-squared values with the following code.
+
+```{r}
+summary(model_bwd)$adjr2
+```
+
+Remember, we're doing *backward* selection! So, we have to read these adjusted R-squared values backward. The full model (last value) has an adjusted R-squared of 61.61%. That is the same value we got in the very first section of the lesson. Working backward, we see improvement (increase) in the adjusted R-squared for the first 10 variables removed until we hit a peak of 63.10%. After that, removing any more predictor variables decreases the adjusted R-squared.
+
+We now know we should remove 10 variables from the model. But, which 10 should be removed? We can retrieve the full sequence (output matrix) of removed variables with the following code.
+
+```{r}
+summary(model_bwd)$outmat
+```
+
+A star means the variable in the column is included in the model and a blank means it has been removed. Again, since we are conducting backward selection, we start at the bottom with all 19 predictors included. Then with each subsequent row we can see which variable was removed. In the first step, the indicator for sales in November is removed. After that we remove sales in January, December, March, and so on until we get to row 9. Row 9 represents the best model because it had the highest adjusted R-squared. What variables are included in that model?
+
+The best model includes 1st floor square footage, 2nd floor square footage, indicators for four roof styles (gable, gambrel, hip, and shed), and indicators for three months (June, July, and September). Notice how this process effectively regrouped roof style and month. By indicating only four roof styles the model is telling us that only gable, gambrel, hip, and shed roof styles have a significant impact on sales price. All the other styles can just be lumped together in the baseline. The same is true for the three sales months. Not only does this level of detail provide us more insight, it also unlocks a higher level of explanatory capability (63.10% versus 62.72%).
+
+Now you'll have a chance to use the built-in functions for model selection by conducting a forward stepwise selection.
+
+
+## Practice 3
+
+Using the `regsubsets()` function, conduct a forward stepwise selection to fit a model with sales price as the response. Then answer the following questions.
+
+* What is the largest adjusted R-squared value that can be achieved?
+* What is the equation for the best linear model?
+* How do these results compare to the manual forward stepwise process we conducted previously?
+

@@ -1,0 +1,163 @@
+---
+title: "Logistic Function"
+author: "Dr. Kris Pruitt"
+date: "8 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce logistic regression as a method for explaining or predicting a binary response variable. Students should leave this lesson with the ability to formulate and explain the logit (log-odds) transformation for fitting a linear model and use that model to predict the probability of a binary event.
+
+
+## Reason 1
+
+In all of our previous lessons on linear regression, we fit a model to explain or predict a continuous numerical response. However, we will often want to fit models with a binary response variable such as Yes/No, Win/Lose, or True/False. In order to fit such models, we'll treat the binary response as a continuous numerical variable between 0 and 1, and interpret it as the *probability* that the binary variable is equal to 1. We'll begin the lesson by exploring how we might model probability as a response.
+
+
+## Example 1
+
+For this example, we will use a data set regarding pumpkin seed measurements. This data comes from a published study in 2021 that used pumpkin seed dimensional measurements to distinguish between two types of seed. Import the data set and add a new column using the code below.
+
+```{r}
+pumpkin <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/pumpkin_data.csv') %>%
+  mutate(TypeA=ifelse(Type=='A',1,0))
+```
+
+There are two types of pumpkin seeds: A and B. The dimensional data was gathered using digital cameras, so the unit of measurement is pixels. Suppose we are interested in predicting the probability of a pumpkin seed being Type A based on its major axis length. We'll use the new binary column we created as the response variable. We can graph the equivalent of a scatter plot for this association as follows.
+
+```{r}
+ggplot(data=pumpkin,aes(x=Major_Axis_Length,y=TypeA)) +
+  geom_jitter(width=0,height=0.1,alpha=0.2) +
+  scale_x_continuous(limits=c(300,700),breaks=seq(300,700,50),name='Major Axis Length (pixels)') +
+  scale_y_continuous(limits=c(0,1),breaks=seq(0,1,0.1),name='Probability of Type A') +
+  theme_bw()
+```
+
+Let's be careful with interpreting this visualization. Every pumpkin seed we've graphed is either Type A (`TypeA=1`) or Type B (`TypeA=0`). So all of the $y$-axis values are either 1 or 0. We've simply spread them out a bit using the `jitter` function in order to better perceive the density of overlapping points. With that said, we can gain some important insights from this graph. It appears that pumpkin seeds with a shorter major axis length are more likely to be Type A. But how do we model this association?
+
+In general, it appears that the probability of being Type A decreases as the major axis length increases. But, we cannot model this association with a decreasing straight line. If we did, we would end up permitting response values greater than 1 and less than 0. Such values have no meaning in terms of probability. Instead, we need a function that is inherently bounded by 1 above and 0 below. The following nonlinear function achieves this.
+
+```{r}
+ggplot(data=pumpkin,aes(x=Major_Axis_Length,y=TypeA)) +
+  geom_jitter(width=0,height=0.1,alpha=0.2) +
+  geom_smooth(method='glm',se=FALSE,method.args=list(family='binomial')) +
+  scale_x_continuous(limits=c(300,700),breaks=seq(300,700,50),name='Major Axis Length (pixels)') +
+  scale_y_continuous(limits=c(0,1),breaks=seq(0,1,0.1),name='Probability of Type A') +
+  theme_bw()
+```
+
+If we let $\hat{p}$ represent the estimated probability that a pumpkin seed is Type A and $\text{Major}$ represent the major axis length, then the best-fit function depicted by the blue line in the graph can be written as:
+
+$$
+\hat{p}=\frac{e^{13.436-0.029 \cdot \text{Major}}}{1+e^{13.436-0.029 \cdot \text{Major}}}
+$$
+
+Clearly, the probability of being Type A is a nonlinear function of major axis length. This function is commonly known as the logistic (or sigmoid) function. In the next section we'll learn how to transform the logistic function into a linear model and find the parameter estimates. For now, practice creating your own scatter plot and interpreting the best fit curve.
+
+
+## Practice 1
+
+Create a "jittered" scatter plot with roundness as the explanatory variable and probability of being Type A as the response. Include the best-fit curve on the plot. Then answer the following questions:
+
+* Does there appear to be an association between the predictor and response? If so, in what direction?
+* What is the real-world interpretation of your answer to the first question, in the context of pumpkin seeds?
+* What is the general equation (use $\beta_i$ parameters) for your best-fit curve?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we introduced the logistic function to model the probability of a particular response value. Unfortunately, this function is nonlinear which complicates our ability to estimate the model parameters ($\beta_i$). Luckily we can overcome this issue by using a special transformation called the **logit transformation**. The logit (or log-odds) transformation converts the probability function into an equivalent linear function.
+
+If we let $p$ represent the probability the response variable is equal to 1 and $x$ represent the explanatory variable, then the linear model is:
+
+$$
+\log \left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x + \epsilon
+$$
+
+The ratio within the logarithm is equivalent to the fractional odds that the response is equal to 1. Hence why this function is sometimes referred to as the log-odds function. The right-hand side of the equation is now our standard linear function with $\beta_i$ parameters that need to be estimated. However, we do *not* estimate these parameters using least squares regression because the residuals are no longer the best metric for fitting the model. Instead we use an optimization method known as the **maximum likelihood method**. This method chooses values for $\beta_0$ and $\beta_1$ that maximize the likelihood of sampling the observed data. The objective function is known as the log-likelihood and can be written as:
+
+$$
+\sum_{i=1}^n [y_i \log(\hat{p})+(1-y_i)\log(1-\hat{p})]
+$$
+
+where $\hat{p}$ is the logistic function value for a given $\hat{\beta}_0$ and $\hat{\beta}_1$. In this case, $y_i$ is the observed binary response value for observation $i$. We'll continue the lesson by exploring how `R` calculates the estimates $\hat{\beta}_0$ and $\hat{\beta}_1$.
+
+
+## Example 2
+
+Just as with linear regression, `R` has built-in functions for automatically estimating the parameters of the logistic regression model. Rather than using the `lm()` function for solely linear models, we use the `glm()` function for generalized linear models. This function unlocks access to a wider family of model fitting options than the standard `lm()` function. For our pumpkin seed example, we fit the maximum likelihood model with the following code.
+
+```{r}
+model <- glm(TypeA~Major_Axis_Length,data=pumpkin,family='binomial')
+coefficients(summary(model))
+```
+
+The majority of the parameters are similar to the standard `lm()` function. The one exception is the `family` parameter. For logistic regression we choose the `binomial` family. This makes intuitive sense if we think about the Binomial distribution. The Binomial models the number of binary "successes" out of a set number of trials. For our purposes, we're calling a Type A pumpkin seed a "success" and we have 2,500 observations (trials). So, we're trying to choose parameter values that maximize the likelihood of our 2,500 trials resulting in 1,300 successes (that's the number of Type A seeds).
+
+The parameter estimates shown in the output should look familiar. They are the same values we saw in the estimated probability equation in the first section of the lesson. They are the parameter values that produce the best-fit logistic function we observed in the scatter plot. Now you'll find the parameter estimates that produce the plot you created in the last practice.
+
+
+## Practice 2
+
+Fit a logistic regression model with roundness as the explanatory variable and probability of being Type A as the response. Then answer the following questions:
+
+* What is the equation for the estimated probability that a seed is Type A?
+* What is the equation for the estimated log-odds that a seed is Type A?
+* How does the sign of the estimated slope parameter appear to affect the logistic function?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+Once we have fit a logistic regression model, we can use it to estimate the probability that the response variable will be equal to 1 for a given value of the explanatory variable. However, if our ultimate objective is to make a *binary* prediction then we must establish a classification threshold for our estimated probabilities. We'll finish the lesson by discussing the impacts of various thresholds.
+
+
+## Example 3
+
+When we want to use a fitted model to predict a response value for a given explanatory value, we don't need to make the calculation manually. The `predict()` function allows us to provide input values to the model and it automatically calculates the model's predicted values. For example, suppose we want to predict the probability that a seed with major axis length of 475 pixels is Type A.
+
+```{r}
+predict(model,newdata=data.frame(Major_Axis_Length=475),type='response')
+```
+
+The `predict()` function requires three important parameters. The first is the name of the model. The second is the new data we want to input into the model. This must be provided as a data frame. Finally, we need to provide the type of output desired. In our case, we list `response` because we want the probability of the response variable being equal to 1. 
+
+The results indicate that a seed with major axis length of 475 pixels has an estimated probability of about 38% of being Type A. This value aligns well with what we see in the scatter plot in the first section. So, should we classify such a seed as Type A or not? Is 38% sufficient likelihood for us to believe it could be Type A or does it make us more likely to believe it is Type B? We need a classification threshold to answer this question.
+
+A common classification threshold is 50%. In other words, if a seed has greater than a 50% chance of being Type A then we classify it as Type A. If the estimated probability is less than or equal to 50% then we classify it as Type B. Let's see how often our model correctly classifies seeds when we use this threshold. 
+◘
+```{r}
+pumpkin_pred <- pumpkin %>%
+  mutate(pred=predict(model,newdata=data.frame(Major_Axis_Length),type='response'),
+         class=ifelse(pred>0.5,1,0))
+
+pumpkin_pred %>%
+  summarize(accuracy=mean(TypeA==class))
+```
+
+With a 50% threshold, our model correctly classifies pumpkin seeds 76% of the time. Given that 52% of the seeds in the sample are Type A, we could ignore our model and just always guess that a seed is Type A. With this approach, we would expect to be correct roughly 52% of the time. However, we can dramatically increase our accuracy to 76% by using our model and knowledge of the seed's major axis length. 
+
+If we were to dramatically increase our classification threshold, we would require much stronger evidence before calling a seed Type A. But we would be at risk of mistaking a lot of Type A seeds for Type B. We call this a high **false negative** rate. The opposite would be true if we dramatically lowered our classification threshold. In that case we would be at risk of classifying many more seeds as Type A when in fact they are Type B. We call this a high **false positive** rate. We'll explore the concept of classification thresholds much more carefully later in the course. For now, practice calculating a classification accuracy based on various thresholds.
+
+
+## Practice 3
+
+Using your model with roundness as the explanatory variable, predict and classify the data set using a threshold of 50%. Then answer the following questions:
+
+* How does the prediction accuracy of your model compare to the major axis length model?
+* Lower your classification threshold to 25% and recalculate the accuracy? How does this compare to the 50% threshold?
+* Increase your classification threshold to 75% and recalculate the accuracy? How does this compare to the 50% threshold?

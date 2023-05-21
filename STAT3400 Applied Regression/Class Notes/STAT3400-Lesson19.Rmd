@@ -1,0 +1,237 @@
+---
+title: "Technical Conditions"
+author: "Dr. Kris Pruitt"
+date: "1 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the technical conditions required to apply the Central Limit Theorem (CLT). Students should leave this lesson with the ability to explain and evaluate the necessary conditions for applying the CLT to the estimation of a population proportion.
+
+
+## Reason 1
+
+In previous lessons on hypothesis testing and confidence intervals we noticed that the simulated null distribution and sampling distribution were relatively symmetric and bell-shaped. This is not a coincidence! A great deal of mathematical theory exists to suggest that the true distribution of many common sample statistics (e.g., mean and proportion) is the Normal distribution. For this lesson we will focus on the sample proportion, but we will thoroughly discuss the sample mean in later lessons. Let's begin by generating a simulated null distribution for a difference in proportions between two populations. 
+
+## Example 1
+
+For this example, we will use the built-in data table called `diamonds`. This sample includes prices and attributes for nearly 54,000 round cut diamonds. Load and view the data.
+
+```{r}
+data(diamonds)
+```
+
+Suppose a friend claims that smaller diamonds are actually more clear (i.e., greater clarity). We would like to evaluate this claim using a hypothesis test. First, we wrangle the data using the code below.
+
+```{r}
+diamonds_new <- diamonds %>%
+  mutate(size=ifelse(carat>0.7,'big','small'),
+         clear=ifelse(clarity=='IF','clearest','not')) %>%
+  select(size,clear)
+```
+
+We've split all of the diamonds into two categories each for size and clarity. If the diamond is greater than 0.7 carats, then we call it *big*. If the diamond has the highest clarity rating ("IF") then we call it *clearest*. Now we establish the hypotheses for the test. Let $p_s$ be the true proportion of small diamonds that are clearest and $p_b$ be the true proportion of big diamonds that are clearest. Then the null and alternate hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; p_s-p_b=0 \\
+H_A:& \; p_s-p_b > 0
+\end{aligned}
+$$
+
+Notice the alternate hypothesis is $>$ rather than $\neq$. This is because our friend claimed that small diamonds have a *greater* proportion of clearest ratings. This is what we refer to as a one-sided (or one-tailed) hypothesis test, because we will only be interested in evaluating positive differences in proportions. In other words, the level of significance (say $\alpha=0.05$) will all be in the right tail of the null distribution. Now we must calculate our test statistic.
+
+```{r}
+diamonds_diff <- diamonds_new %>%
+  group_by(size) %>%
+  summarize(prop=mean(clear=='clearest')) %>%
+  ungroup()
+
+test_stat <- as.numeric(diamonds_diff[2,2]-diamonds_diff[1,2])
+
+test_stat
+```
+
+The difference in sample proportions is about 4 percentage-points. So, our test statistic suggests that smaller diamonds do have a higher proportion of clearest ratings by about 0.04. However, is this sufficiently strong evidence to suggest that the difference in *population* proportions is greater than 0? To answer this question we need to produce a null distribution via randomization.
+
+```{r}
+#initiate empty vector
+results <- data.frame(diff=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  Shuffle <- diamonds_new %>%
+    mutate(Shuffle_clear=sample(diamonds_new$clear,replace=FALSE)) %>%
+    group_by(size) %>%
+    summarize(prop=mean(Shuffle_clear=='clearest')) %>%
+    ungroup()
+  
+  results$diff[i] <- Shuffle$prop[2]-Shuffle$prop[1]
+  
+}
+
+#plot difference in proportions
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=test_stat,color='red',size=1) +
+  labs(title='Null Distribution and Test Statistic',
+       x='Difference in Sample Proportions',y='Count') +
+  theme_bw()
+```
+
+The null distribution (blue histogram) represents differences in proportions that we might expect to witness if big and small diamonds truly have the same clarity. The test statistic (red line) is the difference in proportions that we *actually* witnessed. Such an extreme value relative to the null distribution should make us very skeptical of the null hypothesis. In fact, our p-value is effectively zero. Not a single simulated difference was as large as what we observed. Since the p-value of zero is less than the level of significance of 0.05, we reject the null hypothesis. Our friend appears to be correct...smaller diamonds have greater clarity ratings.
+
+Though we completed all the steps of a hypothesis test in this example, the focus of the lesson is on the null distribution itself. Explore the null distribution for this test a bit more in the practice section.
+
+## Practice 1
+
+Run the code chunk below to recreate the null distribution, along with its mean and standard deviations. Then answer the questions that follow.
+
+```{r}
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=mean(results$diff),color='red',size=1) +
+  geom_vline(xintercept=mean(results$diff)+sd(results$diff),
+             linetype='dashed',color='red',size=0.75) +
+  geom_vline(xintercept=mean(results$diff)-sd(results$diff),
+             linetype='dashed',color='red',size=0.75) +
+  geom_vline(xintercept=mean(results$diff)+2*sd(results$diff),
+             linetype='dashed',color='red',size=0.75) +
+  geom_vline(xintercept=mean(results$diff)-2*sd(results$diff),
+             linetype='dashed',color='red',size=0.75) +
+  labs(title='Null Distribution',
+       x='Difference in Sample Proportions',y='Count') +
+  theme_bw()
+```
+
+* What is the shape and center of the null distribution?
+* What percentage of the observations are within one (and two) standard deviations of the mean?
+* What named distribution has the characteristics you described above?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section we found that the null distribution for the difference in proportions was approximately a Normal distribution. This is precisely the result stated by the Central Limit Theorem (CLT). In fact, for any parameter that is calculated as a sum or average, the CLT states that the null distribution (or sampling distribution) will be approximately Normal. Because a proportion can be represented as the average of a binary outcome, the CLT applies to this parameter as well. However, there are two important requirements to apply the CLT:
+
+* The observations in the sample must be **independent** of one another.
+* The sample must be sufficiently **large**.
+
+Independence can be achieved by ensuring the sample is random. Sufficient size depends on the parameter of interest and on the natural variability of the population. We'll continue the lesson by first exploring the independence assumption and then finish with the sufficient size assumption.
+
+## Example 2
+
+We'll once again return to the diamonds example as the context in which to discuss the requirements for the CLT. The original sample consisted of nearly 54,000 diamonds. The documentation (`?diamonds`) doesn't explain how this sample was obtained, so how do we know if it is truly a random sample? Unfortunately, when we use poorly-documented observational data such as this we may never know for sure if it was randomly collected. However, we can at least consider some common issues that would cause the observations to *not* be independent.
+
+* Proximity in time
+* Proximity in space
+* Repetition
+
+Time proximity is a *very* common issue that often leads to a violation of the independence assumption. Our example data has no measure of time, so this issue is difficult to assess. But imagine the data included a time stamp and we were evaluating the price of the diamond. Because the value of precious stones is often dictated by market fluctuations, the price of a diamond at one time stamp would *not* be independent of the price of the same diamond at a consecutive time stamp. A high value diamond today is likely to still be high value tomorrow, for example. This is known as **autocorrelation** and there are entire courses designed to teach methods for overcoming the issues it causes.
+
+Space proximity is another issue that often leads to a violation of the independence assumption, but it isn't always as obvious. Imagine if all of the diamonds in our sample were rated by the same jeweler. If that jeweler has some bias that leads to more frequent cut quality ratings of "Ideal" or more clarity ratings of "IF" then the observations are not independent of one another. The rating assigned to one diamond is likely to be the same rating assigned to a similar diamond, because those ratings are determined by the same person. Ideally we would prefer to have the diamonds rated by a wide variety of jewelers separated by time and space.
+
+A final common issue that leads to a violation of independence is repeated observations. Often this is caused by some sort of administrative or clerical error. If the same observation appears in the data more than once (accidentally or otherwise), then those observations are not independent. In fact, they are perfectly correlated because they are exactly the same! For our data, this could have happened if the jeweler accidentally put an already-rated diamond back in the pile of unrated diamonds, and then later entered it into the data table again. Of course, it would be difficult for us to differentiate between an accidental repeat and two distinct diamonds that just happen to have the same ratings.
+
+When conducting controlled experiments, we can make efforts to avoid these three common violations of independence. When using observational data, we must rely on good documentation or some sort of communication with the original collectors of the data to ensure independence. If we have reason to believe independence is violated, then any subsequent analysis and results will be suspect. For the diamonds hypothesis test to be valid, we assume the diamonds were rated by multiple jewelers separated by time and space, and that all 54,000 diamonds are unique. Now you can practice thinking through these assumption with a different data set.
+
+## Practice 2
+
+Load the Billboard Top 100 data set from the year 2000 and run the associated wrangling pipeline.
+
+```{r}
+data(billboard)
+
+billboard_new <- billboard %>%
+  pivot_longer(cols=wk1:wk76,names_to='week',values_to='rank',
+               values_drop_na=TRUE)
+```
+
+The wrangled data includes the Top 100 ranking for a given artist and song in a given week. Based on these observations answer the following questions:
+
+* What concerns, if any, do you have regarding time proximity?
+* What concerns, if any, do you have regarding space proximity?
+* What concerns, if any, do you have regarding repetition?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous section we discussed the technical condition of independence for the CLT. We'll finish this lesson by discussing the condition that the sample be sufficiently large in order to apply the CLT.
+
+## Example 3
+
+There are various common rules stated in textbooks and research regarding the minimum sample size to apply the CLT. For inferences about the mean, a common minimum sample size is 30 observations. Only highly skewed data could require 60 or more observations for the CLT to be valid. For inferences about a proportion, a common rule is at least 10 "successes" and 10 "failures" in the sample. Our diamonds hypothesis test defined "success" as a perfect clarity rating and "failure" as not a perfect rating. We had 1,790 diamonds with a perfect rating and over 52,000 without, so size was not remotely a concern. However, this will not be the case with all samples.
+
+Diamonds are rare and expensive. Consequently, if we were asked to collect this data on our own it would be difficult to get access to 54,000 diamonds! Let's imagine for a moment that we only had access to 25 diamonds. We'll draw this imaginary sample from the original larger sample.
+
+```{r}
+set.seed(240)
+samp <- sample.int(n=nrow(diamonds),size=25,replace=FALSE)
+
+diamonds_small <- diamonds[samp,] %>%
+  mutate(size=ifelse(carat>0.7,'big','small'),
+         clear=ifelse(clarity=='IF','clearest','not')) %>%
+  select(size,clear)
+```
+
+Our list of 25 diamonds only has one diamond with a perfect clarity rating ("IF"). This violates our rule of at least 10 "successes" and therefore is not of sufficient size to apply the CLT. But, why is this small sample size an issue for the CLT? Let's try to generate the null distribution using this smaller sample.
+
+```{r}
+#initiate empty vector
+results <- data.frame(diff=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  Shuffle <- diamonds_small %>%
+    mutate(Shuffle_clear=sample(diamonds_small$clear,replace=FALSE)) %>%
+    group_by(size) %>%
+    summarize(prop=mean(Shuffle_clear=='clearest')) %>%
+    ungroup()
+  
+  results$diff[i] <- Shuffle$prop[2]-Shuffle$prop[1]
+  
+}
+
+#plot difference in proportions
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  labs(title='Null Distribution',
+       x='Difference in Sample Proportions',y='Count') +
+  theme_bw()
+```
+
+Does this look like a Normal distribution?! The obvious answer is no. The problem with only having the one "success" is that our random shuffling either assigned that one "success" to the 13 big diamonds or the 12 small diamonds. So the difference in proportions just fluctuated back and forth between $0.08-0=0.08$ and $0-0.08=-0.08$. There were no other options to build a more robust distribution. Though an extreme case, this demonstrates the more general issue that arises with small sample sizes and the CLT. Finish this lesson by generating a null distribution for a small sample.
+
+## Practice 3
+
+Reference the 1974 Motor Trend Car data for this practice section. Load the data and view the documentation.
+
+```{r}
+data(mtcars)
+
+?mtcars
+```
+
+A friend claims that a higher proportion of manual transmission cars have 6-cylinder engines compared to automatic transmission cars. Generate a null distribution, via randomization, for a hypothesis test of your friend's claim. Then answer the following questions:
+
+* Does this sample data meet the size requirements for the CLT?
+* What is the shape and center of the null distribution?
+* Would you feel comfortable assuming the null distribution is Normal?

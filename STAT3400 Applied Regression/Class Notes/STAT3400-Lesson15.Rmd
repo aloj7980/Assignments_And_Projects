@@ -1,0 +1,170 @@
+---
+title: "Randomization"
+author: "Dr. Kris Pruitt"
+date: "20 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+library(mdsr)
+library(lattice)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+This lesson begins a new block of material with a focus on the more general concept of statistical inference. The purpose of this particular lesson is to introduce the concept of randomization for simulating the equivalence of two populations. Students should leave this lesson with the ability to calculate and compare an observed difference in means and a randomized difference in means.
+
+
+## Reason 1
+
+A common interest in statistics is whether sample data suggests a difference between two populations based on a particular parameter. For example, we might like to know whether the sample means from population A and B are different enough to indicate a true difference between the population means. We use the word "true" to reference the unknown population parameter that we estimate using a sample statistic. Since we will generally never know the true value of a population parameter, we must estimate it using a sample statistic.
+
+One of the challenges with estimating a parameter using a statistic is the natural variability that occurs in sampling and within a system itself. Even if two populations were truly equivalent based on some parameter, we would expect the associated statistics to differ from one another by some amount due to the randomness of sampling. The question then is *how much* do the sample statistics need to differ before we will believe that the population parameters truly differ? The wider field of statistical inference focuses on questions such as this. We'll begin the lesson by exploring an example.
+
+## Example 1
+
+For this example we will use a built-in data set called `USRegionalMortality` from 2011-2013. This data includes the biological sex and age-adjusted mortality rate per 100,000 people for a variety of causes. Let's begin by calculating the mean mortality rate by sex for the sample.
+
+```{r}
+data("USRegionalMortality")
+
+USRegionalMortality %>%
+  group_by(Sex) %>%
+  summarize(Count=n(),
+            AvgRate=mean(Rate)) %>%
+  ungroup()
+```
+
+The sample of 400 observations is equally split by sex, but the mean mortality rate is higher for males. For the causes considered in the study, the mortality rate for males is about 67 per 100,000 while the same rate for females is about 47 per 100,000. The question is whether a difference of 20 people per 100,000 in the sample is significant enough for us to believe that the mortality rate in the entire population truly differs by sex.
+
+All random sampling will introduce some amount of variability. It's possible that the mortality rate for both sexes is truly the same and we just randomly witnessed a difference of 20 as a result of the sample we obtained. How would we know if a difference of 20 is "normal" for this context or whether it is significant? We can simulate the true mortality rate being equivalent across sexes using a method known as **randomization**.
+
+The process of randomization maintains the same group prevalence (i.e., number of males and females), but randomly shuffles the assignment of response value (i.e., mortality rate). This simulates the equivalence of mortality rate across sexes, because if the two populations are truly the same then it should not matter which value is assigned to each observation. Under the assumption of equivalent populations, either sex should be equally likely to be assigned *any* of the mortality rates in the sample. Let's perform this shuffling and then recalculate the sample mean mortality rates.
+
+```{r}
+set.seed(719)
+
+USRegionalMortality %>%
+  transmute(Sex,Rate,
+            Shuffle_Rate=sample(USRegionalMortality$Rate,replace=FALSE)) %>%
+  group_by(Sex) %>%
+  summarize(Count=n(),
+            AvgRate=mean(Shuffle_Rate)) %>%
+  ungroup()
+```
+
+We use the `sample()` function, without replacement, to shuffle the mortality rate column while leaving the sex column alone. This randomly assigns a mortality rate to each sex observation. We use the `set.seed()` here purely for academic purposes so we will all get the same random results on our individual computers. Then we recalculate the sample mean mortality rate by sex.
+
+Now the mortality rate for females is slightly higher by about 2 people per 100,000. Remember, this sample difference is under the assumption of no *true* difference. If there is truly no difference in mortality rate between sexes, would it be surprising to find a sample difference of 2? It would certainly be less surprising than finding a difference of 20 like we did in the original data!
+
+So, when we simulated the two populations as being equivalent we randomly got a difference in mean mortality rate of about 2. In the original data we witnessed a difference of about 20. Is this difference in the original data big enough for us to stop believing that the two populations are equivalent? One randomly simulated value is probably not enough to answer that question. In the next section we will repeat the simulation process to obtain a whole distribution of values. For now, practice calculating your own observed and simulated statistics.
+
+## Practice 1
+
+Repeat the mortality rate comparison in the example with the `Status` column rather than the `Sex` column. The status variable indicates whether the person lives in an urban or rural part of the country. Then answer the following questions:
+
+* What is the observed difference in mean mortality rate?
+* What is the simulated difference in mean mortality rate (use `set.seed(303)`)?
+* What does the comparison of these two differences lead you to believe about the equivalence of the populations?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section we generated a single simulated difference in means under the assumption of equivalent populations. But it is difficult to judge the significance of our observed difference compared to a single value. A better approach is to generate an entire distribution of simulated differences. This will provide many more values for comparison and increase the likelihood that we make an accurate assessment of the significance of our observed statistic. We'll continue the lesson by generating this distribution.
+
+## Example 2
+
+Using the mortality rate data from the previous example, we will repeat the shuffling process many times and calculate the difference in means.
+
+```{r}
+#initiate empty vector
+results <- data.frame(diff=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  Shuffle <- USRegionalMortality %>%
+    transmute(Sex,Rate,
+              Shuffle_Rate=sample(USRegionalMortality$Rate,replace=FALSE)) %>%
+    group_by(Sex) %>%
+    summarize(AvgRate=mean(Shuffle_Rate)) %>%
+    ungroup()
+  
+  results$diff[i] <- Shuffle$AvgRate[2]-Shuffle$AvgRate[1]
+  
+}
+```
+
+In the code above, we simply repeated the shuffling process from the previous example 1,000 times. Each time we saved the difference in mean mortality rate in the vector named `results`. Now we can plot a distribution of these 1,000 simulated differences along with our observed difference.
+
+```{r}
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=20,color='red',size=1) +
+  labs(title='Null Distribution and Observed Statistic',
+       x='Difference in Mean Mortality Rate',y='Count') +
+  theme_bw()
+```
+
+The blue histogram represents the distribution of differences in mean mortality rate that we might expect to observe *if there is truly no difference* based on sex. This is a relatively symmetric distribution with the majority of the values between -10 and 10. So, if males and females truly have the same mortality rate, then we would not be surprised to get an observed difference of up to 10. However, a difference of 20 would be very rare. Consequently, we are very skeptical that the mean mortality rate is the same for both sexes. Instead, we are compelled to believe that males truly have a higher mortality rate than females.
+
+## Practice 2
+
+Generate a simulated distribution of difference in mean mortality rate by urban or rural status. Plot the distribution along with your observed difference from the previous practice. Then answer the following questions:
+
+* How would you describe the shape, center, and spread of the distribution?
+* How does your observed difference compare to the distribution?
+* What does this comparison lead you to believe about the equivalence of the populations?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The process of comparing an observed statistic to an assumed distribution is known as a **hypothesis test**. In the previous section, we conducted an informal hypothesis test by visually comparing our observed statistic to a simulated distribution. We'll finish this lesson by introducing some structure and formality to the hypothesis testing process.
+
+## Example 3
+
+In hypothesis testing, the default assumption is known as the **null hypothesis**. The null hypothesis is what we must assume is true if we have no data or other evidence. In our example, we assume there is *no difference* in mean mortality rate between sexes until we have evidence to suggest otherwise.
+
+The test hypothesis is known as the **alternate hypothesis**. The alternate hypothesis represents the reason for conducting the test (or experiment). It represents the evidence we are searching for. For our example, we are searching for evidence of a *difference* between the sexes in terms of mortality rate. In mathematical notation, we write the hypotheses as follows:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_M=\mu_F \\
+H_A:& \; \mu_M \neq \mu_F
+\end{aligned}
+$$
+
+The null hypothesis ($H_0$) states that the true mean mortality rate for males ($\mu_M$) is equivalent to the true mean mortality rate for females ($\mu_F$). The alternate hypothesis ($H_A$) states that the mean rates are not equal. We could have written these equivalently as:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_M-\mu_F=0 \\
+H_A:& \; \mu_M-\mu_F \neq 0
+\end{aligned}
+$$
+
+This format makes it clear that we are interested in a difference in means. The true difference in means ($\mu_M-\mu_F$) is our population parameter. We estimate this parameter using a sample difference in means, which we denote $\bar{x}_M-\bar{x}_F$. This notation is stated as "x bar" and it represents the mean of the sample. It is also known as our observed statistic or **test statistic**.
+
+In order to judge the significance of our test statistic, we need to compare it to a **null distribution**. The null distribution represents values of the test statistic we would expect to observe *if the null hypothesis is true*. In our case, this would be the difference in sample mean mortality rates we would expect to see if the male and female populations are equivalent. That is exactly what we generated with our simulated distribution in the previous example.
+
+Once we have a test statistic and a null distribution, we can measure the likelihood of our observed value under the null hypothesis. This metric is known as a **p-value**. We'll save further discussion of p-values for future lessons. However, a small p-value will suggest that our observed test statistic is very unlikely under the null hypothesis. Once the p-value is below a defined threshold of likelihood, we will be compelled to *reject* the null hypothesis in favor of the alternate.
+
+## Practice 3
+
+Using your urban versus rural populations, define the null and alternate hypotheses in proper notation. Then answer the following questions:
+
+* What is your test statistic? 
+* What is your null distribution?
+* Does your test statistic appear likely or unlikely on the null distribution?

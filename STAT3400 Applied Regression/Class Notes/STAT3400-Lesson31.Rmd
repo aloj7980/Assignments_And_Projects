@@ -1,0 +1,252 @@
+---
+title: "Difference in Two Means"
+author: "Dr. Kris Pruitt"
+date: "5 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to review the three methods for conducting a hypothesis test on the difference in two means. Students should leave this lesson with the ability to complete a hypothesis test using randomization, the Central Limit Theorem, and the t-distribution as appropriate.
+
+## Reason 1
+
+Randomization is a common computational method for generating a null distribution to test the difference in two means. With a sufficiently large sample from two independent populations, we repeatedly shuffle the values for the variable of interest and calculate the difference in sample means. These differences comprise the null distribution, which assumes the populations have the same mean. We then compare the observed difference in sample means (i.e., the test statistic) to the null distribution in order to obtain a p-value. We'll begin the lesson by demonstrating the randomization process.
+
+## Example 1
+
+Throughout this lesson, we will use the same example context to demonstrate the three hypothesis testing methods. The example regards differences in batting statistics between the two sub-leagues of Major League Baseball (MLB). Specifically, we will investigate the difference in mean hits per season for teams in the American League (AL) and the National League (NL) during the 1997 to 2019 seasons. During this time frame, the AL permitted the *designated hitter* while the NL did not. The designated hitter usually replaces the pitcher in the batting order, since pitchers tend to be poor hitters. So, we might expect AL teams to average more hits per season than NL teams. We will test this claim using data from the `Lahman` package.
+
+```{r}
+#load Lahman package
+library(Lahman)
+
+#import batting data
+data("Batting")
+
+#wrangle batting data
+hits <- Batting %>%
+  filter(yearID<2020,yearID>1996) %>%
+  group_by(yearID,teamID,lgID) %>%
+  summarize(tH=sum(H)) %>%
+  ungroup()
+
+#sample from batting data
+set.seed(303)
+samp <- sample.int(n=nrow(hits),size=200,replace=FALSE)
+hits_samp <- hits[samp,]
+```
+
+The previous code chunk wrangles the batting data from the `Lahman` package to only include the total hits per team for the 1997 to 2019 seasons. We then randomly sample 200 observations from that time frame, in order to conduct the test. Let $\mu_1$ and $\mu_2$ be the true mean hits per season for AL and NL teams, respectively. Then our **hypotheses** are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_1-\mu_2=0 \\
+H_A:& \; \mu_1-\mu_2 > 0
+\end{aligned}
+$$
+
+We will have the same hypotheses for all three test methods. Similarly, we will use the same **level of significance** ($\alpha=0.05$) for each test. Finally, the appropriate **test statistic** for a difference in population means is the difference in sample means. We calculate this difference as:
+
+```{r}
+#calculate mean hits grouped by league
+samp_means <- hits_samp %>%
+  group_by(lgID) %>%
+  summarize(Count=n(),
+            AvgHits=mean(tH),
+            StDevHits=sd(tH)) %>%
+  ungroup()
+
+#calculate difference in mean hits
+test_stat <- as.numeric(samp_means$AvgHits[1]-samp_means$AvgHits[2])
+test_stat
+```
+
+Based on this sample, it appears that AL teams average about 35 hits per season more than NL teams. However, we still need to assess the strength of this evidence. The remaining steps of the hypothesis test diverge, depending on the method employed. For randomization, we generate a **null distribution** by repeatedly shuffling the total hits values that are assigned to each league and calculating a difference in means. This simulates the difference in sample means we might expect to observe if the leagues truly have the same population mean.
+
+```{r,echo=FALSE}
+#initiate empty vector
+results <- data.frame(diff=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  shuffle <- hits_samp %>%
+    transmute(lgID,tH,
+              Shuffle_tH=sample(hits_samp$tH,replace=FALSE)) %>%
+    group_by(lgID) %>%
+    summarize(AvgHits=mean(Shuffle_tH)) %>%
+    ungroup()
+  
+  results$diff[i] <- shuffle$AvgHits[1]-shuffle$AvgHits[2]
+  
+}
+
+#compute rejection threshold
+threshold <- as.numeric(quantile(results$diff,0.95))
+
+#plot null distribution
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=threshold,color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=test_stat,color='red',size=1) +
+  labs(title='Null Distribution and Test Statistic',
+       x='Difference in Mean Hits per Season',y='Count') +
+  theme_bw()
+```
+
+Visually, we can see that we reject the null hypothesis. The test statistic is beyond the rejection threshold. Computationally, we arrive at the same conclusion by calculating the **p-value**.
+
+```{r}
+mean(results$diff>test_stat)
+```
+
+The p-value is far less than the significance level of 0.05, so we **reject the null hypothesis**. There *is* sufficient statistical evidence to suggest that AL teams average more hits per season than NL teams. This might explain why MLB decided to adopt the designated hitter for the NL after the 2021 season.  
+
+## Practice 1
+
+* What underlying assumptions are necessary to pursue randomization for hypothesis testing?
+* In rejecting the null hypothesis, what are the chances we committed a Type 1 error?
+* Have we *proven* that allowing a designated hitter leads to more hits per season?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+A valuable attribute of the randomization approach is that we can investigate the difference between any two parameters we like. We could have conducted a test on the difference in medians, difference in standard deviations, etc. When the test is on the difference in means, we can apply the Central Limit Theorem (CLT). The CLT requires a sufficiently large sample from two independent populations and employs the Normal distribution as the null distribution. We will continue the lesson by conducting a CLT difference in means test.
+
+## Example 2
+
+As previously mentioned, the hypotheses, level of significance, and test statistic are the same for all of our methods of testing the difference in mean hits per season between the AL and NL. The primary difference between the methods is the null distribution. In this case, we use a Normal distribution that is centered on the null value (i.e., 0) with a standard error estimated from the sample. The standard error for a difference in means is:
+
+$$
+\text{standard error}=\sqrt{\frac{s_1^2}{n_1}+\frac{s_2^2}{n_2}}
+$$
+
+With this standard error, we can generate the appropriate null distribution.
+
+```{r,echo=FALSE}
+#calculate standard error
+sterr <- sqrt(((samp_means$StDevHits[1]^2)/samp_means$Count[1])+
+              ((samp_means$StDevHits[2]^2)/samp_means$Count[2]))
+
+#simulate null distribution by drawing from Normal distribution
+set.seed(653)
+null_dist <- data.frame(diff=rnorm(n=1000,mean=0,sd=sterr))
+
+#plot null distribution along with test statistic
+ggplot(data=null_dist,aes(x=diff)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=qnorm(p=0.05,mean=0,sd=sterr,lower.tail=FALSE),
+             color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=test_stat,color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Difference in Mean Hits per Season',
+       y='Density') +
+  theme_bw()
+```
+
+As before, we see that the test statistic exceeds the rejection threshold. We compute the associated p-value as:
+
+```{r}
+pnorm(q=test_stat,mean=0,sd=sterr,lower.tail=FALSE)
+```
+
+Thus, if the AL and NL truly average the same hits per season, then there is only a 0.1% chance we would have observed this sample data (or more extreme). That is highly unlikely, so we reject the null hypothesis.
+
+## Practice 2
+
+* What underlying assumptions are necessary to pursue the CLT for hypothesis testing?
+* What is an appropriate 95% confidence bound for the difference in means?
+* What is the meaning of a Type 2 error, in the context of this problem?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+Our final demonstration of the difference in means hypothesis test employs the t-distribution. While randomization and the CLT both require a sufficiently large sample, the t-distribution is designed to account for the added variability introduced by small samples. Thus, the t-distribution provides a more conservative null distribution and generally larger p-values.
+
+## Example 3
+
+Given that the t-distribution is intended for small samples, we will draw a new (smaller) sample of teams from the original data.
+
+```{r}
+#sample from batting data
+set.seed(777)
+samp2 <- sample.int(n=nrow(hits),size=40,replace=FALSE)
+hits_samp2 <- hits[samp2,]
+```
+
+From this new sample, we can calculate the test statistic.
+
+```{r}
+#calculate mean hits grouped by league
+samp_means2 <- hits_samp2 %>%
+  group_by(lgID) %>%
+  summarize(Count=n(),
+            AvgHits=mean(tH),
+            StDevHits=sd(tH)) %>%
+  ungroup()
+
+#calculate difference in mean hits
+test_stat2 <- as.numeric(samp_means2$AvgHits[1]-samp_means2$AvgHits[2])
+test_stat2
+```
+
+We still observe a higher average hits per season for AL teams versus NL, but it's not quite as large a difference as before. In order to test the strength of this evidence on a t-distribution, we need to standardize the test statistic.
+
+```{r}
+#calculate standard error
+sterr2 <- sqrt(((samp_means2$StDevHits[1]^2)/samp_means2$Count[1])+
+               ((samp_means2$StDevHits[2]^2)/samp_means2$Count[2]))
+
+#standardize test statistic
+t_stat <- (test_stat2-0)/sterr2
+t_stat
+```
+
+This new test statistic can be compared to a t-distribution based on the null hypothesis. However, the t-distribution requires the degrees of freedom ($df$) parameter. With two different sample sizes ($n_1$ and $n_2$), how do we calculate the degrees of freedom? The best formula for the degrees of freedom is quite complex. So, a common conservative estimate is to use the minimum of $n_1-1$ and $n_2-1$. In our case, this is $n_1-1=17$. Now we're ready to visualize the null distribution.
+
+```{r,echo=FALSE}
+#generate values from t-distribution
+set.seed(100)
+tdist <- data.frame(variate=rt(n=10000,df=17))
+
+#plot density curve
+ggplot(data=tdist,aes(x=variate)) +
+  geom_density(adjust=3,color='black',fill='sky blue') +
+  geom_vline(xintercept=qt(p=0.05,df=17,lower.tail=FALSE),
+             color='red',linetype='dashed',size=1) +
+  geom_vline(xintercept=t_stat,color='red',size=1) +
+  labs(title='Null Distribution (t-distribution)',
+       x='Standard Errors',y='Density') +
+  theme_bw()
+```
+
+Interestingly, we no longer reject the null hypothesis! This exemplifies the conservative nature of the t-distribution. When we have relatively little data, we require *much* stronger evidence in order to reject the null. The associated p-value is:
+
+```{r}
+pt(q=t_stat,df=17,lower.tail=FALSE)
+```
+
+Since the p-value of 10% is greater than the significance level of 5%, we **fail to reject the null hypothesis**. With such a small sample, the observed difference of 32 hits per season is not sufficient evidence to declare a difference between the AL and NL.
+
+## Practice 3
+
+* What underlying assumptions are necessary to pursue the CLT for hypothesis testing?
+* Did we check all of these assumptions? If not, check!
+* What is the meaning of power, in the context of this problem?
+

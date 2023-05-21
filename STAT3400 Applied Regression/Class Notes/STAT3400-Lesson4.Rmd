@@ -1,0 +1,229 @@
+---
+title: "Linear Association"
+author: "Dr. Kris Pruitt"
+date: "25 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to explore visual and numerical measures of linear association between two variables. Students should leave this lesson with the ability to describe linear association in scatter plots, to compute and interpret the Pearson correlation coefficient, and to calculate residuals from a best-fit line.
+
+
+## Reason 1
+
+When trying to describe a linear association between two numerical variables, our ultimate goal is to find a function of the form:
+
+$$
+y=\beta_0 +\beta_1 x + \epsilon
+$$
+
+For this function $\beta_0$ is the $y$-intercept, $\beta_1$ is the slope, and $\epsilon$ represents the variation of the observations from the line. Typically, we start with data ($x$ and $y$) and try to find values for $\beta_0$ and $\beta_1$ that make the total variation from the line as small as possible. But, we'll begin this lesson by assuming we already know the slope and $y$-intercept, and explore the impact of changing the variation.
+
+
+## Example 1
+
+For this example we will use the data frame `auto_data.csv` from the course website. This data includes performance characteristics for vehicles from the 1970s and 1980s. Save the file to your computer and import it into RStudio. We'll include the `na.omit()` function for this lesson to eliminate any observations with missing variable values and the `rownames()` function to re-number the rows afterward.
+
+```{r}
+auto <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/auto_data.csv') %>%
+  na.omit()
+
+rownames(auto) <- NULL
+```
+
+There are 392 observations (vehicles) with 9 variables, most of which are numerical. Suppose we were interested in the association between the weight of the vehicle and the power of its engine. Furthermore, imagine we were provided an exact linear function that relates these two variables: $\text{horsepower}=-12+0.04 \cdot \text{weight}$. Notice this is the same form as the general linear function above, but there is no $\epsilon$. If the horsepower values in our sample data *exactly* followed this function, then the scatter plot would look like the following.
+
+```{r}
+auto_new <- auto %>%
+  mutate(horsepower_new=0.04*weight-12)
+
+ggplot(data=auto_new,aes(x=weight,y=horsepower_new)) +
+  geom_point() +
+  geom_abline(intercept=-12,slope=0.04,color='blue') +
+  labs(x='Vehicle Weight (lbs)',y='Engine Power (hp)') +
+  theme_bw()
+```
+
+In this case, there is no variation from the linear relationship. The association between weight and power exactly follows the linear function. When two variables exactly follow a functional relationship without deviation, we say they are perfectly **correlated**. While a scatter plot provides a visual measure of association, a correlation coefficient provides a numerical measure. The Pearson correlation coefficient is a common metric for the direction and strength of a linear association. It ranges between -1 (perfect negative correlation) and +1 (perfect positive correlation), with 0 indicating no association at all. Its manual calculation is tedious, so we will leverage the `cor()` function in `R` instead. For the weight and power data in the scatter plot, the correlation coefficient is +1, as expected.
+
+```{r}
+cor(auto_new$weight,auto_new$horsepower_new)
+```
+
+A perfect correlation would imply that a vehicle's weight exactly determines its engine power. This is clearly not the case in reality. There will be some variation from one vehicle to the next.  Let's add some variation to the engine power values, while still keeping the linear function as the base. For each vehicle, we'll add a random amount of horsepower from the Normal distribution with a mean of 0 and a standard deviation of 10 using the `rnorm()` function. This random amount of horsepower acts as our $\epsilon$ for the general linear function. We use the `set.seed()` function to ensure all of our computers choose the same random values to add.
+
+```{r}
+set.seed(2023)
+
+auto_new2 <- auto_new %>%
+  cbind(random=rnorm(392,mean=0,sd=10)) %>%
+  mutate(horsepower_plus=0.04*weight-12+random)
+
+ggplot(data=auto_new2,aes(x=weight,y=horsepower_plus)) +
+  geom_point() +
+  geom_abline(intercept=-12,slope=0.04,color='blue') +
+  labs(x='Vehicle Weight (lbs)',y='Engine Power (hp)') +
+  theme_bw()
+```
+
+We can still perceive the linear association between the two variables, but it isn't perfect like before. In the previous plot, all 2,000 pound vehicles had exactly 68 horsepower. In this new plot, 2,000 pound vehicles might *average* 68 horsepower, but there is some variation above and below that average. In other words, the correlation is no longer perfect. Let's calculate the new correlation coefficient.
+
+```{r}
+cor(auto_new2$weight,auto_new2$horsepower_plus)
+```
+
+The correlation coefficient still indicates a strong, positive linear association, but it is no longer perfect. For the remainder of the course, we will use the Pearson correlation coefficient to describe the strength of linear association between two variables with the following categories:
+
+* Strong: 0.75 - 1
+* Moderate: 0.5 - 0.75
+* Weak: 0.25 - 0.5
+* None: 0 - 0.25
+
+The numerical values in the categories are absolute values of the calculated coefficient, so positive and negative correlation are described with the same strength. Now you'll have a chance to adjust the amount of random variation in the data and assess the correlation.
+
+
+## Practice 1
+
+Recreate the same scatter plot as above with the same randomization seed, but increase the standard deviation of the Normal distribution to 30 horsepower. Then answer the following questions.
+
+* What stands out the most to you when comparing this new scatter plot to the previous?
+* If the blue line was not provided for you, would you be able to perceive it from just the points?
+* Before you calculate it, what would you guess for the correlation coefficient?
+* What is the actual correlation coefficient and how would you describe its strength?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we assumed we knew the parameters of the linear function that described the association between our two variables of interest. In general, this will *not* be the case. Instead, we will just have the points on the scatter plot and we'll have to determine the parameters of the line that "best fits" the data. We'll continue the lesson by exploring linear association in this more conventional manner.
+
+
+## Example 2
+
+Now we will build a scatter plot with the real horsepower values in the sample data, rather than the notional values from the previous section.
+
+```{r}
+ggplot(data=auto,aes(x=weight,y=horsepower)) +
+  geom_point() +
+  labs(x='Vehicle Weight (lbs)',y='Engine Power (hp)') +
+  theme_bw()
+```
+
+The true association between the two variables is a little messier than our constructed association from before. It still appears to be linear and increasing, but the strength is difficult to assess from the graph. Let's calculate the correlation coefficient.
+
+```{r}
+cor(auto$weight,auto$horsepower)
+```
+
+The positive linear association is still strong. But, we do not know the equation of the line that best fits the data. We will spend a large portion of the remainder of this course learning how to find that equation. In the meantime, we can get a purely visual representation of the line using the `geom_smooth()` function.
+
+```{r}
+ggplot(data=auto,aes(x=weight,y=horsepower)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  labs(x='Vehicle Weight (lbs)',y='Engine Power (hp)') +
+  theme_bw()
+```
+
+The `method='lm'` option indicates we want the smooth function to be based on a linear model. The `se=FALSE` option removes the standard error bars from the line. We'll learn more about standard error in later lessons. The resulting blue line is the linear association that best fits the data. But, what does it mean to "best fit" the data? For our purposes, "best" will mean the line that provides the minimum total error. Another word for the error between the observed data and the fitted line is the **residual**.
+
+We calculate the residual as the observed value minus the fitted value. For example, the weight and horsepower for the first observation in the sample are:
+
+```{r}
+auto[1,c(4,5)]
+```
+
+The fitted value on the blue line for a weight of 3,504 pounds is about 125 horsepower (we're visually estimating from the plot). So, the residual for this observation is $130-125=5$ horsepower. As another example, the weight and horsepower for observation #103 are:
+
+```{r}
+auto[103,c(4,5)]
+```
+
+The fitted value for a weight of 4,997 pounds is about 185 horsepower. So, the residual is $150-185=-35$ horsepower. When fitting lines to data, we will generally see some positive (above the line) and some negative (below the line) residuals. Ideally, these errors (residuals) would be random and symmetric around the line, but that won't always be the case. We'll learn how to detect and rectify issues with the residuals in future lessons. For now, let's practice graphing a best-fit line and calculating some residuals.
+
+
+## Practice 2
+
+Build a scatter plot with weight on the $x$-axis and acceleration on the $y$-axis. The acceleration variable is measured as the number of seconds to reach 60 miles-per-hour. Include the best-fit line on your graph. Then answer the following questions.
+
+* How would you describe the shape, direction, and strength of the association between these variables?
+* Can you think of a real-world explanation for the association you just described?
+* What is the approximate residual for observation #68?
+* What is the approximate residual for observation #333?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The linear function and Pearson correlation coefficient are only appropriate if the underlying relationship between the two variables is truly linear. If the variables appear to be related in a nonlinear manner, then we must either transform one of the variables or pursue other fitting functions. We'll finish this lesson by transforming a nonlinear association in order to apply a linear function.
+
+
+## Example 3
+
+Suppose we wanted to explain the variation in fuel efficiency (mpg) using engine power (hp). This would suggest a scatter plot with horsepower on the $x$-axis and miles-per-gallon on the $y$-axis.
+
+```{r}
+ggplot(data=auto,aes(x=horsepower,y=mpg)) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  labs(x='Engine Power (hp)',y='Fuel Efficiency (mpg)') +
+  theme_bw()
+```
+
+Though we included the best-fit line, the relationship between these two variables is obviously *not* linear. There is clearly a curved, concave-up association. As a result, a linear function is not appropriate and the Pearson correlation coefficient is meaningless. To be clear, we could still calculate the correlation coefficient.
+
+```{r}
+cor(auto$horsepower,auto$mpg)
+```
+
+If we calculated the correlation without looking at the graph, we might think there is a strong *linear* association between the two variables. But, the Pearson coefficient is only appropriate after we have visually confirmed a linear relationship. Since the visual relationship is nonlinear, we should not use the Pearson coefficient to describe the correlation.
+
+One option for dealing with nonlinear associations is a transformation of the response variable. Often a logarithm, square-root, or inverse transformation will "straighten" curvature in the scatter plot. Let's try a scatter plot with the logarithm of fuel efficiency as the response variable.
+
+```{r}
+ggplot(data=auto,aes(x=horsepower,y=log(mpg))) +
+  geom_point() +
+  geom_smooth(method='lm',se=FALSE) +
+  labs(x='Engine Power (hp)',y='Log of Fuel Efficiency (mpg)') +
+  theme_bw()
+```
+
+The relationship between engine power and the log of fuel efficiency appears much more linear. This is an acceptable association to describe with the Pearson correlation coefficient.
+
+```{r}
+cor(auto$horsepower,log(auto$mpg))
+```
+
+Now there is a strong, negative, linear association between the two variables. Of course we have to remember to "undo" the transformation if we want to use the best-fit line to make a prediction. For example, a vehicle with 150 hp has a fitted value of about 2.75. However, that 2.75 is for the logarithm of fuel efficiency. To get back to just fuel efficiency we must apply the exponential to "undo" the logarithm.
+
+```{r}
+exp(2.75)
+```
+
+Thus, the best-fit fuel efficiency for a 150 hp vehicle is about 15.6 mpg. To complete this lesson, you'll get a chance to practice a transformation.
+
+
+## Practice 3
+
+Create a scatter plot with fuel efficiency (mpg) as the response variable and engine displacement as the explanatory variable. Displacement is a measure of the volume of the engine in cubic inches. Answer the following questions.
+
+* How would you describe the shape and direction of the association between these variables?
+* Can you think of a real-world explanation for this type of association?
+
+Now transform the response variable using the inverse (i.e., `1/mpg`) and generate a new scatter plot. Then answer the following questions.
+
+* How would you describe the shape, direction, and strength of the association between these variables?
+* What is the best-fit estimate of fuel efficiency for a vehicle with an engine displacement of 350 cubic inches?

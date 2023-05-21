@@ -1,0 +1,237 @@
+---
+title: "Type 1 and 2 Errors"
+author: "Dr. Kris Pruitt"
+date: "15 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to distinguish between the two types of decision errors that can be made in hypothesis testing. Students should leave this lesson with the ability to compute and explain the likelihood of Type 1 and Type 2 errors in the context of hypothesis testing.
+
+
+## Reason 1
+
+As we have seen in many examples, a hypothesis test will result in one of two conclusions: reject the null hypothesis or fail to reject the null hypothesis. However, we must be careful to remember that these conclusions are based on a *sample*. They do not represent absolute truth. Consequently, we could in fact make the wrong decision. Even with a high level of confidence, we could reject the null hypothesis when in reality it is true. Similarly, we could fail to reject the null hypothesis when in reality it is false. These cases introduce two types of decision errors.
+
+```{r,echo=FALSE}
+tab <- data.frame(Table=c('Null is True','Null is False'),
+                  Positive=c('Type 1 Error','Good Decision'),
+                  Negative=c('Good Decision','Type 2 Error'))
+kable(tab,col.names=c('','Reject','Fail to Reject'),align='rcc')
+```
+
+With a Type 1 error, we reject the null hypothesis when it is true. With a Type 2 error, we fail to reject the null hypothesis when it is false. Otherwise, we made the correct decision. We'll begin the lesson by demonstrating Type 1 and 2 errors in a context we've discussed before.
+
+## Example 1
+
+In previous lessons on hypothesis testing, we leveraged the analogy of the US court system. If we imagine a jury trial as a hypothesis test, then the null and alternate hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \text{Innocent} \\
+H_A:& \; \text{Guilty}
+\end{aligned}
+$$
+
+The default assumption is that the defendant is innocent, and the purpose of the trial is to present evidence of the defendant's guilt. If the evidence is strong enough (e.g., beyond a shadow of a doubt) then the jury will find the defendant guilty. This is equivalent to rejecting the null hypothesis. If the evidence is not sufficient, then the jury will find the defendant not guilty. This is equivalent to failing to reject the null hypothesis. But, just as with hypothesis testing in general, it is possible that the jury makes the wrong decision. Let's consider the possible outcomes in a table.
+
+```{r,echo=FALSE}
+tab <- data.frame(Table=c('Actually Innocent','Actually Guilty'),
+                  Positive=c('Type 1 Error','Good Decision'),
+                  Negative=c('Good Decision','Type 2 Error'))
+kable(tab,col.names=c('','Found Guilty','Found not Guilty'),align='rcc')
+```
+
+If the jury commits a Type 1 error, then an innocent person goes to prison. If the jury commits a Type 2 error, then a guilty person goes free. In reality, there are many reasons why these errors could occur. In the case of a Type 1 error, it could be that coincidental circumstantial evidence placed the defendant in the wrong place at the wrong time. In the case of a Type 2 error, it could be that the defendant is a very careful criminal and there was almost no evidence of their guilt. In either case, absolute truth is never known and the decision is made based on evidence. In the context of statistics, the evidence is represented by a sample and evaluated in a hypothesis test.
+
+## Practice 1
+
+Construct a two-way table, similar to the court case example, but use the context of COVID testing as the analogy for a hypothesis test. Then answer the following questions:
+
+* What is the meaning of a Type 1 error in this context?
+* What is the meaning of a Type 2 error in this context?
+* What real-world event would cause us to fail to reject the null hypothesis?
+* TRUE or FALSE: If we reject the null hypothesis, then the patient definitely does not have COVID.
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+Now that we understand the definitions of Type 1 and Type 2 errors, we can focus on the *likelihood* that they will occur. We can control the probability of committing a Type 1 or 2 error via the parameters of the hypothesis test. For the remainder of this lesson, we will discuss the probability of Type 1 error and its association with the level of significance. In the next lesson we will discuss the probability of Type 2 error and its connection with the "power" of a test.
+
+Spoiler alert: **The probability of committing a Type 1 error is equivalent to the chosen level of significance**.
+
+## Example 2
+
+It might seem a bit anticlimactic, but when we choose the level of significance ($\alpha$) as the second step in any hypothesis test, we are also choosing the probability of committing a Type 1 error. Thus, if we want to reduce the chances of committing a Type 1 error, we should choose a smaller significance level (e.g., $\alpha=0.01$) or equivalently a higher level of confidence (e.g., 99%). Thus, our decision on significance level should be driven by the real-world consequences of making a Type 1 error. This is why the US court system requires such a high level of confidence (i.e., beyond a shadow of a doubt) in a conviction. We want to avoid sending an innocent person to prison.
+
+For another example of the probability of Type 1 error, let's return to the Starbucks data from previous lessons. Recall we tested the claim that the average number of calories for Grande size drinks is greater than 200 calories. Let's import the data and write the hypotheses.
+
+```{r}
+starbucks <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv') %>%
+  filter(Size=='Grande') %>%
+  select(Calories)
+```
+
+If we let $\mu$ be the true mean calories of Grande size drinks, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu=200 \\
+H_A:& \; \mu > 200
+\end{aligned}
+$$
+
+We previously selected $\alpha=0.10$ as our level of significance. What we did not previously discuss is that this is equivalent to choosing a 10% chance of committing a Type 1 error. In other words, there is a 10% chance we will conclude that Grande drinks have more than 200 calories, on average, when in fact they do not. We can visualize this probability on the null distribution for the test.
+
+```{r,echo=FALSE}
+#generate values for null distribution
+set.seed(653)
+null_dist <- data.frame(cals=rnorm(n=1000,
+                                   mean=200,
+                                   sd=sd(starbucks$Calories)/sqrt(nrow(starbucks))))
+
+#calculate threshold for Type 1 error
+type1 <- qnorm(p=0.1,
+               mean=200,sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+               lower.tail=FALSE)
+
+#plot Type 1 threshold on null distribution
+ggplot(data=null_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=type1,color='red',size=1,linetype='dashed') +
+  geom_segment(aes(x=215,y=0.0025,xend=220,yend=0.0025),arrow=arrow(),
+               color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Sample Mean Calories',
+       y='Density') +
+  theme_bw()
+```
+
+The probability of a Type 1 error ($\alpha=0.10$) is represented by the area under the null distribution (blue density curve) to the right of the threshold (dashed red line). Let's think carefully about why this is true. The definition of Type 1 error is the probability of rejecting the null hypothesis given the null hypothesis is true. This is a conditional probability. The null distribution assumes the null hypothesis is true ($\mu=200$), so we meet the premise of the conditional probability. We will reject the null hypothesis when the p-value is smaller than the level of significance. This will occur when the test statistic is beyond the significance threshold (dashed red line). Let's add the test statistic to the plot.
+
+```{r,echo=FALSE}
+#calculate test statistic
+test_stat <- mean(starbucks$Calories)
+
+#plot Type 1 threshold on null distribution
+ggplot(data=null_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=type1,color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=test_stat,color='red',size=1) +
+  labs(title='Null Distribution',
+       x='Sample Mean Calories',
+       y='Density') +
+  theme_bw()
+```
+
+The test statistic (solid red line) is beyond the significance threshold (dashed red line), so we reject the null hypothesis. As a result, we will conclude that Grande size drinks have more than 200 calories, on average. But we must remember that there is a 10% chance we are wrong. There is a 10% chance that the drinks do *not* have more than 200 calories and the sample data misled us. Now you can practice visualizing the probability of Type 1 error in another example.
+
+## Practice 2
+
+Continuing with the Starbucks data, return to the test of the claim that more than half of Grande size drinks are over 225 calories. Run the code chunk below and construct a plot of the null distribution that includes the significance threshold ($\alpha=0.05$) and the test statistic.
+
+```{r}
+#import and filter data
+starbucks2 <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv') %>%
+  filter(Size=='Grande') %>%
+  transmute(Over=ifelse(Calories>225,1,0))
+
+#compute test statistic
+test_stat2 <- mean(starbucks2$Over)
+
+#compute standard error for null distribution
+sterr2 <- sqrt((test_stat2*(1-test_stat2))/nrow(starbucks2))
+```
+
+Then answer the following questions:
+
+* What is the conclusion for the hypothesis test?
+* TRUE or FALSE: We are at risk of making a Type 1 error.
+* In order to reject the null hypothesis, the test statistic must be greater than ______.
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous example, we demonstrated the probability of Type 1 error in a one-sided hypothesis test. The test was one-sided because we only considered a single tail of the null distribution. As we've discussed previously, this places all of the significance ($\alpha$) in one tail rather than splitting it into two tails. Not only does this difference affect our hypotheses, but it also impacts the probability of the committing a Type 1 error. We'll finish the lesson by demonstrating the potential **confirmation bias** that can occur when we conduct one-sided versus two-sided tests.
+
+## Example 3
+
+When we conduct a one-sided hypothesis test, we are only focusing on one of two potential outcomes. Either we believe a parameter is *greater than* the default null value or we believe it is *less than* that null value. In either case, we are ignoring the opposing option. For some applications, where we are certain we are only interested in one side, this might be appropriate. However, if we are uncertain of which side is of interest, we should always choose a two-sided test. This is because one-sided tests increase our chances of committing a Type 1 error. We can visualize this in an example.
+
+For the Starbucks example in the previous section, let's consider two possible alternate hypotheses. This is *not* common practice! We're just exploring this as an academic exercise.
+
+$$
+\begin{aligned}
+H_0:& \; \mu=200 \\
+H_{A1}:& \; \mu > 200 \\
+H_{A2}:& \; \mu \neq 200
+\end{aligned}
+$$
+
+The first alternate hypothesis ($H_{A1}$) is the original one-sided test. The second alternate hypothesis ($H_{A2}$) represents the two-sided version of the test. Now we are going to reconstruct the null distribution plot from before, but we will add the significance threshold for the two-sided test (dashed black lines) along with the one-sided (dashed red lines). In both cases, the significance level is $\alpha=0.10$.
+
+```{r,echo=FALSE}
+#calculate thresholds for two-sided Type 1 error
+type1_high <- qnorm(p=0.05,
+                    mean=200,
+                    sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+                    lower.tail=FALSE)
+
+type1_low <- qnorm(p=0.05,
+                   mean=200,
+                   sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+                   lower.tail=TRUE)
+
+#plot both Type 1 thresholds on null distribution
+ggplot(data=null_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=type1,color='red',size=1,linetype='dashed') +
+  geom_vline(xintercept=type1_high,color='black',size=1,linetype='dashed') +
+  geom_vline(xintercept=type1_low,color='black',size=1,linetype='dashed') +
+  labs(title='Null Distribution',
+       x='Sample Mean Calories',
+       y='Density') +
+  theme_bw()
+```
+
+Recall that our test statistic is about 216 calories. So we will only be looking in the *upper* tail of the distribution, regardless of which alternate hypothesis we consider. As before, our probability of committing a Type 1 error is represented by the area under the null distribution (blue density curve) to the *right* of the significance threshold (dashed line). We can clearly see that the probability of a Type 1 error for the one-sided test (red) is greater than that of the two-sided test (black). By only focusing on one side, we are potentially demonstrating confirmation bias and inflating our chances of committing a Type 1 error.
+
+So, why would we ever conduct a one-sided test?! As we will see in the next lesson, there is a trade-off between the two types of errors. We might choose to increase our chances of committing a Type 1 error in order to decrease our chances of committing a Type 2 error. For now, practice visualizing the difference between one-sided and two-sided tests.
+
+## Practice 3
+
+Return to the test of the claim that less than half of Venti Starbucks drinks are under 40 grams of sugar. Run the code chunk below and construct a plot of the null distribution that includes the significance thresholds ($\alpha=0.05$) for both the original one-sided test and the option of a two-sided test.
+
+```{r}
+#import and filter data
+starbucks3 <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv') %>%
+  filter(Size=='Venti') %>%
+  transmute(Under=ifelse(Sugars..g.<40,1,0))
+
+#compute test statistic
+test_stat3 <- mean(starbucks3$Under)
+
+#computer standard error for null distribution
+sterr3 <- sqrt((test_stat3*(1-test_stat3))/nrow(starbucks3))
+```
+
+Then answer the following questions:
+
+* What is a Type 1 error in the context of this problem?
+* Given the test statistic value, which tail will you focus on?
+* For this problem, a ____ sided test has a greater likelihood of committing a Type 1 error.

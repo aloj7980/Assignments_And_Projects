@@ -1,0 +1,177 @@
+---
+title: "Categorical Data"
+author: "Dr. Kris Pruitt"
+date: "20 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = '60%',fig.align='center')
+```
+
+The purpose of this lesson is to explore categorical variables using summaries and visualizations. Students should leave this lesson with the ability to create and interpret contingency tables, bar plots, and box plots for nominal and ordinal variables.
+
+
+## Reason 1
+
+Given that categorical variables typically have values represented by words (rather than numbers), the most common statistic of interest is a count. We might like a count of the number of observations within each category (level) or we might like counts within the intersections of categories for multiple variables. We'll begin by creating tables of counts and then move on to visual representations.
+
+
+## Example 1
+
+For this example we will use the data frame `starbucks_data.csv` from the course website. This data includes nutritional characteristics for Starbucks drinks of various types and sizes. Save the file to your computer, import it into `RStudio`, and then view the data.
+
+```{r}
+starbucks <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv')
+```
+
+There are 242 observations (drinks) with 20 variables to describe each drink. Most of the variables are numeric, but there are categorical variables to describe the type of drink, the size, and the milk preparation. Suppose we wanted a count of the number of drinks of each size included in the data frame. We can simply use the `table()` function along with the column of interest.
+
+```{r}
+table(starbucks$Size)
+```
+
+It appears the most common sizes are Tall, Grande, and Venti. This probably comes as no surprise if you frequent Starbucks on a regular basis. But, size is an ordinal variable and these categories are not in the correct size order. Instead they are in the default alphabetical order. We can change that by using the `factor()` function and the `levels` parameter.
+
+```{r}
+table(factor(starbucks$Size,levels=c('Single','Double','Short','Tall','Grande','Venti')))
+```
+
+Now size is in increasing order as it should be. Although counts of a single categorical variables are useful, we can gain even more insight about the data by considering two variables at once. A table that shows counts for two categorical variables is known as a **contingency table**. Let's add the milk preparation for the drink to the table.
+
+```{r}
+table(factor(starbucks$Size,levels=c('Single','Double','Short','Tall','Grande','Venti')),
+      factor(starbucks$Beverage_prep,levels=c('Solo','Soymilk','Nonfat Milk','2% Milk','Whole Milk')))
+```
+
+We could debate about whether the milk preparation is a nominal or ordinal variable. If the intent is to capture the amount of dairy-based fat in the drink, then I would argue it is an ordinal variable. The contingency table is currently ordered with this intent. This two-way table provides much more insight than the one-way table. Now we see that single and double-sized drinks do not come with any milk product at all. This is because they are espresso shots. We also see that the most common size and preparation is a grande drink with nonfat milk.
+
+The primary focus of this course is the association between two or more variables. As a result, we will be most interested in summaries and visualizations that include at least two variables (like the contingency table above). Now you can practice by creating and interpreting your own two-way table.
+
+
+## Practice 1
+
+Load the built-in data frame regarding the General Social Survey (GSS) of Americans from 2000-2014 using the function `data(gss_cat)`. Filter the data frame using the code below. This code reduces the observations to only survey responses that provided a clear answer to the questions.
+
+```{r}
+gss_cat_filter <- gss_cat %>%
+  filter(!partyid %in% c('No answer','Don\'t know','Other party'),
+         marital != 'No answer') %>%
+  droplevels()
+```
+
+Using the filtered data, create a contingency table of political party versus marital status and answer the following questions.
+
+* Are marital status and political party ordinal or nominal variables?
+* What is the most common combination of marital status and political party?
+* What percentage of strong Republicans (strong Democrats) are divorced?
+* What percentage of divorced people are strong Republicans (strong Democrats)?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+Although summarizing category counts in tabular form is useful, visual graphics are often easier to quickly interpret. This is particularly true when there are many different categories. We'll continue the lesson by visualizing the same information we previously showed in the tables.
+
+
+## Example 2
+
+The table of Starbucks drink sizes can easily be displayed in a bar plot. Though there are basic `R` functions for such plots, we will use the `ggplot` format because the resulting graphics are much more visually appealing.
+
+```{r}
+ggplot(data=starbucks,
+       aes(x=factor(Size,levels=c('Single','Double','Short','Tall','Grande','Venti')))) +
+  geom_bar() +
+  labs(x='Drink Size',y='Count') +
+  theme_bw()
+```
+
+Notice we used the same `factor()` function to ensure the size categories are depicted in the correct order. Even for this small number of categories, it is much easier to quickly interpret the relative frequency of sizes in the graph versus the table. We can then add the milk preparation to the graph by creating a stacked bar plot.
+
+```{r}
+ggplot(data=starbucks,
+       aes(x=factor(Size,levels=c('Single','Double','Short','Tall','Grande','Venti')),
+           fill=factor(Beverage_prep,levels=c('Solo','Soymilk','Nonfat Milk','2% Milk','Whole Milk')))) +
+  geom_bar() +
+  labs(x='Drink Size',y='Count',fill='Milk Prep') +
+  theme_bw()
+```
+
+Now we have the additional insight of observing which milk preparation is most common within each drink size. However, if our goal is to detect an association between drink size and milk prep, it can be difficult when there are dramatic difference in the number of observations within each category (e.g., much fewer Single size compared to Grande). An easy way to remedy this issue is by standardizing the stacked bar plot.
+
+```{r}
+ggplot(data=starbucks,
+       aes(x=factor(Size,levels=c('Single','Double','Short','Tall','Grande','Venti')),
+           fill=factor(Beverage_prep,levels=c('Solo','Soymilk','Nonfat Milk','2% Milk','Whole Milk')))) +
+  geom_bar(position='fill') +
+  labs(x='Drink Size',y='Proportion',fill='Milk Prep') +
+  theme_bw()
+```
+
+By adding the `position='fill'` parameter to the `geom_bar()` function we have standardized milk prep within each drink size. Now all of the milk prep categories must add up to 100% within each size. This makes it much easier to detect an association between the two categorical variables. For example, the proportion of Solo milk prep clearly changes across sizes. For Single and Double sizes, 100% of the milk prep is Solo. By contrast, only about 10% of the other sizes have a Solo prep. But, if we only look at the three most common sizes (Tall, Grande, Venti), there doesn't appear to be much of a difference in milk prep across sizes.
+
+Notice with both stacked bar plots, we effectively made drink size the explanatory variable and milk prep the response variable. This is because we initially split all of the drinks by size on the x-axis and *then* broke each size down by milk prep with the stack colors. This permits us to see if the size of the drink helps explain the variation in milk prep. We could easily reverse these roles if that better suits the intent of the analysis. 
+
+Two other options for graphing categorical variables that you can explore on your own are mosaic plots and waffle charts. For now, let's practice building and interpreting stacked bar plots.
+
+
+## Practice 2
+
+Using the filtered GSS data, create a standardized stacked bar plot with marital status on the x-axis and political party as the filler. Then answer the following questions.
+
+* Does marital status appear to be associated with political party?
+* Which political party category changes the most across marital statuses?
+* Among divorced people, are a higher percentage strong Republicans or Democrats?
+* Can you think of a real-world explanation for what you observe in the graph?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous sections we explored ways to detect associations between two categorical variables using contingency tables and bar plots. For other applications we might like to look for an association between a categorical variable and a numerical variable. We'll finish this lesson by summarizing and visualizing a numerical variable across multiple categories.
+
+
+## Example 3
+
+Suppose we wanted to calculate the median calories for Starbucks drinks of various sizes. In this case, calories is a continuous numerical variable and size is an ordinal categorical variable. Recall, the median splits the data in half with 50% of values larger and 50% of values smaller. We calculate the median calories grouped by size with the following code.
+
+```{r}
+starbucks %>%
+  group_by(factor(Size,levels=c('Single','Double','Short','Tall','Grande','Venti'))) %>%
+  summarize(med_cals=median(Calories)) %>%
+  ungroup()
+```
+
+From the table, it appears that the median calories for a drink increase as the size increases. This makes intuitive sense, because more drink typically means more sugar and fat which means more calories. The table is informative, but a graph would be better. A common visualization for a numerical variable grouped by categories is a box plot (aka box-and-whisker plot). The added benefit of a box plot is that it displays multiple statistics at once, rather than just the median.
+
+```{r}
+ggplot(data=starbucks,
+       aes(x=factor(Size,levels=c('Single','Double','Short','Tall','Grande','Venti')),
+           y=Calories)) +
+  geom_boxplot(fill='sky blue') +
+  labs(x='Drink Size',y='Calories') +
+  theme_bw()
+```
+
+The thick horizontal line in the center of each box is the median we calculated previously. However, the box plot also includes the minimum (bottom of lower whisker), 25th percentile (bottom of box), 75th percentile (top of box), and maximum (top of upper whisker). The shaded box represents the middle 50% of the data and its height is sometimes called the **interquartile range**. Extreme observations, known as **outliers**, are indicated by individual points. We see a couple of these in the Short drink size. Outliers are generally identified as points that are more than 1.5 times the interquartile range above or below the box.
+
+This visualization makes the association between drink size and calories even more obvious. Although all the drink sizes have cases where the drink is 0 calories, the general trend is that calories increase with drink size. Now you'll have an opportunity to practice creating and interpreting a box plot.
+
+
+## Practice 3
+
+Using the filtered GSS data frame, create a box plot for age grouped by marital status. Then answer the following questions.
+
+* Does there appear to be an association between age and marital status?
+* Which two categories of marital status are most different in terms of age?
+* Which categories have the most outliers and what do these mean in context?
+* Can you think of a real-world explanation for what you observe in the graph?

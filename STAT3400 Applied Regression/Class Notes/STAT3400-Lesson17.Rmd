@@ -1,0 +1,194 @@
+---
+title: "Bootstrapping"
+author: "Dr. Kris Pruitt"
+date: "24 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the concept of bootstrapping for calculating a confidence interval. Students should leave this lesson with the ability to simulate resampling and calculate an interval estimate for the population mean.
+
+
+## Reason 1
+
+In previous lessons on hypothesis testing, we used sample data to determine if a particular value was plausible for a population parameter. For example, a hypothesis test could determine if it is plausible that one population mean is equal to another. Confidence intervals represent a different tool for statistical inference. Rather than focusing on the plausibility of a particular value, a confidence interval attempts to determine a plausible *range* of values for the parameter. Just as with randomization for hypothesis tests, there are computational approaches for producing a confidence interval. In this lesson we will focus on an approach known as **bootstrapping**. But first, we will begin the lesson by developing some intuition regarding confidence intervals.
+
+## Example 1
+
+For this example, we will once again employ the National Football League (NFL) scouting combine data from the years 2000-2020.
+
+```{r}
+combine <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/combine_data.csv')
+```
+
+Strictly for academic purposes, let's assume that this data represents the entire *population* of scouting combines throughout the history of the event. From this population we decide to gather a random *sample* of 200 players who completed the 40-yard dash and calculate the mean time.
+
+```{r}
+combine_forty <- combine %>%
+  select(Forty) %>%
+  na.omit()
+
+set.seed(653)
+mean(sample(combine_forty$Forty,size=200,replace=FALSE))
+```
+
+Our random sample produced a mean 40-yard dash time of 4.7649 seconds. Is this a reasonable estimate of the *true* mean 40-yard dash time of the entire population? It's difficult to tell because our statistic (sample mean) is based on a single sample. If we had randomly included a different set of players, the sample statistic would be different. Let's try it.
+
+```{r}
+set.seed(808)
+mean(sample(combine_forty$Forty,size=200,replace=FALSE))
+```
+
+Now we have a sample mean of 4.70705 seconds. Each of these values is what we call a **point estimate**, because it is a single estimated value. The risk of basing our inferences about the population on a single point estimate is that variation exists depending on the particular sample we happen to get. We witnessed this directly when we selected two different samples from the population and obtained different means. In a perfect world, we could sample from the population as many times as we want and generate a distribution of estimated means. But imagine a living, breathing NFL scout who kept getting sent out over and over to find another 200 players to record their 40-yard dash time! Instead, we'll make the computer simulate the NFL scout sampling from the population 1,000 times.
+
+```{r}
+#initiate empty vector
+results <- data.frame(avg=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results$avg[i] <- mean(sample(combine_forty$Forty,size=200,replace=FALSE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results,aes(x=avg)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  labs(title='Sampling Distribution',
+       x='Sample Mean 40-yard Dash Time (sec)',y='Count') +
+  scale_x_continuous(limits=c(4.65,4.85),breaks=seq(4.65,4.85,0.02)) +
+  theme_bw()
+```
+
+Now we have accounted for the natural variability that occurs in random sampling. We see that the mean 40-yard dash time is typically around 4.76 seconds, but it wouldn't be all that unlikely to see values anywhere between 4.71 and 4.81. We call this distribution of the sample statistic a **sampling distribution**. For our example, it is the distribution of sample mean 40-yard dash time. The distribution depicts what would happen if the NFL scout went out and recorded times for 200 players and calculated the mean...and then repeated that 1,000 times! Notice, our previously sampled mean of 4.70705 was actually relatively rare. If that had been our sole assessment of 40-yard dash times, it would be misleading.
+
+A sampling distribution is valuable because it provides an indication of the variability we can expect in our sample statistic. However, in most real-world situations, we will *not* be able to repeatedly sample from the population to generate a sampling distribution. Often this would cost too much time, money, or manpower to implement. We simply cannot send the NFL scout out there 1,000 times over and over. Historically, the solution to this problem was to develop a theoretical sampling distribution based on the Central Limit Theorem, which we will explore later in the course. A more modern approach is to generate the sampling distribution computationally in a manner similar to what we simulated here. Prior to formalizing that process, try creating your own simulated sampling distribution.
+
+## Practice 1
+
+Create a simulated sampling distribution for the mean vertical jump height of players at the combine. Then answer the following questions:
+
+* What is the general shape of the sampling distribution?
+* What value is the sampling distribution centered on?
+* What is a reasonable range of values you might expect to see in repeated sampling?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous example, we sampled from the population repeatedly in order to build a sampling distribution. This is generally not feasible, but even if it was we would likely prefer to just get one very large sample rather than a bunch of smaller samples. In practice, we will typically have a single sample and no ability (or interest) in getting another one. However, we can use that single sample to imitate the repeatedly sampling we conducted in the previous section. This is known as **resampling**.
+
+A specific type of resampling *with replacement* is known as **bootstrapping**. With bootstrapping, we treat our single sample as though it is the population and we repeatedly sample from it. The key difference between this and what we did in the previous section is that bootstrapping is done with replacement and maintains the full sample size. In other words, if the original sample has 1,000 observations then the resample will also have 1,000 observations. However, because we are sampling with replacement, the 1,000 observations in the resample will include repeated or missing observations from the original sample. Initially this might all sound a little circular and confusing. Let's gain some clarity by demonstrating bootstrap resampling in an example.
+
+## Example 2
+
+For this example, we will use the `combine_forty` data frame we created in the previous example. But, we will now be more realistic and only draw a *single* sample from the population. The sample includes 200 observations. When we resample from it, we will maintain 200 observations. However, some of the original observations will appear more frequently in the resample and some will not appear at all. Let's add a resampled column to our original data and compare.
+
+```{r}
+set.seed(653)
+forty_sample <- sample(combine_forty$Forty,size=200,replace=FALSE)
+
+forty_resamp <- data.frame(orig=forty_sample) %>%
+  mutate(resamp=sample(forty_sample,size=200,replace=TRUE))
+```
+
+Notice the value 4.42 appears in the original data once, but it does not appear in the resampled data at all. By contrast, the value 4.39 appears in the original data two times and in the resampled data four times. The general idea is that over repeated resamples, values should appear in roughly the same proportion as they exist in the original data. This is meant to mimic what would happen when sampling from a population. If a particular value is relatively frequent in the population, then it should also be relatively frequent in the sample. The same is true in resampling where we treat the original sample as the mock population.
+
+Just as with the previous example, we will repeat the resampling process many times and calculate the statistic of interest each time. In this case, we will resample 1,000 times and create a distribution of sample mean 40-yard dash times.
+
+```{r}
+#initiate empty vector
+results <- data.frame(avg=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results$avg[i] <- mean(sample(forty_sample,size=200,replace=TRUE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results,aes(x=avg)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  labs(title='Sampling Distribution',
+       x='Sample Mean 40-yard Dash Time (sec)',y='Count') +
+  scale_x_continuous(limits=c(4.65,4.85),breaks=seq(4.65,4.85,0.02)) +
+  theme_bw()
+```
+
+Notice how similar this sampling distribution is to the one we created in the previous section. Both are relatively symmetric and centered around 4.76. But, think carefully about the difference in how the two distributions were created. The first was created by drawing multiple samples from the *entire population*. The second was created by resampling from a *single sample*. However, the final result is very similar.
+
+Initially, the idea of "sampling from the sample" might seem questionable. Yet our two examples above demonstrate that resampling can do a very good job of mimicking repeatedly sampling from an entire population. In either case, the goal is to gain insight regarding the variability of the statistic of interest. Rather than putting "all of our eggs in one basket" by relying on a single point estimate, we would prefer to estimate a range of plausible values. In this case, it appears plausible that the mean 40-yard dash time is somewhere between 4.71 and 4.81 seconds. Now you can practice resampling with the vertical jump data.
+
+## Practice 2
+
+Create a bootstrap sampling distribution for the mean vertical jump height of players at the combine. Then answer the following questions:
+
+* What is the shape and center of the sampling distribution?
+* How do the shape and center compare to your distribution from the previous practice?
+* What is a reasonable range of values you might expect to see in repeated sampling?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+So far we've referred to "a range of plausible values" in relatively general terms based on the visualization of the sampling distribution. However, a **confidence interval** is calculated more precisely and includes an assessment of "how confident" we are that the interval captures the true value of the parameter (e.g., population mean). Luckily, the bootstrap sampling distribution provides a relatively straight-forward way to calculate an interval at a desired level of confidence. We'll finish this lesson by computing and interpreting some confidence intervals.
+
+## Example 3
+
+Suppose we wanted to computer a 95% confidence interval for the true mean 40-yard dash time. Visually, we are looking for the endpoints shown in the sampling distribution below. These endpoints surround 95% of the sample means generated by bootstrapping.
+
+```{r}
+ggplot(data=results,aes(x=avg)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=quantile(results$avg,0.025),color='red',size=1) +
+  geom_vline(xintercept=quantile(results$avg,0.975),color='red',size=1) +
+  labs(title='Sampling Distribution',
+       x='Sample Mean 40-yard Dash Time (sec)',y='Count') +
+  scale_x_continuous(limits=c(4.65,4.85),breaks=seq(4.65,4.85,0.02)) +
+  theme_bw()
+```
+
+If we were to repeat the bootstrap resampling process 100 times, then these two endpoints would capture the true mean 95 out of 100 times. This is the meaning of 95% *confidence*. Be careful, it is **NOT** correct to say there is a 95% probability that the true mean is in this interval. The true mean is a fixed (not random) value, so it is either in this interval or it isn't. There is no probability involved. The randomness only comes into play if we choose to repeat the resampling over and over. In that context, 95 out of 100 intervals would capture the true mean.
+
+We can also directly calculate the bounds of the confidence interval without the visualization.
+
+```{r}
+quantile(results$avg,0.025)
+quantile(results$avg,0.975)
+```
+
+Recall that the 0.025 quantile is the same as the 2.5 percentile. Thus, 2.5% of values are less than this boundary. Similarly, the 0.975 quantile is the same as the 97.5 percentile. So, 2.5% of values are greater than this boundary. Consequently, 95% of values are between the boundaries. The correct interpretation of these boundaries is: **We are 95% confident that the true mean 40-yard dash time is between 4.72 and 4.81 seconds**.
+
+The confidence level does have an impact on the width of the confidence interval. A higher level of confidence requires a *wider* interval to be sure we capture the true mean. Thinking about it as fishing with a net. If you want to be more sure that you catch a fish, then you need to cask a wider net. We can demonstrate this by increasing the confidence level to 99%.
+
+```{r}
+quantile(results$avg,0.005)
+quantile(results$avg,0.995)
+```
+
+Notice the interval grew to between 4.71 and 4.83. So, **we are 99% confident that the true mean 40-yard dash time is between 4.71 and 4.83**. Now try calculating a confidence interval on your own.
+
+## Practice 3
+
+Based on your vertical jump bootstrapping results from the previous practice, complete the following steps.
+
+* Add boundary indicators (red lines) to your sampling distribution for a 90% confidence interval.
+* Directly calculate the numerical bounds of the 90% confidence interval.
+* Increase the confidence level to 95% and re-calculate the bounds. How did they change?

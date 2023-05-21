@@ -1,0 +1,214 @@
+---
+title: "Prediction with Logistic Regression"
+author: "Dr. Kris Pruitt"
+date: "26 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to conduct predictive statistical analyses for multiple logistic regression models. Students should leave this lesson with the ability to construct confidence intervals for the response, to compute the classification error, and to evaluate the technical conditions of the model.
+
+
+## Reason 1
+
+In previous lessons on inferential analyses, we constructed confidence intervals for the slope parameters of a regression model. We can also construct confidence intervals for the *average response* value given a particular set of predictor values. In the context of linear regression, the average response value is directly provided as the output of the model. For logistic regression, the average of a binary response is equivalent to the probability of the outcome we define as "success". We learned previously that the logistic (aka sigmoid) function, which models the probability ($p$) of a certain outcome, is:
+
+$$
+p=\frac{e^{\beta_0 + \beta_1 x_1 + \beta_2 x_2 + ... + \beta_k x_k}}{1+e^{\beta_0 + \beta_1 x_1 + \beta_2 x_2 + ... + \beta_k x_k}}
+$$
+
+For a particular set $(x_1,x_2,...,x_k)$ of predictor values, the probability of "success" acts as the average response. Rather than relying on a single point estimate of this average, we might like to construct a **confidence interval**. We'll begin the lesson by computing such an interval.
+
+## Example 1
+
+For this example, we will use data from an experimental fire suppression system found in the file `fire_data.csv` on the course site. The system employs sound waves to extinguish fires by varying the distance (cm) from the flame, the sound pressure (dB), the speed (m/sec) of the sound wave, and the frequency (Hz). The response variable (status) is equal to 1 if the fire is extinguished and 0 otherwise. Import and wrangle the data using the code below.
+
+```{r}
+#import data
+fire <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/fire_data.csv') %>%
+  select(-SIZE,-FUEL)
+```
+
+Suppose we want to fit a multiple logistic regression model to predict whether a fire will be extinguished based on the four characteristics of the suppression system. Let's estimate the parameters of the model.
+
+```{r}
+#fit logistic regression model
+model1 <- glm(STATUS~.,data=fire,family='binomial')
+
+#extract estimated parameters
+coefficients(summary(model1))
+```
+
+The output from the fitted model provides estimated values for the parameters $(\beta_0,\beta_1,\beta_2,\beta_3,\beta_4)$. Using the logistic function, we can estimate the probability of extinguishing a fire given a particular set of characteristics for the suppression system. For example, the probability of extinguishing for an attempt set at 15 cm distance, 75 dB pressure, 8 m/sec flow, and 5 Hz frequency is about 93% (see below).
+
+```{r}
+#predict probability of extinguishing
+predict(model1,
+        newdata=data.frame(DISTANCE=15,DECIBEL=75,AIRFLOW=8,FREQUENCY=5),
+        type='response')
+```
+
+The point estimate for probability is informative, but we have no idea of the variability surrounding this estimate. We prefer an interval of plausible probabilities along with a confidence level. We can construct such an interval using **bootstrap resampling**. Let's think carefully about the steps involved with this process:
+
+* Resample from the original data with replacement
+* Fit a multiple logistic regression model using the resample
+* Predict the response (probability) for the predictor values of interest
+* Generate a sampling distribution for the probability
+* Compute confidence interval using percentiles of the sampling distribution
+
+Let's build a repeatable workflow that completes all of these steps. WARNING: This loop takes a a few seconds! Even with only 200 resamples, the code chunk takes longer to complete than most others we've created. Ideally, we would like to run more resamples, but given the time constraints of class we'll go with 200 for now.
+
+```{r}
+#initiate empty vector for probabilities
+results <- data.frame(prob=rep(NA,200))
+
+#repeat resampling 1000 times, fit model, and save probability
+for(i in 1:200){
+  
+  set.seed(i)
+  rows <- sample(x=nrow(fire),size=nrow(fire),replace=TRUE)
+  resample <- fire[rows,]
+  
+  remodel <- glm(STATUS~.,data=resample,family='binomial')
+  results$prob[i] <- as.numeric(predict(remodel,
+                                        newdata=data.frame(DISTANCE=15,
+                                                           DECIBEL=75,
+                                                           AIRFLOW=8,
+                                                           FREQUENCY=5),
+                                        type='response'))
+  
+}
+
+#plot sampling distribution
+ggplot(data=results,aes(x=prob)) +
+  geom_histogram(color='black',fill='sky blue',bins=14) +
+  geom_vline(xintercept=quantile(results$prob,probs=0.05),
+             color='red', size=1) +
+  geom_vline(xintercept=quantile(results$prob,probs=0.95),
+             color='red', size=1) +
+  scale_x_continuous(limits=c(0.90,0.96),breaks=seq(0.90,0.96,0.005)) +
+  labs(title='Bootstrap Sampling Distribution (90% confidence interval)',
+       x='Probability of Extinguishing',y='Count') +
+  theme_bw()
+```
+
+We are 90% confident that the given suppression system settings have between a 0.925 and 0.941 probability of extinguishing the fire. This is far superior to the single point estimate of 0.933 which provides no indication of variability or confidence. Now you can practice creating a confidence interval for the probability of extinguishing a fire.
+
+## Practice 1
+
+Construct a 95% confidence interval for the probability of extinguishing a fire based on the following system settings: `(DISTANCE=100,DECIBEL=90,AIRFLOW=4,FREQUENCY=50)`. Then answer the following questions:
+
+* What is the proper interpretation of your interval, in the context of the problem?
+* How would the width of your confidence interval change if you decreased your confidence level to 90%?
+* How would you expect the width of the interval to change if the original sample only had 500 observations?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+Developing reliable methods to predict the probability of "success" using logistic regression is a good first step toward building a **classification model**. After deciding on an appropriate threshold for the probability of "success", we make a binary classification of "success" or "failure". With binary classifications, we will either be right or wrong once the truth is revealed. Naturally, this leads to the idea of classification accuracy or error. We'll continue the lesson by exploring the process of evaluating classifications. 
+
+## Example 2
+
+A typical classification threshold to begin our analysis is 50%. In other words, if the given system settings result in a probability of extinguishing greater than 50%, then we classify the fire as extinguished. Below a probability of 50%, we classify the fire as not extinguished. We can then compare our classifications to the reality of what the experiment observed to estimate the model's error rate.
+
+```{r}
+#add classifications to the data
+fire_class <- fire %>%
+  mutate(status_prob=predict(model1,newdata=fire,type='response'),
+         status_class=if_else(status_prob>0.5,1,0))
+
+#create contigency table
+table(fire_class$STATUS,fire_class$status_class)
+```
+
+The rows in the contingency table represent the *true* status of the fire. The columns represent the *predicted* status of the fire. By comparing the two, we obtain an estimate of the model's error rate. The off-diagonal counts indicate how frequently the model was wrong. For the 17,442 observations, the model was wrong only 2,275 times (995+1280). That amounts to an error rate of about 13%.
+
+Is 13% an acceptable error rate? Generally, this depends on the context of the problem. In certain contexts we might be willing to accept a higher error rate than others. However, we can always compare our model's error rate to a **null model**. The null model consists of always classifying an observation based on the most prevalent outcome in the data. In our sample data, 50.2% of fires were *not* extinguished. So, if we ignored the system settings and always guessed "not extinguished" we would be correct roughly half the time. Of course this also means we would be wrong about half the time. Our model's error rate of 13% is much better than the null model's error rate of 50%, so that provides some assurance of its value.
+
+Although the overall error rate of the model is 13%, it does not perform equally for the true condition of the fire. Our **false positive rate** for the model is 11%. In other words, given a fire was *not* extinguished, there is an 11% chance (995/(7764+995)) that we label it as extinguished. By contrast, the model has a **false negative rate** of nearly 15%. Given a fire was extinguished, there is a 15% chance (1280/(1280+7403)) that we label it as *not* extinguished. In this context, which do we think is worse: false positive or false negative? After considering this question, practice creating and interpreting your own contingency table.
+
+## Practice 2
+
+Increase the classification threshold for the logistic regression model to 75% and generate a new contingency table. Then answer the following questions:
+
+* What is the overall error rate for this classification model? 
+* What are the false positive and false negative rates for this model?
+* What is a common sense explanation for the changes you observed in error rates between this model and the original?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+Just as with multiple *linear* regression, there are certain technical conditions for multiple *logistic* regression that we should assess to ensure the validity of our predictive analyses. However, because we are interested in prediction instead of inference, the list of conditions is shorter. For example, we will not be concerned with multicollinearity among the predictors. We also have no reason to check conditions related to residuals, because logistic regression employs maximum likelihood estimation (as opposed to least squares). The prediction conditions for multiple logistic regression are:
+
+* Linearity - Predictors are linearly associated with the log-odds of the response
+* Independence - Response values are independent across observations
+
+The linearity condition refers to the log-odds (aka logit) function. Recall, we can transform the logistic function to the logit function in the following manner:
+
+$$
+\log \left(\frac{p}{1-p}\right) = \beta_0 + \beta_1 x_1 + \beta_2 x_2 + ... + \beta_k x_k
+$$
+
+Thus, we assume a linear relationship between the predictors ($x_i$) and the log-odds of the response. The independence condition is similar to that of linear regression and is best secured via random sampling. We'll finish the lesson by discussing these two conditions further.
+
+## Example 3
+
+Though we have no visual method for checking the linear association of all four predictor variables at once, we can check each of them individually. For example, if we want to assess the linear association between the airflow and the log-odds of extinguishing the fire, we can apply the following scatter plot.
+
+```{r}
+#plot airflow versus log-odds
+fire_class %>%
+  mutate(log_odds=log(status_prob/(1-status_prob))) %>%
+  ggplot(aes(x=AIRFLOW,y=log_odds)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  labs(x='Sound Wave Speed (m/sec)',
+       y='Log-Odds of Extinguishing Fire') +
+  theme_bw()
+```
+
+There does appear to be a strong, linearly increasing association between the sound wave speed and the log-odds of extinguishing the fire. This makes intuitive sense, because a greater airflow should generally have a better chance of putting out the fire. This is analogous to blowing harder when trying to blow out birthday candles. Let's perform a similar check for the frequency of the soundwave.
+
+```{r}
+#plot frequency versus log-odds
+fire_class %>%
+  mutate(log_odds=log(status_prob/(1-status_prob))) %>%
+  ggplot(aes(x=FREQUENCY,y=log_odds)) +
+  geom_point() +
+  geom_smooth(method='lm') +
+  labs(x='Sound Wave Frequency (Hz)',
+       y='Log-Odds of Extinguishing Fire') +
+  theme_bw()
+```
+
+This picture certainly isn't as comforting as the previous! There is a weak, negative association between frequency and log-odds, but linearity is difficult to detect. There might be a nonlinear, concave-down relationship here. Although, even if that were the case, it is still very weak. So, we would likely note some minor concern for linearity with this particular predictor variable. You'll have the chance to check the other two variables in practice.
+
+In terms of the independence condition, the best method is to obtain a random sample from the beginning of the experiment. For the fire suppression system, this would mean randomly selecting the distance, decibel, airflow, and frequency prior to each attempt to extinguish the fire. This could be achieved by drawing from a Uniform distribution within specified bounds for each variable. Unfortunately, we were not part of the original experiment, so we had no capacity to influence the design of the experiment. It's possible the researchers used a random design, but we would need to consult their publication to be sure. There is a visual method for investigating serial correlation among the **deviance residuals**, similar to what we studied for linear regression. However, the concept of deviance residuals is beyond the scope of this course.
+
+## Practice 3
+
+Check for linear association between the log-odds of extinguishing the fire and the remaining two predictor variables (i.e., distance and decibels). Then answer the following questions:
+
+* How would you describe the association between the pairs of variables in each plot?
+* Research the Box-Tidwell test. How might this test be used to check the linearity condition?
+
+Read the research paper by Koklu and Taspinar (on the course site) regarding the fire suppression system.
+
+* Does it appear the authors used a randomized design for the experiment?
+* Do the authors address the independence of the observations?
+

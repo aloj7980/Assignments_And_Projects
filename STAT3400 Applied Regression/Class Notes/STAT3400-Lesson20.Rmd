@@ -1,0 +1,221 @@
+---
+title: "Normal Distribution"
+author: "Dr. Kris Pruitt"
+date: "3 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to explore the characteristics of and uses for the Normal distribution. Students should leave this lesson with an understanding of the parameters of the distribution and the ability to compute percentiles and probabilities from the distribution.
+
+
+## Reason 1
+
+The Normal distribution, or Normal curve, is the first probability density function that we typically learn about in the disciplines of probability and statistics. It's symmetric bell shape accurately reflects the distribution of many real-world phenomenon and the sampling distribution of many statistics. Thus, it appears again and again in many technical disciplines. We'll begin this lesson by investigating the impact of adjustments to the two parameters of the Normal distribution.
+
+## Example 1
+
+We can draw random variates (values) from the Normal distribution using the `rnorm()` function. The function requires three parameters: the number of variates, the mean (center) of the distribution, and the standard deviation (spread) of the distribution. If we wanted a single random variate drawn from the **Standard Normal** distribution (mean of zero and standard deviation of 1), then we could use the following code.
+
+```{r}
+set.seed(168)
+
+rnorm(n=1,mean=0,sd=1)
+```
+
+We get a single value of about -0.52. But it is difficult to know how likely this one value is, in general. If we were to draw from the Standard Normal distribution many more times, would we expect to see values close to -0.52 often? To answer this intuitively, we need to visualize the entire distribution. One method for achieving this is to generate many random variates and then plot them with a density function.
+
+```{r}
+stnormal <- data.frame(variate=rnorm(n=1000,mean=0,sd=1))
+
+ggplot(data=stnormal,aes(x=variate)) +
+  geom_density(adjust=2,fill='sky blue') +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Standard Normal Distribution',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+Now it is easier to see that values around -0.52 *are* relatively likely because they have a high density. But the shape of the distribution, and therefore the likelihood of any particular value, is driven by the mean and standard deviation. If we were to change these two parameters, the likelihood of obtaining values around -0.52 would also change. For comparison, let's add two more Normal distributions to the plot.
+
+```{r}
+fatnormal <- data.frame(variate=rnorm(n=1000,mean=5,sd=3))
+thinormal <- data.frame(variate=rnorm(n=1000,mean=-5,sd=0.5))
+
+ggplot() +
+  geom_density(data=stnormal,aes(x=variate),adjust=2,fill='sky blue',alpha=0.5) +
+  geom_density(data=fatnormal,aes(x=variate),adjust=2,fill='dark grey',alpha=0.5) +
+  geom_density(data=thinormal,aes(x=variate),adjust=2,fill='dark red',alpha=0.5) +
+  scale_x_continuous(limits=c(-8,15),breaks=seq(-8,16,1)) +
+  scale_y_continuous(limits=c(0,0.8),breaks=seq(0,0.8,0.1)) +
+  labs(title='Normal Distributions',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+Decreasing (red) or increasing (grey) the mean of the distribution shifts it left or right, respectively, along the $x$-axis. Decreasing (red) or increasing (grey) the standard deviation of the distribution narrows or widens, respectively, its spread and increases or decreases, respectively, its peak. Now if we asked about the likelihood of values around -0.52 our answer would change. On the grey distribution, values near -0.52 are unlikely but still plausible. On the red distribution, values near -0.52 seem nearly impossible.
+
+Now you can practice drawing random variates and plotting the output.
+
+## Practice 1
+
+According to some sources, the height of adult biological males in the US is Normally distributed with a mean of 5 foot 10 inches and a standard deviation of 3 inches. The same measurements for adult biological females are 5 foot 3.5 inches and 2.5 inches. Generate random variates of these two distributions and visualize the results in a density plot. Then answer the following questions:
+
+* What range of heights does it appear are plausibly shared by both males and females?
+* If you were asked to predict heights for one of the sexes, which would you choose?
+* Does a minimum height requirement of 64 inches discriminate more males or females?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+The previous section demonstrated the impact of adjusting the parameters of a Normal distribution. Once we have settled on appropriate parameters, there are two important uses for the resulting distribution in the context of statistical inference.
+
+* Critical values - percentiles of the distribution
+* p-values - probabilities of the distribution
+
+These two uses represent opposing viewpoints. When computing a critical value, we input a percentage (probability) and receive a value on the $x$-axis as output. When computing a p-value, we input a value on the $x$-axis and receive a percentage (probability) as output. Both are important for hypothesis tests and confidence intervals. Prior to using them in this context, let's simply calculate percentile and probabilities on a Normal distribution. We'll begin with percentiles.
+
+## Example 2
+
+Let's return to our Standard Normal distribution from the first section. Suppose we want to know what value on the $x$-axis will split the distribution into 25% below the value and 75% above the value. This is equivalent to the 25th percentile. There are two ways for us to obtain this percentile. We could simply compute it from our 1,000 random variates of the Standard Normal distribution using the `quantile()` function.
+
+```{r}
+quantile(stnormal$variate,0.25)
+```
+
+It appears that about -0.678 is the value that splits the distribution 25/75. We could also visualize this value on the density plot.
+
+```{r}
+ggplot(data=stnormal,aes(x=variate)) +
+  geom_density(adjust=2,fill='sky blue') +
+  geom_vline(xintercept=quantile(stnormal$variate,0.25),color='red',size=1) +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Standard Normal Distribution',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+The line indicates that 25% of the area under the Normal curve is to the left and 75% of the area is to the right. We could also calculate this value exactly without simulating any random variates using the `qnorm()` function.
+
+```{r}
+qnorm(p=0.25,mean=0,sd=1,lower.tail=TRUE)
+```
+
+Notice we didn't need to use the simulated `stnormal` data at all. That's because the `qnorm()` function calculate the percentile from the true Normal distribution rather than an estimated distribution. The `lower.tail` parameter allows us to specify if we want 25% to be below the critical value (`TRUE`) or if we want 25% to be above the critical value (`FALSE`).
+
+Often we won't want just one critical value on the $x$-axis. We might want two critical values that define a range which contains a certain percentage of the distribution. For example, we might want to know what two bounds contain the middle two-thirds (67%) of the distribution. Again, we could determine this computationally or exactly. Let's start with the computational approach.
+
+```{r}
+ggplot(data=stnormal,aes(x=variate)) +
+  geom_density(adjust=2,fill='sky blue') +
+  geom_vline(xintercept=quantile(stnormal$variate,0.165),color='red',size=1) +
+  geom_vline(xintercept=quantile(stnormal$variate,0.835),color='red',size=1) +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Standard Normal Distribution',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+Interesting! From our simulated Standard Normal distribution, it appears that we can capture the middle two-thirds of the distribution by varying one standard deviation above and below the mean. Of course, this is just an estimate. Let's calculate the critical values exactly.
+
+```{r}
+qnorm(p=0.165,mean=0,sd=1,lower.tail=TRUE)
+qnorm(p=0.165,mean=0,sd=1,lower.tail=FALSE)
+```
+
+That is very close to plus or minus one standard deviation. It turns out this is part of a well-known rule for the Standard Normal distribution. What is sometimes called the **68-95-99.7 Rule** states that the middle 68%, 95%, and 99.7% of the distribution are contained within 1, 2, and 3 standard deviations from the mean, respectively. Let's check this rule using the `qnorm()` function. 
+
+```{r}
+qnorm(p=0.16,mean=0,sd=1,lower.tail=TRUE)
+qnorm(p=0.16,mean=0,sd=1,lower.tail=FALSE)
+
+qnorm(p=0.025,mean=0,sd=1,lower.tail=TRUE)
+qnorm(p=0.025,mean=0,sd=1,lower.tail=FALSE)
+
+qnorm(p=0.0015,mean=0,sd=1,lower.tail=TRUE)
+qnorm(p=0.0015,mean=0,sd=1,lower.tail=FALSE)
+```
+
+The resulting critical values are very close to 1, 2, and 3 standard deviations above and below the mean. We also notice that each pair of bounds exactly the same, other than the sign. This is due to the symmetry of the Normal distribution. Now you can practice calculating some critical values.
+
+## Practice 2
+
+Using the heights for biological males and females from the previous practice, answer the following questions.
+
+* What is a computational estimate for the 70th percentile of height for females?
+* What is the exact 70th percentile of height for females?
+* What are the exact bounds that capture the middle 90% of heights for males?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous section we looked at the first primary use of the Normal distribution in inference statistics: percentiles (critical values). Now we will finish the lesson by investigating the other primary use: probabilities (p-values).
+
+## Example 3
+
+The computation of probabilities on a Normal distribution works in the opposite manner of percentiles. Now we *input* a value on the the $x$-axis and get back a percentage (probability). Suppose we want to know what percentage of the Standard Normal distribution is greater than 2.25. As with percentiles, we can determine probabilities computationally or exactly. We'll begin with the computational approach using our simulated Standard Normal data.
+
+```{r}
+stnormal %>%
+  summarize(prob=mean(variate>2.25))
+```
+
+Based on our simulated data, about 1.1% of the area under the Standard Normal curve is greater than 2.25. This is equivalent to saying that a random variate from the Standard Normal distribution has a 1.1% chance of being greater than 2.25. Once again we can visualize this on the density plot.
+
+```{r}
+ggplot(data=stnormal,aes(x=variate)) +
+  geom_density(adjust=2,fill='sky blue') +
+  geom_vline(xintercept=2.25,color='red',size=1) +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Standard Normal Distribution',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+Be careful to note the difference in how we generated this visualization compared to the previous section. With percentiles, we did *not* know where to draw the red line. We knew the area under the curve and had to determine the location of the red line. With probabilities it is the opposite. We knew exactly where to draw the red line, but we didn't know what area under the curve would result from it. We had to calculate that area, which is treated as a probability. We could also compute this probability exactly using the `pnorm()` function.
+
+```{r}
+pnorm(q=2.25,mean=0,sd=1,lower.tail=FALSE)
+```
+
+So, it appears the exact probability is closer to 1.2%. What if we want the probability of being between two bounds on the $x$-axis? There are computational and exact methods for determining this as well. Imagine we want the probability that a random variate is between -0.75 and +0.75. We can obtain this from our simulated data.
+
+```{r}
+stnormal %>%
+  summarize(prob=mean(variate> -0.75 & variate< 0.75))
+```
+
+Alternatively, we can calculate it exactly.
+
+```{r}
+pnorm(q=0.75,mean=0,sd=1,lower.tail=TRUE)-pnorm(q=-0.75,mean=0,sd=1,lower.tail=TRUE)
+```
+
+Regardless, we find there is about a 55% chance that a number randomly drawn from the Standard Normal distribution will fall between -0.75 and +0.75. Now you can finish the lesson by calculating probabilities with the height distributions.
+
+## Practice 3
+
+Using the heights for biological males and females from the previous practices, answer the following questions.
+
+* What is the approximate percentage of females taller than 5 foot 8 inches?
+* What is the exact percentage of females taller than 5 foot 8 inches?
+* What is the exact percentage of males that are between 5 foot 8 inches and 6 feet tall?

@@ -1,0 +1,188 @@
+---
+title: "Confidence Intervals"
+author: "Dr. Kris Pruitt"
+date: "27 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to continue to explore the computation and interpretation of bootstrapped confidence intervals. Students should leave this lesson with the ability to create and explain bootstrapped confidence intervals for multiple population parameters.
+
+
+## Reason 1
+
+In the previous lesson on bootstrapped confidence intervals, we conducted an academic exercise in which we assumed we had access to the entire population and could sample as often as we like. For almost all real-world applications, this will not be feasible. Instead, we will generally have a single sample from which we can construct a confidence interval. We'll begin this lesson with a quick refresher on calculating a bootstrapped confidence interval for the population mean.
+
+## Example 1
+
+For this example we will consider a random sample of measurements for black cherry trees in the built-in data table `trees`. Load and view the data.
+
+```{r}
+data(trees)
+```
+
+The table consists of the diameter (girth) in inches, height in feet, and volume in cubic feet of 31 black cherry trees. Suppose we wanted to compute a 90% confidence interval for the true mean height of black cherry trees. Let's begin by visualizing the sampling distribution for mean height, along with bounds that capture 90% of the resampled means.
+
+```{r}
+#initiate empty vector
+results <- data.frame(avg=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results$avg[i] <- mean(sample(trees$Height,size=31,replace=TRUE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results,aes(x=avg)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=quantile(results$avg,0.05),color='red',size=1) +
+  geom_vline(xintercept=quantile(results$avg,0.95),color='red',size=1) +
+  labs(title='Sampling Distribution',
+       x='Sample Mean Tree Height (ft)',y='Count') +
+  scale_x_continuous(limits=c(70,80),breaks=seq(70,80,1)) +
+  theme_bw()
+```
+
+It appears that a 90% confidence interval for mean tree height falls between about 74 and 78 feet. Let's calculate the bounds directly to be more accurate.
+
+```{r}
+quantile(results$avg,0.05)
+quantile(results$avg,0.95)
+```
+
+So, **we are 90% confident that the true mean height of black cherry trees is between 74.06 and 77.78 feet**. Try calculating a 95% confidence interval for true mean diameter.
+
+## Practice 1
+
+Compute a 95% bootstrapped confidence interval for the true mean diameter of black cherry trees. Then answer the following questions:
+
+* What is the shape and center of the sampling distribution?
+* What is the margin of error for the confidence interval?
+* What would happen to the interval width if you decreased the confidence level to 80%?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+So far we've only been calculating confidence intervals for a single population parameter: the mean. However, we can compute bootstrapped confidence intervals for any parameter we like. The same process applies if we want an interval estimate for the true median, percentile, standard deviation, range, or any other aggregate measurement of the observations in the population. We'll continue the lesson by creating intervals for other parameters such as these.
+
+## Example 2
+
+Suppose we are interested in the standard deviation of black cherry tree heights, rather than the mean. We can compute a bootstrapped confidence interval in the exact same manner.
+
+```{r}
+#initiate empty vector
+results2 <- data.frame(stdev=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results2$stdev[i] <- sd(sample(trees$Height,size=31,replace=TRUE))
+
+}
+
+#plot sampling distribution
+ggplot(data=results2,aes(x=stdev)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=quantile(results2$stdev,0.05),color='red',size=1) +
+  geom_vline(xintercept=quantile(results2$stdev,0.95),color='red',size=1) +
+  labs(title='Sampling Distribution',
+       x='Sample Standard Deviation of Tree Height (ft)',y='Count') +
+  scale_x_continuous(limits=c(3,9),breaks=seq(3,9,1)) +
+  theme_bw()
+```
+
+Thus, **we are 90% confident that the true standard deviation of height for black cherry trees is between about 5 and 7.5 feet**. More precisely, the interval is between 5.07 and 7.35 feet (see code below).
+
+```{r}
+quantile(results2$stdev,0.05)
+quantile(results2$stdev,0.95)
+```
+
+Now you can practice constructing and interpreting a confidence interval for a different population parameter.
+
+## Practice 2
+
+Create a 99% confidence interval for the 75th percentile of tree diameter. Then answer the following questions:
+
+* What is the shape and center of the sampling distribution?
+* What is the correct interpretation of your interval?
+* What do you think would happen to the width of the interval if the original sample had more observations?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+Another common population parameter of interest is the proportion of observations that have some particular characteristic. We'll finish this lesson by constructing a bootstrapped confidence interval for a proportion.
+
+## Example 3
+
+For this example, we will switch to a built-in data table called `diamonds`. This sample includes prices and attributes for nearly 54,000 round cut diamonds. Load and view the data.
+
+```{r}
+data(diamonds)
+```
+
+One of the listed attributes is the cut quality of the diamond. There are various categories ranging from Fair to Ideal. Suppose we were curious about the proportion of diamonds that are labeled as having an Ideal cut. A point estimate for this statistic is calculated from the original data as follows:
+
+```{r}
+mean(diamonds$cut=='Ideal')
+```
+
+Based on this single sample, it appears about 40% of diamonds have an ideal cut. However, we know that this point estimate will vary depending on which diamonds we happen to sample from the population. Thus, we should simulate the variability of this statistic using bootstrapping just as we did with the other statistics. Imagine we wanted a 99% confidence interval.
+
+```{r}
+#initiate empty vector
+results3 <- data.frame(prop=rep(NA,1000))
+
+#repeat sampling process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  results3$prop[i] <- mean(sample(diamonds$cut,size=nrow(diamonds),replace=TRUE)=='Ideal')
+
+}
+
+#plot sampling distribution
+ggplot(data=results3,aes(x=prop)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=quantile(results3$prop,0.005),color='red',size=1) +
+  geom_vline(xintercept=quantile(results3$prop,0.995),color='red',size=1) +
+  labs(title='Sampling Distribution',
+       x='Sample Proportion of Ideal Cut Diamonds',y='Count') +
+  scale_x_continuous(limits=c(0.39,0.41),breaks=seq(0.39,0.41,0.0025)) +
+  theme_bw()
+```
+The precise bounds are:
+
+```{r}
+quantile(results3$prop,0.005)
+quantile(results3$prop,0.995)
+```
+
+Thus, **we are 99% confident that the true proportion of diamonds that achieves a cut quality of Ideal is between 39.39% and 40.50%**. Notice, we were able to achieve a high level of confidence *and* a relatively narrow interval. This was possible, in part, due to the very large sample size. Now you can finish the lesson by calculating a confidence interval for a proportion.
+
+## Practice 3
+
+Compute a 99% confidence interval for the true proportion of diamonds that are assigned the best color quality (D). Then answer the following questions:
+
+* What is the shape and center of the sampling distribution?
+* What is the correct interpretation of your interval?
+* If you conducted a hypothesis test with the null hypothesis that the true proportion of diamonds with the best color rating was equal to 13%, what conclusion do you think would result?

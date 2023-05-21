@@ -1,0 +1,198 @@
+---
+title: "Training versus Testing Accuracy"
+author: "Dr. Kris Pruitt"
+date: "28 April 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to distinguish between training and testing accuracy in the context of classification models. Students should leave this lesson with the ability to fit a logistic regression model to a training set, assess its accuracy using a testing set, and incorporate both sets into a model selection process.
+
+
+## Reason 1
+
+In previous lessons we discussed various types of classification accuracy for a logistic regression model. We calculated the overall accuracy of a model, along with conditional accuracies like sensitivity and specificity. However, we measured accuracy using the same data to which the model was fit. In other words, we fit the regression model to a sample and then asked how the model performed on the *same* data. This is a convenient way to introduce the idea of classification accuracy, but it tends to overestimate the true accuracy of the model. This is known as **overfitting**. 
+
+A reasonable analogy for overfitting is "teaching to the test" in a college class. Suppose I showed you all of the answers to an exam and then asked you to take the exact same exam. You would likely do pretty well, even if only by memorizing the answers! Now imagine instead that I showed you all of the answers to one test, but then gave you a similar, but *not* exactly the same, test. You would likely perform a bit worse than the first situation, due to minor variations in the questions or a lack of genuine understanding (versus memorization). The first situation is an example of overfitting. When we test a model using the same data that we used to train it, there is a chance that the associated algorithm honed in on estimates unique to that particular sample, rather than identifying patterns that would apply to all samples. Consequently, such a model might perform worse when shown new data.
+
+The solution to this issue is to test a model on *different* data than that which is used to train the model. In other words, we want the second situation in the college class example. A better measure of the model's true accuracy can be derived from data that it has never "seen". We'll begin the lesson by demonstrating this concept of **training versus testing data**.
+
+## Example 1
+
+For this example, we will return to the pumpkin seed data set. Recall, this data involved an experiment to classify the type (A or B) of pumpkin seed based on various dimensions measured using digital imagery. Import the data set and create a binary response variable using the code below.
+
+```{r}
+#import and wrangle data
+pumpkin <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/pumpkin_data.csv') %>%
+  mutate(TypeA=ifelse(Type=='A',1,0)) %>%
+  select(-Type)
+```
+
+Before fitting a logistic regression model to this sample, we want to randomly split it into two sets: training and testing. The training data will be used to fit the model and obtain estimated coefficients for the logistic function. Then we will use the testing data to measure the model's classification accuracy. A logical question regards *how* we should split the data. Should it be a 50/50 split or something else? If we use more data for training, then we will have less for testing and vice-versa. The general consensus is that more data should be used for training, because that approach should provide better estimates for the model. Common splits are around 75% training and 25% testing, so that is what we will choose here.
+
+```{r}
+#set a randomization seed for repeatability
+set.seed(303)
+
+#randomly select 75% of the rows for training
+rows <- sample(x=nrow(pumpkin),size=floor(0.75*nrow(pumpkin)),replace=FALSE)
+
+#split data into the two groups
+training <- pumpkin[rows,]
+testing <- pumpkin[-rows,]
+```
+
+The code above randomly selects 1,875 rows from the data frame to be used for training the logistic regression model. The remaining 625 rows are set aside to be used for testing the model's accuracy. One of the things that is worth checking after splitting data in this way is the prevalence of "successes" within each group. For our case, Type A pumpkin seeds are considered a "success". Ideally the prevalence of Type A seeds in both the training and testing sets should be similar to that of the sample overall. The random selection of rows should ensure this, but it is worth checking.
+
+```{r}
+#overall prevalence in the sample
+mean(pumpkin$TypeA==1)
+
+#prevalence in training set
+mean(training$TypeA==1)
+
+#prevalence in testing set
+mean(testing$TypeA==1)
+```
+
+All three data sets have roughly 52% Type A pumpkin seeds, so we feel confident that the training and testing sets are each representative of the sample overall. Now we fit a logistic regression model to the training set and evaluate its accuracy using the testing set. We will begin by using all 12 available predictor variables.
+
+```{r}
+#fit model to training data
+model <- glm(TypeA~.,data=training,family='binomial')
+
+#classify observations in testing set
+testing_class <- testing %>%
+  mutate(Type_prob=predict(model,newdata=testing,type='response'),
+         Type_class=if_else(Type_prob>0.5,1,0))
+
+#compute overall testing accuracy
+mean(testing_class$TypeA==testing_class$Type_class)
+```
+
+The model with all 12 explanatory variables predicted the seed type in the testing set with an accuracy of 88.64%. Keep in mind, when we executed the maximum likelihood algorithm using the `glm()` function, we only used the *training* data. The algorithm had no capacity to adjust parameter estimates to cater to the observations in the testing data. So, the performance on the testing data is a much better reflection of how we might expect the model to perform on "new" pumpkin seed data. Before we proceed further, practice fitting and assessing the model using different sets.
+
+## Practice 1
+
+Although the training and testing set approach is far superior to fitting and assessing models using the same data, our accuracy estimate is still subject to which observations (randomly) get chosen for each set. Demonstrate this phenomenon by completing the steps below and answering the associated questions.
+
+* Change the randomization seed for the training and testing sets to `set.seed(719)` and compute the new test accuracy.
+* Change the randomization seed for the training and testing sets to `set.seed(101)` and compute the new test accuracy.
+* How do these accuracies compare to the original value of 88.64%?
+* What might be a good method for resolving any discrepancies between the values?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+By splitting the sample into training and testing sets, we obtain a much better estimate of the true classification accuracy of our model. This same approach is a valuable addition to any model selection process. In earlier lessons in the course, we explored forward and backward step-wise selection methods for determining the "best" collection of predictor variables to include in a model. For linear regression we employed adjusted R-squared as the metric for "best", while for logistic regression we used the Akaike Information Criterion (AIC). Another option for the measurement of the "best" model is to use the testing accuracy. We'll continue the lesson by demonstrating backward step-wise selection.
+
+## Practice 2
+
+For the pumpkin seed example, we have 12 potential predictor variables. Backward step-size selection removes each of these 12 variables from the model, one at a time, and checks for improvement in the performance metric. In our case, improvement means increased testing accuracy compared to the baseline of 88.64%. Let's create a loop that does this for us. Most of the code below is similar to what we've used in the past. The one exception is the way in which we remove one variable at a time from the training set. Notice that for each iteration of the loop, we remove the $i$-th column using `training[,-i]`. This allows us to iterate through columns 1 to 12.
+
+```{r}
+#create empty vector to hold accuracies
+accuracy <- data.frame(class_acc=rep(NA,12))
+
+#remove each variable and save accuracy
+for(i in 1:12){
+  
+  #remove i-th variable
+  training_min1 <- training[,-i]
+  
+  #fit model minus one variable
+  model_min1 <- glm(TypeA~.,data=training_min1,family='binomial')
+  
+  #classify testing observations
+  testing_class_min1 <- testing %>%
+    mutate(Type_prob=predict(model_min1,newdata=testing,type='response'),
+           Type_class=if_else(Type_prob>0.5,1,0))
+  
+  #compute and save overall accuracy
+  accuracy$class_acc[i] <- mean(testing_class_min1$TypeA==testing_class_min1$Type_class)
+  
+}
+```
+
+Now we can review the `accuracy` data frame which stores the testing accuracy associated with removing each of the 12 predictors one at a time. The removal of the variables in Columns 3 and 4 both provide the greatest increase in classification accuracy (89.12%). These columns are associated with the major axis length and minor axis length variables. So, removing either one of these explanatory variables provides the greatest increase in accuracy. Flip a coin to decide!
+
+Let's imagine our coin flip resulted in removing major axis length (Column 3). We can permanently remove this column and then repeat the preceding process on the remaining 11 variables. Our new baseline accuracy is 89.12%, but it's possible we can improve on this by removing another variable. Let's find out.
+
+```{r}
+#permanently remove one variable
+training_min1 <- training[,-3]
+
+#create empty vector to hold accuracies
+accuracy2 <- data.frame(class_acc=rep(NA,11))
+
+#remove each variable and save accuracy
+for(i in 1:11){
+  
+  #remove i-th variable
+  training_min2 <- training_min1[,-i]
+  
+  #fit model minus one variable
+  model_min2 <- glm(TypeA~.,data=training_min2,family='binomial')
+  
+  #classify testing observations
+  testing_class_min2 <- testing %>%
+    mutate(Type_prob=predict(model_min2,newdata=testing,type='response'),
+           Type_class=if_else(Type_prob>0.5,1,0))
+  
+  #compute and save overall accuracy
+  accuracy2$class_acc[i] <- mean(testing_class_min2$TypeA==testing_class_min2$Type_class)
+  
+}
+```
+
+After reviewing our new list of accuracies in the data frame `accuracy2`, we see that the removal of either Columns 6 or 10 provide an increase to 89.44%. Column 6 is eccentricity and Column 10 is aspect ratio. Thus, removing either one of these explanatory variables will once again increase our classification accuracy. Flip a coin again! Now you can perform the next step of the algorithm on your own.
+
+## Practice 2
+
+Suppose our coin flip resulted in the selection of eccentricity for removal. Permanently remove eccentricity from the model and conduct another iteration of the backward step-wise selection approach. Then answer the following questions:
+
+* Can the removal of any more explanatory variables improve our accuracy?
+* What does your answer to the previous question tell you about the current model?
+* Do some research of your own online and see if there is a built-in package for `R` that executes our step-wise process automatically.
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+Our final model in the previous section estimates the true classification accuracy to be 89.44%. However, this estimate is based on a single test set. What if the accuracy obtained from the single test set is not representative of the performance on future data? It is possible, just via random chance, that the single test set we created performs differently than other test sets. If this were to occur, then we might over or under estimate the true accuracy of the model. One method for reducing this concern is known as **cross validation**. At the simplest level, cross validation involves training and testing models on different sets of data to ensure accuracy results are consistent. We'll finish the lesson by developing an outline for a cross validation algorithm.
+
+## Example 3
+
+At the beginning of this lesson, we split the pumpkin seed sample into 75% training data and 25% testing data. So, one-quarter of the sample played the role of "future data" and provided the estimate of classification accuracy. Instead, what if every observation had the opportunity to be part of this one-quarter to provide estimated accuracy? This approach might alleviate the concern for the test set being unrepresentative. The method described above is known as **k-fold cross validation**. Specifically, our example involves 4-fold cross validation because the data is split into quarters (four folds). An outline for the process is as follows:
+
+* Randomly split the sample into 4 mutually exclusive groups (A,B,C,D) of approximately equal size
+* Train a model on the aggregate of groups B,C,D and test its accuracy on group A
+* Train a model on the aggregate of groups A,C,D and test its accuracy on group B
+* Train a model on the aggregate of groups A,B,D and test its accuracy on group C
+* Train a model on the aggregate of groups A,B,C and test its accuracy on group D
+* Average the four accuracies obtained from each test set
+
+The metric obtained at the end of the process is known as the cross-validated accuracy. Typically, this will provide a good estimate of the model's true performance on future data. Now you can answer some conceptual questions regarding cross-validation.
+
+## Practice 3
+
+With $k$-fold cross validation, we get to choose the value for $k$. With that in mind, answer the following questions:
+
+* What are the pros and cons of choosing a relatively large value for $k$?
+* What are the pros and cons of choosing a relatively small value for $k$?
+* Regardless of the value for $k$, what are the real-world consequences of high variability in the accuracies across folds?
+

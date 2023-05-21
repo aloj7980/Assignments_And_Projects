@@ -1,0 +1,153 @@
+---
+title: "Hypothesis Testing"
+author: "Dr. Kris Pruitt"
+date: "22 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to formalize the steps involved in hypothesis testing. Students should leave this lesson with the ability to formulate, execute, and interpret a hypothesis test for the difference in means between two populations using randomization.
+
+
+## Reason 1
+
+In the previous lesson we informally introduced some of the key components of a hypothesis test. In this lesson we will establish a more formal structure for how to conduct a hypothesis test on any population parameter of interest. We will then demonstrate the process for a difference in means between two populations. The key steps of any hypothesis test are:
+
+* Formulate null and alternate hypotheses
+* Choose a level of significance
+* Calculate a test statistic
+* Determine the null distribution
+* Compute a p-value
+* Choose a hypothesis
+
+There are many more details involved in each of these steps, but this is the basic structure of any hypothesis test. We will begin this lesson by discussing each of the steps in a more conceptual manner. Then we will demonstrate the concepts with a computational example.
+
+## Example 1
+
+In the United States, a trial by jury is a form of hypothesis testing. We can discuss each of the steps listed above in the context of a trial. Often it is helpful to think about a new concept using an analogy, so we will work through one here. Suppose there was a massive string of bank robberies and a shady character named Jane Smith has been arrested as the mastermind. Jane pleads not guilty and will be tried by a jury of her peers. Let's explore how Jane's trial will be carried out as a hypothesis test.
+
+Firstly, the **null hypothesis** for any trial in the US court system is that the defendant is innocent of the crime. That is the default condition, because if there was no trial we would have to assume that Jane is innocent. The purpose of the trial is to look for evidence of Jane's guilt. Thus, the **alternate hypothesis** is that Jane is guilty. The court will never been able to 100% prove either guilt or innocence. However, if the evidence of guilt is strong enough, then the court will reject the assumption of innocence.
+
+Now the court must decide what strength of evidence is "strong enough" to reject the assumption of innocence. The required strength of evidence depends on the severity of the crime in questions. However, for the highest level of crimes, the court requires the evidence to suggest guilt "beyond a shadow of a doubt." This threshold for the strength of evidence is known as the **level of significance** for the test. It is critically important that this threshold is selected *before* conducting the test. Otherwise, a statistician or domain expert might be accused of manipulating the threshold to achieve a desired outcome.
+
+Next, the prosecution must present all the evidence that speaks to Jane's guilt. The evidence of the alternate hypothesis is known as the **test statistic**. Every piece of evidence provided by the prosecution is an observation in the data that will be aggregated by jury into a single metric that evaluates Jane's guilt. This single metric must be tailored to the parameters associated with the hypotheses. In other words, the manner in which the jury aggregates the evidence in a robbery trial might be different than if it were a murder trial. Similarly, the calculation of the test statistic depends on the population parameters of interest in the hypotheses.
+
+Then, Jane's defense team tries to present a convincing story and timeline of events under the assumption of her innocence. The defense's case acts as the **null distribution** for the trial. In other words, the defense is trying to show the jury that circumstantial evidence can just coincidentally occur even if Jane is innocent. For example, the defense might explain that Jane is on a security video from one of the banks because she actually has an account there. Or they might explain that Jane just purchased a fancy new car because she inherited money from a family member. The defense wants to show the jury that all of the events and circumstances presented by the prosecution *could* happen to an innocent person.
+
+Once the prosecution and defense have rested their respective cases, the jury must deliberate. The deliberation is focused on comparing the prosecution's case to the defense's case. The baseline for the jury is to consider all of the random circumstances that could happen to an innocent person. The baseline is the null distribution because the null hypothesis is innocence. The defense's case acts as an anchor for what the jury believes could conceivably happen to an innocent person. Then the jury must overlay the prosecution's case on the defense's case (null distribution). They must ask, "Is the evidence presented by the prosecution likely or unlikely under the assumption of Jane's innocence?" The measurement of likely or unlikely under the null distribution is known as a **p-value**. A p-value answers the question, "How likely is the prosecution's evidence if Jane is innocent?" If the answer is *very likely* then perhaps the jury decides Jane is not guilty. But, if the answer is *very unlikely* then the jury might decide Jane is guilty.
+
+Ultimately, the comparison of the defense's case and the prosecution's case will result in a decision by the jury. This decision is made by comparing the p-value to the level of significance. The selected threshold for likely versus unlikely is "shadow of a doubt."  When the jury makes their assessment of likelihood (p-value) in the previous step, they must compare it to this required threshold (level of significance). Is the evidence of guilt *beyond* a shadow of a doubt or is it *not beyond*? If the likelihood of guilt is beyond a shadow of a doubt, then the jury will **reject the null hypothesis**. In other words, Jane is guilty. If the likelihood of guilt is *not* beyond a shadow of a doubt, then the jury will **fail to reject the null hypothesis**. In other words, Jane is not guilty.
+
+Notice we do not claim to have *proven* innocence. There is no need to prove innocence, because that was the assumption to start with! The entire purpose of the trial was to seek evidence of guilt. So, the conclusion of the trial (hypothesis test) is focused on whether the evidence was strong enough to believe the alternate hypothesis.
+
+## Practice 1
+
+Repeat the narrative above in the context of being tested for COVID. What are the hypotheses? Who is the "jury" and what is the "trial" in this case? What is playing the role of "prosecution" and "defense?"
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+The analogy presented in the previous section is incredibly useful for understanding the conceptual purpose for each step of a hypothesis test. However, most applications encountered by an analyst will involve some form of mathematical notation and computation to complete the test. We'll continue the lesson by presenting a computational hypothesis test for the difference in two population means.
+
+## Example 2
+
+For this example we will use player performance data from the National Football League (NFL) scouting combine. Import and view the data.
+
+```{r}
+combine <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/combine_data.csv')
+```
+
+We are interested in comparing the strength of players based on their position on the field. Specifically, we will use the 225 pound bench press as the measure of strength. The more repetitions a player can bench press 225 pounds, the higher we will assess their strength. Suppose we want to know whether players on the line can bench press more reps, on average, than players out wide away from the line. First we need to do a bit of quick wrangling to get the data in a useful form.
+
+```{r}
+combine_new <- combine %>%
+  filter(!is.na(Bench)) %>%
+  mutate(Pos_cat=case_when(
+    Position %in% c('C','DE','DL','DT','EDGE','OG','OL','OT') ~ 'Line',
+    Position %in% c('ILB','LB','OLB','RB') ~ 'Back',
+    TRUE ~ 'Wide'
+  )) %>%
+  filter(Pos_cat %in% c('Line','Wide')) %>%
+  select(Pos_cat,Bench)
+```
+
+Now we have a clean data table with just the two position categories and the number or bench press reps. Let's conduct all the steps of the hypothesis test. If we let $\mu_L$ and $\mu_W$ be the mean bench press reps for line and wide players, respectively, then the null and alternate hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu_L-\mu_W=0 \\
+H_A:& \; \mu_L-\mu_W \neq 0
+\end{aligned}
+$$
+
+In other words, we assume the two position categories bench the same, on average, and we are looking for evidence that one position category can bench more. Next we need to decide on a level of significance. The common mathematical notation for level of significance is the Greek letter $\alpha$ and a typical value is 0.05. Let's pause to carefully consider the meaning of a 5% level of significance. This is the threshold for the strength of evidence under the assumption of the null hypothesis. So, in order for us to reject the null hypothesis, there has to be less than a 5% chance of observing the sample data under the null distribution.
+
+Next we calculate our test statistic. In this case, the test statistic is the difference in sample means ($\bar{x}_L-\bar{x}_W$) because that is the best estimate of the difference in population means ($\mu_L-\mu_W$).
+
+```{r}
+bench <- combine_new %>%
+  group_by(Pos_cat) %>%
+  summarize(AvgBench=mean(Bench)) %>%
+  ungroup()
+
+test_stat <- as.numeric(bench[1,2]-bench[2,2])
+test_stat
+```
+
+The difference in sample means is about 9.5 bench press reps. Specifically, line players benched more than wide players by about 9.5 reps. Do we find that difference to be likely or unlikely if the two positions truly have equal strength? It's hard to say until we have a null distribution as a frame of reference. So, we will generate a computational null distribution via randomization.
+
+```{r}
+#initiate empty vector
+results <- data.frame(diff=rep(NA,1000))
+
+#repeat randomization process 1000 times and save results
+for(i in 1:1000){
+  
+  set.seed(i)
+  Shuffle <- combine_new %>%
+    mutate(Shuffle_Reps=sample(combine_new$Bench,replace=FALSE)) %>%
+    group_by(Pos_cat) %>%
+    summarize(AvgBench=mean(Shuffle_Reps)) %>%
+    ungroup()
+  
+  results$diff[i] <- Shuffle$AvgBench[2]-Shuffle$AvgBench[1]
+
+}
+
+#plot null distribution and test stat
+ggplot(data=results,aes(x=diff)) +
+  geom_histogram(color='black',fill='sky blue',bins=32) +
+  geom_vline(xintercept=test_stat,color='red',size=1) +
+  labs(title='Null Distribution and Observed Statistic',
+       x='Difference in Mean Bench Reps',y='Count') +
+  theme_bw()
+```
+
+Wow, a difference in mean bench reps of 9.5 is *extremely* unlikely if line and wide players are of equal strength! We might expect to see a difference of up to about 1.5, but certainly not 9.5. Rather than basing this purely on a visual assessment, we can quantify it by calculating the p-value. We calculate the p-value by answering the question, "How often did we see a difference in means of 9.5 or more in our simulated null distribution?"
+
+```{r}
+results %>%
+  summarize(pvalue=mean(abs(diff)>=test_stat))
+```
+
+Notice we referred to the absolute value of the difference in means. This is because our alternate hypothesis did not specify which position would have more bench press reps. We have to account for the possibility that wide players are stronger than line players, even though that isn't what the test statistic suggested. The result is that there was *not a single case* in the simulation where the difference in means was as large as 9.5. We can interpret this as: If line and wide players are of equal strength, then there is effectively *no chance* we would have observed this sample data. We use the word "effectively" because a p-value of exactly zero is theoretically impossible, even if practically true.
+
+The final step is to compare our p-value to our level of significance. If the p-value is *less than* the level of significance, then we reject the null hypothesis. If it is *greater than or equal to* the level of significance, then we fail to reject. The decision is pretty obvious here. Zero is clearly smaller than 0.05, so we reject the null. In context, there is significant statistical evidence to suggest that line and wide player are not of equal strength. Instead, the evidence suggests line players are stronger than wide player. If you follow the NFL at all, this conclusion makes intuitive sense as well. Now you can practice a complete hypothesis test using a different context.
+
+## Practice 2
+
+Conduct a hypothesis test to determine if there is any evidence that back players and wide players have a different vertical jump capability.
+

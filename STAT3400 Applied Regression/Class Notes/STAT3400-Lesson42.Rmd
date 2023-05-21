@@ -1,0 +1,159 @@
+---
+title: "Classification Thresholds"
+author: "Dr. Kris Pruitt"
+date: "1 May 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to demonstrate the impact of classification thresholds on the accuracy of predictions. Students should leave this lesson with the ability to select the optimal classification threshold for a logistic regression model using a receiver operating characteristic (ROC) curve.
+
+## Reason 1
+
+In the previous lesson, we fit a logistic regression model to a training set and evaluated its accuracy in classifying a testing set. As part of the classification process, we employed a probability threshold of 50%. In other words, if an observation had a predicted probability greater than 50%, then we classified it as a "success" in the problem context. However, a 50% threshold will not produce the the greatest classification accuracy in all cases. Depending on the prevalence of "successes" in the population, we might achieve greater accuracy by raising or lowering the classification threshold. We'll begin the lesson by demonstrating this phenomenon in an example.
+
+## Example 1
+
+For this example, we will return to the pumpkin seed data set. Recall, this data involved an experiment to classify the type (A or B) of pumpkin seed based on various dimensions measured using digital imagery. Import and wrangle the data set using the code below. We will remove two of the predictor variables based on insights from a previous lesson on model selection.
+
+```{r}
+#import and wrangle data
+pumpkin <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/pumpkin_data.csv') %>%
+  mutate(TypeA=ifelse(Type=='A',1,0)) %>%
+  select(-Type,-Major_Axis_Length,-Eccentricity)
+```
+
+Before fitting a logistic regression model to this sample, we want to randomly split it into two sets: training and testing. The training data will be used to fit the model and obtain estimated coefficients for the logistic function. Then we will use the testing data to measure the model's classification accuracy. We will use a common split of 75% training and 25% testing.
+
+```{r}
+#set a randomization seed for repeatability
+set.seed(303)
+
+#randomly select 75% of the rows for training
+rows <- sample(x=nrow(pumpkin),size=floor(0.75*nrow(pumpkin)),replace=FALSE)
+
+#split data into the two groups
+training <- pumpkin[rows,]
+testing <- pumpkin[-rows,]
+```
+
+Now we fit a logistic regression model to the training set and evaluate its accuracy using the testing set. We will begin with the default classification threshold of 50%.
+
+```{r}
+#fit model to training data
+model <- glm(TypeA~.,data=training,family='binomial')
+
+#classify observations in testing set
+testing_class <- testing %>%
+  mutate(Type_prob=predict(model,newdata=testing,type='response'),
+         Type_class=if_else(Type_prob>0.5,1,0))
+
+#create contingency table
+table(testing_class$TypeA,testing_class$Type_class)
+```
+
+The estimated accuracy of the current model is 89.44%, based on its performance on the testing set. The sensitivity of the model is 90.49% and the specificity is 88.29%. However, all of these performance metrics are based on the default threshold of 50%. It's possible we can achieve improved performance by adjusting the threshold. You'll get a chance to explore this in the practice section.
+
+## Practice 1
+
+Adjust the classification threshold as directed below and then answer the associated questions.
+
+* Decrease the classification threshold to 48.5%. What is the new accuracy, sensitivity, and specificity?
+* Increase the classification threshold to 51.5%. What is the new accuracy, sensitivity, and specificity?
+* Which performance metrics got better and which got worse?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+The accuracy, sensitivity, and specificity of a classification model can be impacted greatly by the choice of threshold. If the threshold is set too low then we risk over-classifying "successes" because the burden of proof is reduced. If we set the threshold too high, then we risk under-classifying "successes" because the burden of proof is too great. We'll continue the lesson by exploring the impact of the threshold on the performance of a model.
+
+## Example 2
+
+A common visualization to demonstrate the impact of the classification threshold is the **receiver operating characteristic (ROC) curve**. The historical origin of this title relates to military radar operators, but today it is employed to choose the appropriate threshold for a classification model. It is best explained after it's generated, so we'll create the ROC curve for the pumpkin seed classifier using functions from the `ROCR` library.
+
+```{r}
+#load ROCR package
+library(ROCR)
+
+#create required objects for ROC
+pred <- prediction(predictions=testing_class$Type_prob,
+                   labels=testing_class$TypeA)
+
+perf <- performance(pred,measure='sens',x.measure='spec')
+
+#plot ROC curve with threshold color
+plot(perf,colorize=TRUE)
+```
+
+The ROC curve plots the specificity on the $x$-axis and the sensitivity on the $y$-axis. In a perfect world, we would like both measures of accuracy to be large (i.e., close to 1). Visually, this means we want to be in the upper right-hand corner of the plot. However, we are forced to trade off between sensitivity and specificity by adjusting the classification threshold (color in the plot). 
+
+When the classification threshold is very low (blue), we have higher sensitivity and lower specificity. A low threshold means we are classifying almost everything as a Type A pumpkin seed. When a seed is actually Type A, we are almost certain to label it as such because we are labeling nearly everything a Type A seed. But, the down-side to this approach is the impact on specificity. When almost none of the seeds are classified as Type B, we are unlikely to correctly label Type B seeds. The opposite problem exists if we set the threshold very high (red). The best balance gets us as close to the upper right-hand corner as possible (somewhere in the green). This provides a balance of relatively high sensitivity and high specificity.
+
+Based on the color map, the green is associated with thresholds between about 40% and 60%. So, our original 50% threshold might be appropriate in this case. Just to investigate deeper, let's graph the *overall* accuracy of the classification model as a function of the threshold.
+
+```{r}
+#plot accuracy curve
+perf2 <- performance(pred,measure='acc')
+plot(perf2)
+```
+
+Based on these results, the model is relatively robust to small changes in the threshold (cutoff). In other words, thresholds between about 30% and 50% provide very little difference in accuracy. Outside of that range, we start to see more dramatic decreases in accuracy. This will not always be the case. For certain problem types, the accuracy can be more greatly improved by moving the threshold away from the default of 50%. This is particularly true when predicting rare event. Now you can practice interpreting a different ROC curve.
+
+## Practice 2
+
+Generate a new ROC curve that displays **positive predictive value (PPV)** versus **negative predictive value (NPV)**. This can be achieved by changing `sens` to `ppv` and changing `spec` to `npv` in the `performance()` function.
+
+* What is the meaning of PPV and NPV in the context of this problem?
+* Where do we want to be on the PPV versus NPV plot?
+* What range of classification thresholds should we prefer, based on this plot?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+Another valuable use for an ROC curve is for model selection. We've already seen two other metrics for selecting a logistic regression model: Akaike Information Criterion (AIC) on the training set and classification accuracy on the testing set. We might also like to select a model based on the two dimensions of an ROC curve, but how do we compute a single metric? The answer is the Area Under the Curve (AUC). We'll finish the lesson by presenting this performance metric in our example. 
+
+## Example 3
+
+Another common set of axes for an ROC curve is true positive rate (TPR) versus false positive rate (FPR). Let's create this plot.
+
+```{r}
+#plot TPR vs. FPR curve
+perf3 <- performance(pred,measure='tpr',x.measure='fpr')
+plot(perf3,colorize=TRUE)
+abline(a=0,b=1)
+```
+
+Unlike the previous two ROC curves, we would like to be in the *upper-left* corner of this curve. That location represents a model with a high TPR and low FPR. Notice we also included a diagonal line through the origin. This line represents the performance of a random number generator. In other words, if we randomly drew values from a Uniform(0,1) distribution and then applied the appropriate threshold, this line provides the TPR and FPR. 
+
+An ROC curve that is "far away" from this diagonal line represents a model that performs much better than a random number generator. We measure how "far away" the ROC curve is based on the area under the curve (AUC). The AUC in this context is very similar to that of integral calculus. The AUC for the diagonal line is 0.5, so we obviously want to be larger than that. The perfect classification model has an AUC of 1, and we will almost never achieve that. So, our goal is to be closer to 1 than to 0.5. Luckily the `ROCR` package has functions to compute AUC, so we can avoid the calculus!
+
+```{r}
+#compute AUC for the ROC curve
+perf4 <- performance(pred,measure='auc')
+perf4@y.values
+```
+
+The AUC for our model is 0.95, which is much closer to 1 than to 0.5. This AUC value represents a very good classification model. Comparing our fitted model to a random number generator is helpful, but we will typically want to compare multiple fitted models to select the "best" one. You'll finish the lesson by fitting a different model and comparing the AUC to that of our current model.
+
+## Practice 3
+
+Fit a logistic regression model to predict seed type based solely on the minor-axis length of the seed. Estimate the model parameters using the training set and predict probabilities for the testing set. Finally, create an ROC curve with TPR versus FPR. Then answer the following questions:
+
+* What is the AUC of your new model and how does this compare to our previous model?
+* Create an accuracy versus cutoff plot. How does this compare to our previous model?
+* If you had to choose between the two models, which would you choose?

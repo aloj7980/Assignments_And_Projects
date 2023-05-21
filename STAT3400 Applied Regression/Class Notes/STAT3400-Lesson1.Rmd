@@ -1,0 +1,109 @@
+---
+title: "Data and Sampling"
+author: "Dr. Kris Pruitt"
+date: "18 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the collection methods for and properties of data. Students should leave this lesson with the ability to distinguish observational studies from experiments, to define and use in context the terminology of sampling, and to identify variable types from a given data set.
+
+
+## Reason 1
+
+A data frame, also known as a data table or data matrix, is a common way to store data in rows and columns. Within a data frame, each row represents a unique **observation** (case) and each column represents a **variable** (feature) that describes some characteristic of the observation. Variables can be **numerical** (quantitative) or **categorical** (qualitative). Numerical variables can be discrete or continuous, while categorical variables can be nominal or ordinal. Regardless of type, it is always important to understand the real-world meaning and unit of measurement for each variable. We'll begin the lesson by examining a data frame and identifying its characteristics.
+
+
+## Example 1
+
+Load the built-in data frame called `iris` using the `data()` function.
+
+```{r}
+data(iris)
+```
+
+Click on the `iris` data frame in the Environment tab in the upper-right corner of RStudio to view the data table. The description next to the data frame tells us it has 150 observations and 5 variables. When looking at the table, we see there are columns referencing measurements of sepal, petal, and species. What is a sepal? What does each row (observation) represent? Are the measurements in inches or centimeters or something else? Where did this data come from? To answer these questions, we need more context about the data frame. For built-in data frames, we can obtain this information by entering the name of the data frame in the Console preceded by a question mark (`?iris`).
+
+Now the Help tab in the lower-right corner of RStudio provides the information we're looking for. An iris is a type of flower and there are three different species of iris listed in the data frame. The measurements of the flowers are in units of centimeters. Each row represents a single flower and there are 150 flowers total. The data was originally collected by Edgar Anderson in 1935 and later analyzed by R.A. Fisher in 1936. Sadly, the help info does not explain what a sepal is. But, we can quickly search the term online and find that a sepal is the green leafy part of the flower that supports the petals.
+
+With this additional context, we can now identify the variable types. The length and width measurements of sepals and petals are numerical variables. Specifically, they are continuous numerical variables. Measurements of space and time are typically continuous because the reported fidelity is only limited by the accuracy of the measurement device and the selected rounding. By contrast, discrete variables have a natural limitation to their fidelity (e.g., number of people or objects). The species variable is categorical. Specifically, it is a nominal categorical variable because the levels (categories) are simply names with no natural order or precedence. Ordinal variables have a clear precedence (e.g., small, medium, large).
+
+Without all of this additional context, the usefulness of any subsequent analysis is limited. As data analysts, we will have much more credibility when presenting results if we understand the context of the source data and can discuss it intelligently. Now you will have an opportunity to practice with another data frame.
+
+
+## Practice 1
+
+Load the built-in data frame called `mtcars` and answer the following questions.
+
+* How many observations and variables are included in this data frame?
+* What does a single observation represent?
+* Where did this data come from and when was it collected?
+* What are the types, units, and real-world meaning of each variable?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+When analyzing data, we are often interested in the association (relationship) between two or more variables. In particular, we frequently want to know if changes in one variable (input) can help explain changes in another variable (output). The input variable is referred to as the **explanatory** (predictor) variable, while the output variable is called the **response** (outcome) variable. This distinction between explanatory and response variables is particularly important in a regression course, because we will attempt to model associations between variables using a functional relationship (e.g., $y=f(x)$). We'll continue this lesson by visualizing and describing the association between two variables.
+
+
+## Example 2
+
+Referencing the `iris` data frame, create a scatter plot of petal width ($x$-axis) versus petal length ($y$-axis) using the `plot()` function.
+
+```{r}
+plot(iris$Petal.Width,iris$Petal.Length)
+```
+
+We'll learn how to make much more visually appealing graphs in future lessons. For now, we'll just use this simple graph to describe the association between petal width and length. In this example, we are treating petal width as the explanatory variable since it is on the $x$-axis. Petal length is the response variable, since it is on the $y$-axis. Consequently, we are trying to explain the variance in the length of a petal based on the width of the petal. The choice of explanatory versus response was somewhat arbitrary in this example, but typically the problem context will make the choice clear. The response will be what we are trying to predict or explain.
+
+Based on the $y$-axis, we see that the length of petals varies between about 1 and 7 centimeters. Can the width of the petal help us understand where a given flower might fall along that range of length between 1 and 7 centimeters? Based on the scatter plot, the answer appears to be yes. As the width of a petal increases, the length tends to also increase. We call this a positive (versus negative) association. The relationship between the two variables also appears to follow a fairly straight line. We call this a linear (versus nonlinear) association. Thus, it does appear that the width of a flower's petal provides us information about plausible lengths for the petal. This makes intuitive sense, because wider petals should tend to also be longer.
+
+Regression is a statistical technique for modeling the association between one or more explanatory variables and a single response variable using a function. We'll spend the rest of this course digging deeper into this concept. It begins with a simple scatter plot like we produced above, but there is much more to learn. 
+
+
+## Practice 2
+
+Referencing the `mtcars` data frame, create a scatter plot with horsepower as the explanatory variable and miles-per-gallon as the response variable. Based on the plot, answer the following questions.
+
+* What is the range of values for miles-per-gallon?
+* Does knowing the horsepower of a car help you guess where it might fall on the miles-per-gallon range?
+* What is the shape (linear or nonlinear), direction (positive or negative), and strength (weak or strong) of the association?
+* Does this association make sense in the context of car performance?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+The motivation for identifying an association between two variables is not limited to a single data frame. The discipline of statistics seeks to identify characteristics of a sample that can be generalized to an entire population. The same is true for regression. Tactically we will identify associations between variables in sample data, but strategically we would like to be able to claim that association exists in the whole population of data. The ability to make such a claim is largely driven by how the sample was collected. We'll conclude this lesson by discussing the processes for data sampling.
+
+
+## Example 3
+
+In the previous example, we identified a strong, positive, linear association between petal width and length. But, we're not just interested in that association for the 150 irises in the sample data. We would like to claim that same association exists for all irises (or at least for the three species in the sample). For this claim to be valid, the sample needs to be representative of the population of interest (i.e., all irises). The best way to ensure a sample is representative is for it to be collected **randomly**.
+
+If a sample is not collected randomly, then it could be **biased**. Imagine that all 150 irises in the sample were grown in the same garden during the same season by the same gardener. Would it be fair to use the results of an analysis on these irises to make claims about all irises every grown anywhere? What if that garden, season, and gardener happened to be particularly favorable for iris petal growth? It would likely not be a fair generalization. We could solve this by limiting our population of interest to only irises grown in that one garden during that one season by that one garden. Alternatively, we could gather a widely representative sample by randomly selecting irises from among many different gardens, seasons, and gardeners. This would permit claims about a broader population. Ideally, we should first define the population of interest and then randomly sample from that entire population.
+
+There are a variety of strategies for random sampling that are described in the text. For this course the majority of the sample data will be provided, but it is important to understand the motivations for the different strategies. It is also important to understand the difference between observational and experimental data. Experimental data is collected in a carefully planned and controlled environment where the researcher assigns the explanatory variable values. We will not conduct experiments in this course and seldom will we use data from others' experiments. Instead, we will use observational data where the researcher does not control any of the explanatory variable values. The benefit of observational data is that it avoids the overhead of designing and executing experiments. The downside of observational data is that it limits (if not eliminates) the ability to make **causal** claims regarding associations between variables. As you have likely heard before, correlation does not always imply causation.
+
+
+## Practice 3
+
+Read the help documentation about the built-in data frame `ToothGrowth` and answer the following questions.
+
+* What is the population of interest for this sample?
+* How might you ensure this sample is representative of the population?
+* What is the response variable and what are the explanatory variables?
+* Does the description of this study sound like an experiment or an observation?

@@ -1,0 +1,276 @@
+---
+title: "Error versus Power"
+author: "Dr. Kris Pruitt"
+date: "17 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to distinguish between decision errors and the power of a hypothesis test. Students should leave this lesson with the ability to compute and explain the trade-off between Type 1 error and power in hypothesis testing.
+
+
+## Reason 1
+
+In the last lesson, we delineated the possible conclusions of a hypothesis test in the following table.
+
+```{r,echo=FALSE}
+tab <- data.frame(Table=c('Null is True','Null is False'),
+                  Positive=c('Type 1 Error','Good Decision'),
+                  Negative=c('Good Decision','Type 2 Error'))
+kable(tab,col.names=c('','Reject','Fail to Reject'),align='rcc')
+```
+
+We also explained that the *probability* of making a Type 1 error is equivalent to the selected level of significance ($\alpha$). Thus, we can reduce the likelihood of committing a Type 1 error by choosing a lower level of significance. However, this choice does not come without consequence. When we decrease the chances of committing a Type 1 error, we inevitably increase the chances of committing a Type 2 error. We'll begin the lesson by explaining this trade-off in the context of a familiar example.
+
+## Example 1
+
+In previous lessons on hypothesis testing, we leveraged the analogy of the US court system. In this context, we can construct a similar table of the possible conclusions in a jury trial.
+
+```{r,echo=FALSE}
+tab <- data.frame(Table=c('Actually Innocent','Actually Guilty'),
+                  Positive=c('Type 1 Error','Good Decision'),
+                  Negative=c('Good Decision','Type 2 Error'))
+kable(tab,col.names=c('','Found Guilty','Found not Guilty'),align='rcc')
+```
+
+If the jury commits a Type 1 error, then an innocent person goes to prison. The court system tries to avoid this type of error by requiring a very high level of confidence in the conclusion of guilt (i.e., beyond a reasonable doubt). This high confidence is equivalent to a very small level of significance ($\alpha$). Though it is certainly a good thing to avoid sending an innocent person to prison, there is a trade-off. Requiring such a high threshold for the evidence of guilt makes it more likely that a guilty person will go free. This is a Type 2 error.
+
+In some statistics texts, we find the *probability* of a Type 2 error referred to as $\beta$. However, it is more common to see reference to a term called **power**. Power is mathematically equivalent to $1-\beta$. It is the probability that we make the correct decision of rejecting the null hypothesis when it is false. In the court example, power represents the likelihood of sending a guilty person to prison. In general, we would like this probability to be large.
+
+Such is the trade-off in the US court system. Our efforts to avoid a Type 1 error decrease the power of the test. In other words, our efforts to avoid sending an innocent person to prison reduce our capacity to send a guilty person to prison. Depending on the context, other forms of hypothesis testing might emphasize power over Type 1 error.
+
+## Practice 1
+
+Construct a two-way table, similar to the court case example, but use the context of COVID testing as the analogy for a hypothesis test. Then answer the following questions:
+
+* What is the meaning of a Type 1 error in this context?
+* What is the meaning of power in this context?
+* Do you believe the manufacturers of at-home COVID tests should emphasize Type 1 error or power?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+One way to think about power is the capacity to detect a true parameter that differs from the null value. For example, if the hypothesized mean is $\mu_1$ but the true mean is $\mu_2$, what is the probability that we will correctly reject the hypothesized mean? A high-power test has the capacity to detect an incorrect null value with a high probability. Of course, as previously mentioned, increasing a test's power will also increase the chances of committing a Type 1 error. We'll continue the lesson by demonstrating the calculation of power.
+
+## Example 2
+
+For consistency, we will once again return to the Starbucks example we explored in the previous lesson. Recall we tested the claim that the average number of calories for Grande size drinks is greater than 200. Let's import the data and write the hypotheses.
+
+```{r}
+#import and wrangle Starbucks data
+starbucks <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/starbucks_data.csv') %>%
+  filter(Size=='Grande') %>%
+  select(Calories)
+```
+
+If we let $\mu$ be the true mean calories of Grande size drinks, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu=200 \\
+H_A:& \; \mu > 200
+\end{aligned}
+$$
+
+The probability of committing a Type 1 error is decided by the level of significance ($\alpha$). The probability of a Type 2 error ($\beta$) requires a bit more work to compute. While a Type 1 error is conditioned on the null hypothesis being true, a Type 2 error is conditioned on it being *false*. Thus, we must incorporate an alternate distribution in order to calculate Type 2 error. An alternate distribution must be based on a particular value within the range of the alternate hypothesis.
+
+Suppose we are interested in the chances that we fail to reject the null hypothesis when the true mean is actually 210 calories (rather than 200). In order to calculate $\beta$, we split the "fail to reject the null hypothesis" and the "when the true mean is actually 210 calories" parts of this statement into separate calculations. Let's start with the "fail to reject the null hypothesis" part.
+
+The choice of whether or not to reject the null hypothesis will always be made from the null distribution, where in this case $\mu=200$. If our level of significance is $\alpha=0.10$, then we *fail to reject* the null hypothesis when the test statistic is *less than* the threshold of 212.77 calories (see below).
+
+```{r}
+#calculate rejection threshold
+threshold <- qnorm(p=0.1,
+                   mean=200,
+                   sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+                   lower.tail=FALSE)
+
+#display rejection threshold
+threshold
+```
+
+Now that we have the criteria for the "fail to reject the null hypothesis" part of Type 2 error, we need the "when the true mean is actually 210 calories" part. This requires the generation of an alternate distribution.
+
+```{r,echo=FALSE}
+#generate values for alternate distribution
+set.seed(653)
+alt_dist <- data.frame(cals=rnorm(n=1000,
+                                  mean=210,
+                                  sd=sd(starbucks$Calories)/sqrt(nrow(starbucks))))
+
+#plot rejection threshold on alternate distribution
+ggplot(data=alt_dist,aes(x=cals)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=threshold,color='red',size=1,linetype='dashed') +
+  geom_segment(aes(x=210,y=0.0025,xend=190,yend=0.0025),arrow=arrow(),
+               color='red',size=1) +
+  scale_x_continuous(limits=c(180,240),breaks=seq(180,240,10)) +
+  labs(title='Alternate Distribution',
+       x='Sample Mean Calories',
+       y='Density') +
+  theme_bw()
+```
+
+Notice the alternate distribution is centered on 210 calories, but we still define the "fail to reject" region as being less than 212.77 calories. So, the probability of a Type 2 error is the area under the alternate distribution (blue density curve) to the left of the rejection threshold (dashed red line). We can compute this directly using the following code.
+
+```{r}
+#compute probability of Type 2 error
+pnorm(q=threshold,
+      mean=210,
+      sd=sd(starbucks$Calories)/sqrt(nrow(starbucks)),
+      lower.tail=TRUE)
+```
+
+We have a 61% chance ($\beta=0.61$) of committing a Type 2 error if the true mean is actually 210 calories. This value is large because it is difficult to detect a difference of only 10 calories (210 versus 200) in a sample of 73 observations. How difficult is it to detect this difference? The answer is the definition of power ($1-\beta$). We only have a 39% chance of detecting a difference of 10 calories in the true mean using this test. In the practice, you'll have the opportunity to see what affect changes in the probability of Type 1 error have on the probability of Type 2 error.
+
+## Practice 2
+
+Suppose you are willing to accept a 20% chance of a Type 1 error in the Starbucks hypothesis test. How does this change your capacity to detect a difference of 10 calories in the true mean?
+
+* Generate a new alternate distribution with the rejection threshold.
+* Compute $1-\beta$ from the alternate distribution.
+* TRUE or FALSE: When we decrease $\alpha$, we automatically increase $\beta$.
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the previous example, we demonstrated the calculation of power for a one-sided test. Conceptually, power has the same meaning in a two-sided test. However, its calculation is slightly more complex because we must consider the ability to detect differences in the hypothesized value in *both* directions. We'll finish the lesson by demonstrating this calculation.
+
+## Example 3
+
+In a previous lesson we constructed a confidence interval for the proportion of NBA teams that have more than 12 turnovers in a game. Suppose instead we want to test the claim that this proportion differs from 60%. We'll begin by importing the data and setting up the hypothesis test.
+
+```{r}
+#import and wrangle data
+nba <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/nba_data.csv') %>%
+  transmute(turnover=ifelse(TO>12,1,0))
+```
+
+If we let $p$ be the true proportion of teams with more than 12 turnovers, then the hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; p=0.60 \\
+H_A:& \; p \neq 0.60
+\end{aligned}
+$$
+
+We choose $\alpha=0.10$ as the level of significance. Now, imagine we are interested in this test's capacity to detect a difference of 5 percentage-points. In other words, if the true proportion ($p$) is as low as 55% or as high as 65%, what are the chances that we will reject the null value of 60%. This represents the power of the test to detect a difference of 5 percentage-points. In order to compute the power, we begin by determining the rejection thresholds.
+
+```{r}
+#calculate rejection thresholds
+threshold_low <- qnorm(p=0.05,
+                       mean=0.6,
+                       sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba)),
+                       lower.tail=TRUE)
+
+threshold_high <- qnorm(p=0.05,
+                        mean=0.6,
+                        sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba)),
+                        lower.tail=FALSE)
+
+#display rejection thresholds
+threshold_low
+threshold_high
+```
+
+Thus, we will reject the null hypothesis if we obtain a test statistic greater than 0.626 or less than 0.574. Conversely, we will *fail to reject* if the test statistic is *greater than* 0.574 or *less than* 0.626. Next we must consider the "fail to reject" region on an alternate distribution. But we need two alternate distributions, one for each side. The alternate distribution for the lower (left) side of the null value is displayed below.
+
+```{r,echo=FALSE}
+#generate values for alternate distribution
+set.seed(653)
+alt_dist1 <- data.frame(tos=rnorm(n=1000,
+                                  mean=0.55,
+                                  sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba))))
+
+#plot rejection threshold on alternate distribution
+ggplot(data=alt_dist1,aes(x=tos)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=threshold_low,color='red',size=1,linetype='dashed') +
+  geom_segment(aes(x=0.576,y=1,xend=0.586,yend=1),arrow=arrow(),
+               color='red',size=1) +
+  scale_x_continuous(limits=c(0.5,0.6),breaks=seq(0.5,0.6,0.01)) +
+  labs(title='Alternate Distribution - Low',
+       x='Sample Proportion',
+       y='Density') +
+  theme_bw()
+```
+
+Notice this alternate distribution is centered on 0.55, because it considers values less than the null proportion. The contribution to Type 2 error rate on this end is represented by the area under the alternate distribution (blue density curve) to the right of the rejection threshold (dashed red line). We can calculate this probability directly as:
+
+```{r}
+#compute probability of Type 2 error
+pnorm(q=threshold_low,
+      mean=0.55,
+      sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba)),
+      lower.tail=FALSE)
+```
+We have a 5.8% chance of committing a Type 2 error for test statistics less than the null value. But, we must consider the possibility of test statistics greater than the null value.
+
+```{r,echo=FALSE}
+#generate values for alternate distribution
+set.seed(653)
+alt_dist2 <- data.frame(tos=rnorm(n=1000,
+                                  mean=0.65,
+                                  sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba))))
+
+#plot rejection threshold on alternate distribution
+ggplot(data=alt_dist2,aes(x=tos)) +
+  geom_density(fill='sky blue',adjust=2) +
+  geom_vline(xintercept=threshold_high,color='red',size=1,linetype='dashed') +
+  geom_segment(aes(x=0.624,y=1,xend=0.614,yend=1),arrow=arrow(),
+               color='red',size=1) +
+  scale_x_continuous(limits=c(0.6,0.7),breaks=seq(0.6,0.7,0.01)) +
+  labs(title='Alternate Distribution - High',
+       x='Sample Proportion',
+       y='Density') +
+  theme_bw()
+```
+
+This alternate distribution is centered on 0.65, because it considers values more than the null proportion. The contribution to Type 2 error rate on this end is represented by the area under the alternate distribution (blue density curve) to the left of the rejection threshold (dashed red line). We can calculate this probability directly as:
+
+```{r}
+#compute probability of Type 2 error
+pnorm(q=threshold_high,
+      mean=0.65,
+      sd=sqrt(mean(nba$turnover)*(1-mean(nba$turnover))/nrow(nba)),
+      lower.tail=TRUE)
+```
+
+Due to the symmetry of the Normal distribution, we get the same probability on the high end as we did on the low end. We get the total Type 2 error rate by adding these two probabilities together. So, when attempting to detect a difference of 5 percentage-points in the true proportion, we have an 11.6% chance of committing a Type 2 error. Conversely, the power of the test is 88.4%. In other words, we have an 88.4% chance of correctly detecting a difference of 5 percentage-points in the true proportion.
+
+For this example, we were able to achieve a relatively low Type 1 error rate *and* a relatively low Type 2 error rate. In general, we are forced to trade off between these two rates. So, how were we able to get both of them to be relatively low? The first reason is that the sample size was large, which provides a relatively small standard error for the null and alternate distributions. The second is that a difference of 5 percentage-points was relatively large in this context, and thus easier to detect. Now you can finish the lesson by exploring the impact of sample size on the power of a test.
+
+## Practice 3
+
+Run the code chunk below to randomly sample 100 observations from the NBA data and compute the associated standard error.
+
+```{r}
+#sample from the NBA data
+set.seed(653)
+nba_small <- sample(nba$turnover,size=100,replace=FALSE)
+
+#calculate standard error
+sterr_small <- sqrt(mean(nba_small)*(1-mean(nba_small))/length(nba_small))
+```
+
+Using this new standard error, compute the power of the same test as in the example. Then answer the following questions:
+
+* How does the power of this new test compare to that of the original?
+* What caused this difference in power?
+* All other things being equal, a smaller sample size will provide ____ power.

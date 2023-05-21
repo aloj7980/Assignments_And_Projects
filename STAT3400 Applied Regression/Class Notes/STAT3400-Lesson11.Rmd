@@ -1,0 +1,168 @@
+---
+title: "Akaike Information Criterion"
+author: "Dr. Kris Pruitt"
+date: "10 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce a model performance metric for logistic regression. Students should leave this lesson with the ability to calculate and explain the Akaike Information Criterion (AIC), and to use AIC as the metric for model selection.
+
+
+## Reason 1
+
+In the previous lesson on logistic regression we fit a model with a single predictor variable. Much like multiple linear regression, we might find it beneficial to fit a multiple logistic regression model with more than one predictor variable. We'll begin this lesson by fitting a multiple logistic regression model and discussing the proper interpretation of the estimated parameters.
+
+
+## Example 1
+
+For this example, we will once again use the pumpkin seed classification data. Import the data set and add a new column using the code below.
+
+```{r}
+pumpkin <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/pumpkin_data.csv') %>%
+  mutate(TypeA=ifelse(Type=='A',1,0))
+```
+
+Suppose we would like to fit a logistic regression model to predict seed type using some subset of the remaining variables. As with multiple linear regression, we should be careful to check for collinearity among potential predictors. For simplicity, let's suppose the only predictors we are interested in are major axis length, minor axis length, solidity, and extent. We'll check to see if there are any collinearity concerns with these predictors.
+
+```{r}
+pumpkin_select <- pumpkin %>%
+  select(TypeA,Major_Axis_Length,Minor_Axis_Length,Solidity,Extent)
+
+pairs(pumpkin_select)
+```
+
+Based on the scatter plots, there does not appear to be any obvious linear correlation between pairs of predictor variables. The extent variable appears to have some nonlinear association with the axis lengths, but it is relatively weak. We can also check the correlation coefficient values.
+
+```{r}
+cor(pumpkin_select)
+```
+
+The correlation coefficients confirm that we have no collinearity to be concerned with among the four predictors. Now we'll fit a logistic regression model based the maximum likelihood method using the `glm()` function.
+
+```{r}
+model1 <- glm(TypeA~.,data=pumpkin_select,family='binomial')
+coefficients(summary(model1))
+```
+
+If we let $\hat{p}$ represent the estimated probability that a seed is Type A, then the estimated logistic regression model is:
+
+$$
+\log \left(\frac{\hat{p}}{1-\hat{p}}\right) = 121.44-0.05 \cdot \text{Major}+0.09 \cdot \text{Minor}-120.96 \cdot \text{Solid}-0.45 \cdot \text{Extent}
+$$
+
+How do we properly interpret the estimated parameters in this model? We *cannot* say that a one unit increase in the predictor is associated with a fixed increase or decrease in the probability of the response. This is due to the log-odds transform we made on the left-hand side of the equation. However, due to the properties of the transformation, the sign of the estimated parameters is still relevant. In other words, the negative sign on major axis length indicates that an increase in major axis length is associated with a decrease in the probability that the seed is Type A. Similarly, and increase in the minor axis length of a seed suggests an increase in the probability that the seed is Type A.
+
+Now you can practice fitting your own multiple logistic regression model.
+
+
+## Practice 1
+
+Fit a logistic regression model to estimate the probability that a pumpkin seed is Type A using area, extent, solidity, and roundness as predictors. Then answer the following questions:
+
+* Do you have any concerns for collinearity between the predictors?
+* What is the estimated log-odds function?
+* If we increase the roundness of a seed, what impact does that appear to have on the chances that it is Type A?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+With multiple linear regression, we use adjusted R-squared as a measure of the explanatory capability provided by the model. Recall that adjusted R-squared is a function of the sum of squared errors (SSE), which is the objective function for the least squares method. The adjustment to "regular" R-squared is important because it penalizes models that include predictors with little-to-no explanatory power. We would like an equivalent metric for multiple logistic regression. We cannot use adjusted R-squared because we are employing the maximum likelihood method which does not rely on SSE. Instead we need a metric that is based on the objective function for maximum likelihood.
+
+In the last lesson we identified the log-likelihood function as the objective for the maximum likelihood method. Let's call the maximum log-likelihood value $\log(L)$ and let $k$ be the number of predictor variables in the model. Based on these two values, we can calculate a common metric for logistic regression models known as the Akaike Information Criterion (AIC).
+
+$$
+\text{AIC}=2k - 2 \log(L)
+$$
+
+Notice that AIC is increasing in the number of predictors and decreasing in the log-likelihood. Thus, unlike adjusted R-squared, **smaller** AIC values indicate a better model. We desire the largest likelihood with the smallest number of predictors. We'll continue the lesson by calculating AIC values for various models.
+
+
+## Example 2
+
+In the previous example section we fit a multiple logistic regression model for the probability that a seed is Type A. We can easily retrieve the AIC for this model with the following code:
+
+```{r}
+summary(model1)$aic
+```
+
+Unfortunately, this AIC value has no useful interpretation in and of itself. There is no version of "percent of variation in the response that is explained by the predictors" with AIC like there is with adjusted R-squared. Instead, we use the AIC value to inform model selection decisions. Suppose we want to see if it is beneficial to remove extent from the model. We can use AIC as the metric to inform this decision.
+
+```{r}
+model2 <- glm(TypeA~.-Extent,data=pumpkin_select,family='binomial')
+summary(model2)$aic
+```
+
+Remember, a **smaller** AIC is better! Thus, we see that removing extent does improve the model. What if instead we tried to remove solidity from the original model?
+
+```{r}
+model3 <- glm(TypeA~.-Solidity,data=pumpkin_select,family='binomial')
+summary(model3)$aic
+```
+
+In this case, the model got worse because the AIC is larger. So, we would choose to remove extent from the model but not solidity. Now you can try calculating AIC for your own model.
+
+
+## Practice 2
+
+Using your model from the first practice section, manually conduct the first round of a backward step-wise regression. In other words, try removing each of the four predictors individually and see if the model can be improved based on AIC. Then answer the following questions:
+
+* Which variables, if any, can be removed to improve the model?
+* If the removal of more than one variable can improve the model, which should you choose?
+* Which predictor would *hurt* the model the most if you removed it?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+Just as with multiple linear regression, `R` has built-in functions to automatically conduct model selection algorithms for logistic regression. We'll finish this lesson by executing the **best subset selection** method. This differs from the step-wise methods we've explored so far because it involves a *complete* enumeration of every possible model we could fit. This is an extremely computationally expensive approach when there is a large number of predictors under consideration. So, it should be afforded careful consideration before execution.
+
+
+## Example 3
+
+When conducting step-wise methods for multiple linear regression models, we used the `regsubsets()` function from the `leaps` package. For multiple logistic regression we'll need an add-on package called `bestglm` that includes a function also called `bestglm()`. Let's start by loading both packages.
+
+```{r}
+library(leaps)
+library(bestglm)
+```
+
+One additional requirement to use the `bestglm()` function is that the data frame must have the binary response variable in the last column. In our case, the indicator variable for a seed being Type A must be moved from the first column to the last column. There are many ways to re-order the columns in a data frame, but here is one option.
+
+```{r}
+pumpkin_reorder <- pumpkin_select %>%
+  transmute(Major_Axis_Length,Minor_Axis_Length,Solidity,Extent,TypeA)
+```
+
+Now that the response is in the last column, we can apply the `bestglm()` function. The `Xy` parameter is equivalent to specifying the data frame with all the predictors (`X`) first and the response (`y`) last. The `family` parameter is the same as when using the `glm()` function and the `method` parameter is the same as when using the`regsubsets()` function. Finally, we need to specify which information criterion should be used to pick the best model. In our case that is the AIC.
+
+```{r}
+best_subset <- bestglm(Xy=pumpkin_reorder,family=binomial,method='exhaustive',IC='AIC')
+
+best_subset$BestModel
+```
+
+After completing the exhaustive model selection process, we directly access the best model using the `BestModel` feature. In turns out that the two axis lengths and solidity provide the best model based on AIC. Notice the AIC value is the same as when we manually removed extent before. Now you can complete your own best subset selection.
+
+
+## Practice 3
+
+Complete a best subset selection using your model from the the previous practice sections. Then answer the following questions:
+
+* Which variables are included in the best model?
+* What is the smallest AIC value that can be achieved?
+* How does this compare to your manual backward step-wise method from the previous section?

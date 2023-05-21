@@ -1,0 +1,161 @@
+---
+title: "Categorical Predictors"
+author: "Dr. Kris Pruitt"
+date: "1 February 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to estimate and interpret a linear regression model with a categorical predictor (explanatory) variable. Students should leave this lesson with an understanding of how `R` treats categorical predictors when estimating model parameters and the ability to interpret the model output in the context of the problem.
+
+
+## Reason 1
+
+In our previous discussions of simple linear regression the response and explanatory variables were both continuous, numerical variables. Instead, we might like to use a *categorical* predictor to explain the variability in a numerical response. However, this requires a slightly different approach since the predictor categories are generally represented by words rather than numbers. How do we write a regression equation with words?! The solution is to treat each category as its own binary variable that is equal to 1 if the observation is in the category and 0 if it is not in the category. We call these artificial predictors **indicator** variables because they indicate which category is assigned.
+
+Formally, if a predictor variable $x$ is composed of $k$ categories then the linear regression equation is defined below. Notice this is a multiple (as opposed to simple) linear regression model because it has more than one predictor variable.
+
+$$
+y=\beta_0 +\beta_1 x_1 +\beta_2 x_2 + ...+ \beta_{k-1} x_{k-1} + \epsilon
+$$
+
+In this equation, $x_i$ is equal to 1 if an observation is assigned category $i$ and 0 otherwise. Furthermore, since an observation can only be assigned a single category, it must be true that:
+
+$$
+x_1 + x_2 + ... + x_{k-1} \leq 1
+$$
+
+There are two important items to note in this formulation. First, we only need to define $k-1$ indicator variables even though there are $k$ categories. This is because we use the intercept $\beta_0$ as a reference level. In other words, if an observation belongs to the $k$th category, then all of the $x_i$ values will be equal to 0 and only the intercept will remain. This also explains why we use an inequality in the constraint for the sum of the $x_i$ values. If an observation is in the $k$th category, then the sum of the $x_i$ values will be 0. Otherwise, the sum must be exactly equal to 1. Let's begin the lesson by exploring this idea in an example.
+
+
+## Example 1
+
+For this lesson we'll use a data set regarding penguins in the Palmer Archipelago of Antarctica. Import the file `penguin_data.csv` and review the variables included in the data frame.
+
+```{r}
+penguin <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/penguin_data.csv')
+```
+
+Suppose we want to see if there is an association between the species of penguin (categorical) and the length of its flippers (numerical). This suggests fitting a linear regression model with species as the explanatory variable and flipper length as the response. We cannot create a scatter plot because one of the variables is categorical. But we can look for an association in a box plot.
+
+```{r}
+ggplot(data=penguin,aes(x=species,y=flipper_length_mm)) +
+  geom_boxplot(fill='sky blue') +
+  labs(x='Penguin Species',y='Flipper Length (mm)') +
+  theme_bw()
+```
+
+Based on the box plot, it does appear there is some association between species and flipper length. This is particularly true for Gentoo penguins which have much longer flippers than the other two species. However, even between the other two, it does appear that Chinstrap penguins often have longer flippers than Adelie penguins. This acts as our visual confirmation of an association in much the same way as a scatter plot when the predictor is numerical.
+
+The predictor variable has three categories (species). So, based on our previous formulation, the linear regression equation only requires two indicator variables. One of the species will be left out as the reference category. We'll soon see that `R` automatically chooses the reference category for us, but let's suppose we want Adelie penguins to be the reference. In that case, the regression equation would be
+
+$$
+\text{Flipper Length}=\beta_0 + \beta_1 \cdot \text{Chinstrap} + \beta_2 \cdot \text{Gentoo} + \epsilon
+$$
+
+where $\text{Chinstrap}$ and $\text{Gentoo}$ are binary indicator variables that add to at most 1. Just as with our previous discussion of regression equations, the $\beta$ parameters are what we seek to estimate using the least squares method. The flipper length and species are fixed values for a given observation. For example, observation #170 has the following values.
+
+```{r}
+penguin[170,c(1,5)]
+```
+
+So, within the regression equation $\text{Flipper Length}=215$, $\text{Chinstrap}=0$, and $\text{Gentoo}=1$. We'll estimate the parameters for these predictors in the next section. For now, you'll practice formulating your own regression equation.
+
+
+## Practice 1
+
+Suppose you are interested in the association between the sex of a penguin and its body mass (in grams). Complete the following steps and answer the associated questions.
+
+* Create a boxplot with sex as the explanatory variable and body mass as the response variable. Does it appear that there is an association between sex and body mass?
+* Choose one of the sex categories as a reference and write the general regression equation for this case. Is this a simple or multiple regression equation?
+* What are the values for observation #145 in your regression equation?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+The process in `R` for estimating a regression equation with categorical predictors is exactly the same as with numerical predictors. The algorithm automatically chooses a reference category, creates indicator variables, and enforces the constraint on the sum of the indicators. However, we must be careful to properly interpret the parameter estimates that result from the least squares optimization. We'll continue the lesson by estimating and interpreting the model parameters.
+
+
+## Example 2
+
+In order to fit a regression model with flipper length as the response and species as the predictor, we use the same `lm()` function as in previous lessons.
+
+```{r}
+model <- lm(flipper_length_mm~species,data=penguin)
+coefficients(summary(model))
+```
+
+In the last section, we wrote a regression equation with three $\beta$ parameters. The output of the fitted model in this section just returned three parameter estimates. The intercept parameter is estimated to be $\hat{\beta}_0=190.1$. The coefficient on the Chinstrap indicator is estimated to be $\hat{\beta}_1=5.7$ and the coefficient on the Gentoo indicator is estimated to be $\hat{\beta}_2=27.1$. It is simply a nice coincidence that `R` chose the same reference category (Adelie) as we did earlier. However, we can always tell which category `R` chose because it will be the one that does not have its own row in the output. The resulting estimated regression equation is:
+
+$$
+\text{Flipper Length}=190.1 + 5.7 \cdot \text{Chinstrap} + 27.1 \cdot \text{Gentoo}
+$$
+
+Now let's carefully interpret the meaning of this estimated regression equation. If a given penguin is an Adelie, then the Chinstrap and Gentoo predictors are both equal to zero and we estimate Adelie's have an *average* flipper length of 190.1 mm. The value 190.1 mm is our reference flipper length. If a given penguin was a Chinstrap, then we expect its flippers to be 5.7 mm longer than an Adelie (i.e., 195.8 mm on average). Finally, if a penguin is a Gentoo, then we expect its flippers to be 27.1 mm longer than an Adelie (i.e., 217.2 mm on average).
+
+Give this a try on your own with the sex and body mass variables you investigated in the last section.
+
+
+## Practice 2
+
+Fit a linear regression model with body mass as the response variable and sex as the explanatory variable using the `lm()` function. View the parameter estimates with the `summary()` and `coefficients()` functions then answer the following questions.
+
+* What category did `R` choose as the reference category?
+* What is the estimated regression equation?
+* How much heavier (or lighter) would you expect a male penguin to be (on average) compared to a female penguin?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+In the multiple regression setting, it is not as straight-forward how we should measure the strength of the association between the predictors and the response. With simple regression we could use scatter plots and the Pearson correlation coefficient to assess the strength of association. But, with multiple regression we cannot use scatter plots (beyond three dimensions) and it's not as clear how to aggregate all of the pair-wise correlations. The common approach is to use what is known as the **coefficient of determination** which we typically label $R^2$ or R-squared.
+
+In the simple linear regression setting $R^2$ is literally the square of the Pearson correlation coefficient (commonly labeled $r$). Since the correlation coefficient is always between -1 and 1, the $R^2$ value will always be between 0 and 1. Values close to 1 indicate a very strong association between the predictor and the response, while values close to 0 indicate little association. In the multiple regression setting, the calculation of $R^2$ is a bit different.
+
+$$
+R^2 = 1- \frac{SSE}{SST}
+$$
+
+The sum of squared errors ($SSE$) is the minimized total error that results from the least squares algorithm. It is the total error of the fitted regression line. The value $SST$ represents the total error we would get if we simply guessed the average response variable value for all observations. In other words, $SST$ represents the default total error before we try to find the best-fit line. Since the fitted line can never do worse than always guessing the average, the ratio of $SSE$ and $SST$ can never exceed 1.
+
+This calculation of $R^2$ provides an interesting interpretation with regard to the predictor and response variables. We can interpret $R^2$ as the proportion of variation in the response that is explained by its linear association with the predictor(s). So, if $R^2$ is close to 1 then a high proportion of the variation in the response variable can be explained by the linear relationship with the predictor variables. This would indicate a strong association and a useful regression equation. We'll finish this lesson by calculating and interpreting $R^2$.
+
+
+## Example 3
+
+It is uncommon to calculate R-squared manually, though knowledge of the formula does help with the intuition behind its meaning. We can directly retrieve the R-squared value for a fitted model in `R` from the `summary()` function output. For our model of species and flipper length the R-squared value is:
+
+```{r}
+summary(model)$r.squared
+```
+
+Based on this value, 77.5% of the variation in penguin flipper length can be explained by its linear association with species. Let's dig deeper into the meaning of this. Flipper lengths vary between 172 and 231 mm across all species. If we were asked to guess where a given penguin will measure along that range, what would we guess? We could simply guess the average flipper length. The average flipper length across all species in the sample is about 201 mm.
+
+```{r}
+mean(penguin$flipper_length_mm)
+```
+
+Always guessing 201 mm would result in a total error represented by the $SST$ value in the R-squared equation. Can we do better than always guessing the average by choosing an associated variable and fitting a regression line? We could choose species as the associated variable and use that knowledge to inform our guess based on the fitted regression equation. By doing that, our total error ($SSE$) is dramatically reduced. In fact, the total remaining error using knowledge of the species is only 22.5% of the total error incurred by always guessing the average. This is the ratio of $SSE$ to $SST$. As a result, our regression equation has eliminated 77.5% of the error. Knowing the species is very valuable when trying to guess a penguin's flipper length. Now you can practice interpreting R-squared.
+
+
+## Practice 3
+
+Determine the R-squared value for your model of penguin sex and body mass. Then answer the following questions.
+
+* What is the proper interpretation of your R-squared value in the context of the problem?
+* Is the sex of a penguin valuable information when trying to predict its body mass?
+* Can you think of a real-world explanation for your answer to the previous question?

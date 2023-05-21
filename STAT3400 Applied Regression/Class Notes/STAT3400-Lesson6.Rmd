@@ -1,0 +1,132 @@
+---
+title: "Outliers"
+author: "Dr. Kris Pruitt"
+date: "30 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to examine extreme observations in a data set known as outliers. Students should leave this lesson with the ability to identify outliers in a sample and determine whether they have an influence on the fit of a regression line.
+
+
+## Reason 1
+
+In the context of linear regression, outliers are observations that stray far from the rest of the data. Visually, we could observe outliers in a scatter plot as observations that are distinct from the main "cloud" of points. If an observation is far from the rest of the data with regard to the fitted response variable value, then it will have a large residual (in absolute value). On the other hand, if an observation differs greatly from the rest of the data with regard to the explanatory variable we say it has high **leverage**. Outliers with large residuals and/or high leverage can sometimes affect the estimated slope of the regression line. We call such observations **influential** points. Influential points can be problematic if they mask the true association between the variables, so they warrant careful attention. We'll begin the lesson by exploring these concepts in scatter plots.
+
+
+## Example 1
+
+For this example, we will use data from a 1985 study regarding the body composition of males from ages 22-81. Download the data set `bodyfat_data.csv` from the course website and import it into `RStudio`.
+
+```{r}
+bodyfat <- read.csv('C:/Users/krist/Documents/UC/STAT3400/Spring_2023/Data/bodyfat_data.csv')
+```
+
+Imagine we are interested in the association between height (in inches) and weight (in pounds). As result, we generate the following scatter plot with the best-fit line.
+
+```{r}
+ggplot(data=bodyfat,aes(x=Height,y=Weight)) +
+  geom_point(position='jitter',alpha=0.4) +
+  geom_smooth(method='lm',formula=y~x,se=FALSE) +
+  labs(x='Height (in)',y='Weight (lbs)') +
+  theme_bw()
+```
+
+There are two clear outliers in this data that stray from the main "cloud" of points. With regard to the response variable (Weight), there is a very large value over 350 pounds. This observation has a very large residual, since 350+ pounds is far from what the fitted line would predict for a height of 72 inches. However, it is plausible for a six-foot tall male to have such a body weight so we have no reason to believe this observation is due to some kind of error. Consequently, we have no reason to remove it from the data set. 
+
+Regarding the explanatory variable (Height), there is a very small outlier below 30 inches. This observation has very high leverage, since its distance from the rest of the data is nearly 2.5 times the width of the main "cloud." This data point warrants some skepticism. A quick internet search reveals that a height below 30 inches would be nearly a world record. Furthermore, for such an individual to weigh over 200 pounds seems almost physically impossible. This observation is likely an entry error. Rather than 29.5 inches, perhaps it should have been 69.5 inches? There is really no way for us to know without access to the authors of the study. However, this observation is so implausible that it could arguably be removed from the data set.
+
+Despite it likely being an error, the outlier for height helps visually demonstrate why we use the term leverage for such points. In the context of physics, imagine the blue fitted line is a lever acting on the main "cloud" of points and that the outlier is the "person" using the lever. The outlier would have a lot of leverage in this context. This is a problem because the blue line does not appear to follow the trend displayed in the main "cloud" of points. You'll have a chance to highlight this issue in practice.
+
+
+## Practice 1
+
+Create a new data frame that does not include the outlier for height. You can do this using the `filter()` function, among other methods. After removing the outlier, re-create the scatter plot and best-fit line from the example and answer the following questions.
+
+* Purely visually, what do you notice about the best-fit line in this new plot compared to the previous?
+* Using a quick "rise over run" estimate of the slope of the two lines, how much do they differ?
+* Do you think the height outlier was influential in estimating the slope in the example plot?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 2
+
+In the previous section, we evaluated the influence of outliers from a purely visual standpoint. There are more objective methods for assessing the influence of an observation on the regression parameter estimates. In general, an observation is considered influential if the fitted line when the point is excluded differs greatly from the fitted line when the point is included. We'll continue the lesson by evaluating the outliers in this manner.
+
+
+## Example 2
+
+In a prior lesson we learned how to fit a regression line and obtain parameter estimates using the `lm()` function. Let's use that process to find the estimated slope parameter with and without the high leverage point. We'll begin by fitting a model with the point included.
+
+```{r}
+model_with <- lm(Weight~Height,data=bodyfat)
+coefficients(summary(model_with))
+```
+
+The estimated slope when we include the high leverage point is about 2.5. How does this compare to your "rise over run" estimate from the previous section? Now let's remove the high leverage point from the data and fit the new line.
+
+```{r}
+bodyfat_filter <- bodyfat %>%
+  filter(Height>30)
+
+model_without <- lm(Weight~Height,data=bodyfat_filter)
+coefficients(summary(model_without))
+```
+
+After removing the high leverage point, the estimated slope increases dramatically to about 5.5. To put this difference in context, let's think about the proper interpretation of the estimated slope. We expect a one inch increase in height to be associated with a 5.5 pound increase in average weight. That's more than double the average weight increase compared to the estimate with the high leverage point! In general, we don't want a single observation to have such an influence on our estimates and insights. In this case, because we already think the observation is an error, the easy answer is to remove it. However, the answer isn't always so easy in real-world applications.
+
+Now you'll have a chance to evaluate the influence of the other outlier in the data set.
+
+
+## Practice 2
+
+Using the data set *without* the high leverage outlier, fit a model that also excludes the large residual outlier (i.e., the weight outlier). Based on the estimated slope, answer the following questions.
+
+* How does the estimated slope without the weight outlier compare to that of the model with the outlier?
+* Would you classify the weight outlier as an influential point?
+* Should we leave the weight outlier in the data set or remove it?
+
+______________________________________________________________________________________________________________
+
+
+## Reason 3
+
+Another objective method for evaluating the influence of outliers is to use one of the `R` built-in diagnostic plots. We'll explore many of these diagnostic plots throughout the course to check model assumptions and other important factors. In the context of outliers, the relevant diagnostic plot is called a Residuals vs. Leverage plot. This plot highlights the two types of outliers: fitted response value outliers (Residuals) and explanatory value outliers (Leverage). We'll finish this lesson by generating the diagnostic plot and examining its insights.
+
+
+## Example 3
+
+In the previous section, we fit the model with both outliers included and called it `model_with`. We can generate diagnostic plots for this model using the `plot()` function along with the `which` parameter to indicate which plot we want. We'll learn about each of the available plots throughout the course. For now, we just want the fifth plot.
+
+```{r}
+plot(model_with,which=5)
+```
+
+The first thing that stands out in this plot is the red line pointing to a point labelled 42. This is the 42nd observation in the data frame. What is that observation?
+
+```{r}
+bodyfat[42,c(4,5)]
+```
+
+Observation #42 is the height outlier. This point has a high leverage value on the $x$-axis and a high residual value on the $y$-axis. As a result, it appears in the upper-right corner of the plot. In general, when points appear in the upper-right or lower-right corners of the plot, we will call them influential.
+
+Another component of the graph that stands out are the curved dashed lines labelled Cook's distance. The Cook's distance is a measure of how influential a data point is based on the impact of removing it from the model. In a sense, the Cook's distance mimics what we did in the previous section and assigns a value to the differences between the two models. Larger residuals and higher leverage will both increase the Cook's distance. Points beyond a Cook's distance of 1 (second dashed line) are generally considered highly influential. Thus, we have further confirmation that the height outlier is a highly influential data point.
+
+You'll complete this lesson by evaluating another observation in the diagnostic plot.
+
+
+## Practice 3
+
+In the upper-left corner of the diagnostic plot, we see observation #39. What is unique or interesting about this observation? Should we consider it highly influential? If an outlier is highly influential and we do *not* believe it is a collection error, how might we address it in our analysis?

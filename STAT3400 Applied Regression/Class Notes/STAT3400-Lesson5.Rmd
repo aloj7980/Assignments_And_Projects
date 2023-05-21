@@ -1,0 +1,213 @@
+---
+title: "Least Squares Regression"
+author: "Dr. Kris Pruitt"
+date: "27 January 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the optimization problem known as least squares regression. Students should leave this lesson with the ability to formulate the least squares regression problem and explain how its solution provides the parameter estimates for the linear regression equation.
+
+
+## Reason 1
+
+In the previous lesson, we visually explored the association between two numerical variables in a scatter plot. Our goal was to find a straight line that "best fit" the points in the scatter plot. The general equation of that line was:
+
+$$
+y=\beta_0 +\beta_1 x + \epsilon
+$$
+
+The two unknown parameters $\beta_0$ (intercept) and $\beta_1$ (slope) are what we need to estimate in order to "fit" the line. We'll never know the true values for these parameters that dictate the underlying linear relationship between $x$ and $y$. But, we hope to find good estimates for their values based on the data. Once the parameters are estimated, the residual error $\epsilon$ is automatically determined for any given point $(x,y)$. Ideally, we would choose parameter values that make the total error across all points as small as possible. This is what we mean by "best." We desire the minimum total error.
+
+There are a number of ways we could calculate a "total" error. Furthermore, there are a number of algorithms we could use to solve a minimization problem. We'll start this lesson by exploring three different options for computing a "total" error.
+
+## Example 1
+
+For the calculations that follow, we will use the notional data depicted in the scatter plot below. We will also investigate three different options for the estimated slope and intercept parameters. The values listed below correspond to the three blue lines shown in the plot. The "hats" on top of the beta parameters are simply to indicate that these are estimated values for the true unknown parameter. Let's suppose these are the options we're considering for our "best fit" line.
+
+-   Option 1: $\hat{\beta}_0=2.75$ and $\hat{\beta}_1=1.5$
+-   Option 2: $\hat{\beta}_0=1$ and $\hat{\beta}_1=2$
+-   Option 3: $\hat{\beta}_0=-0.75$ and $\hat{\beta}_1=2.5$
+
+```{r}
+not_data <- data.frame(x=c(1,2,3,4,5,6),y=c(3,4,9,7,12,13))
+
+ggplot(data=not_data,aes(x,y)) +
+  geom_point(size=2) +
+  geom_abline(slope=1.5,intercept=2.75,color='blue',linetype='twodash') +
+  geom_abline(slope=2,intercept=1,color='blue') +
+  geom_abline(slope=2.5,intercept=-0.75,color='blue',linetype='dashed') +
+  theme_bw()
+```
+
+For each of the three lines we can easily calculate the residuals as the observed $y$ value minus the fitted $y$ value.
+
+```{r}
+not_data <- not_data %>%
+  mutate(resid1=y-(1.5*x+2.75),
+         resid2=y-(2*x+1),
+         resid3=y-(2.5*x-0.75))
+```
+
+Now that we have some example residuals to work with, we can start examining alternatives for how to calculate the "total" error. Let's start with the *literal* total error for each of the three lines.
+
+```{r}
+not_data %>%
+  summarize(tot_error1=sum(resid1),
+            tot_error2=sum(resid2),
+            tot_error3=sum(resid3))
+```
+
+Well, that wasn't very helpful! All three lines produce a literal total error of zero. The reason for this is relatively intuitive. If some of the residuals are positive, some are negative, and we want them to be roughly symmetric, then they are generally going to cancel each other out and add up to (close to) zero. So, we really need a way to account for error in a purely non-negative way. The two most common ways to achieve this are with the absolute value or by squaring. Let's start with absolute value.
+
+```{r}
+not_data %>%
+  summarize(abs_error1=sum(abs(resid1)),
+            abs_error2=sum(abs(resid2)),
+            abs_error3=sum(abs(resid3)))
+```
+
+That's better! At least there are differences between the options. Based on the sum of absolute errors, Option 2 appears to have the smallest "total" error. So, if these were our only options, we would choose the second line. Of course, this does not prove Option 2 has the minimum error of *all* possible lines, but it is the best of our three options. What if we instead used the sum of squared errors?
+
+```{r}
+not_data %>%
+  summarize(sq_error1=sum(resid1^2),
+            sq_error2=sum(resid2^2),
+            sq_error3=sum(resid3^2))
+```
+
+Once again we see that the second line has the lowest "total" error of the options presented. This matches up with our visual intuition as well, but it is better to have quantitative evidence. We will typically be dealing with far more than six observations, so "eye-balling" the line is not the best practice.
+
+From this quick exercise, it appears that the sum of absolute errors or the sum of squared errors would both be good options for calculating a "total" error. So, which should we use? Based on a combination of academic tradition, mathematical proof, and contextual justification the common practice in linear regression is to use the sum of squared errors. You will see this referred to as $SSE$. Nearly all statistical software, including `R`, uses this calculation for "total" error when fitting regression lines. This is also the reason for the name "least squares" regression. Now you'll have a chance to calculate $SSE$ and choose the best line.
+
+## Practice 1
+
+Import the built-in data set regarding measurements of iris flowers using the `data(iris)` function. Suppose we want to fit the following regression line to the data.
+
+$$
+\text{Petal.Width}=\beta_0 +\beta_1 \cdot \text{Petal.Length} + \epsilon
+$$
+
+We are considering the following three options for parameter estimates of the fitted line. Which option has the smallest $SSE$?
+
+-   Option 1: $\hat{\beta}_0=-0.47$ and $\hat{\beta}_1=0.45$
+-   Option 2: $\hat{\beta}_0=-0.29$ and $\hat{\beta}_1=0.38$
+-   Option 3: $\hat{\beta}_0=-0.36$ and $\hat{\beta}_1=0.42$
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+In the previous section, we had three lines to choose from and selected the one with the smallest $SSE$ as the best option. However, we had no way of knowing if any of the three options was the best among every possible line. Since we have infinitely many lines to choose from (as opposed to only three), checking all of them is not an option. Instead we'll leverage optimization techniques that guarantee the globally best line (i.e., the one with the minimum $SSE$).
+
+The general formula for the $SSE$ is a function of two variables.
+
+$$
+f(\beta_0,\beta_1)=\sum_i (y_i-\beta_0-\beta_1 x_i)^2
+$$
+
+Notice that $x_i$ and $y_i$ are not variables in this context. Instead they are the data points we're fitting. The slope and intercept parameters are the variables. So, we want to find the values for $\beta_0$ and $\beta_1$ that produce the globally minimum value for $f(\beta_0,\beta_1)$. There are multivariate calculus techniques for this involving partial derivatives. There are also algorithms from linear algebra that convert this problem to matrix form and solve for the parameters. In either case, the solution for a linear regression problem with a single predictor turns out to be relatively simple.
+
+Let $\bar{x}$ and $\bar{y}$ be the sample means for the explanatory and response variables, respectively. Similarly, let $s_x$ and $s_y$ be the sample standard deviations. Finally, let $r$ be the Pearson correlation coefficient for the association between the two variables. The estimates for the slope and intercept parameters are:
+
+$$
+\begin{aligned}
+\hat{\beta}_1 &= \frac{s_y}{s_x} \cdot r \\
+\hat{\beta}_0 &= \bar{y} - \hat{\beta}_1 \cdot \bar{x}
+\end{aligned}
+$$
+
+We'll continue the lesson by calculating the parameter estimates for a linear regression using these formulas.
+
+## Example 2
+
+The summary statistics for the notional data we previously examined are calculated as:
+
+```{r}
+sum_stat <- not_data %>%
+  summarize(mean_x=mean(x),
+            mean_y=mean(y),
+            stdev_x=sd(x),
+            stdev_y=sd(y))
+
+sum_stat
+```
+
+The Pearson correlation coefficient for the two variables is:
+
+```{r}
+pearson <- cor(not_data$x,not_data$y)
+
+pearson
+```
+
+Using the formula for the slope estimate $\hat{\beta}_1$ we compute:
+
+```{r}
+beta1 <- (sum_stat$stdev_y/sum_stat$stdev_x)*pearson
+
+beta1
+```
+
+With the estimated slope, we can now computer the intercept estimate.
+
+```{r}
+sum_stat$mean_y-beta1*sum_stat$mean_x
+```
+
+Thus, our "best fit" line to the data is $y=2.1x+0.8$. Notice this is very close to the line we chose as our best of the three options available in the previous section. Now you'll have a chance to manually calculate the parameter estimates for the iris flower data.
+
+## Practice 2
+
+Using the summary statistic equations, estimate the slope and intercept parameters for the linear regression of petal width versus length. What is the "best fit" equation? How does this compare to the best line you chose in the previous section?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+In general, practicing statisticians and data scientists are *not* computing regression parameter estimates by hand. Nor or they even using the summary statistic equations from the previous section. In fact, those equations only work for regression problems with a single predictor (explanatory variable) and most real-world problems have dozens if not hundreds of predictors. Instead, we rely on statistical software, such as `R`, to perform the least squares optimization and estimate the parameters.
+
+The true value of the statistician or data scientist is the ability to interpret the meaning of estimated parameters in the context of the problem at hand. So, we will leverage the power of computing to perform the estimation and focus the majority of our efforts on the proper interpretation of the results.
+
+## Example 3
+
+In the `R` coding language we fit a linear regression model using the `lm()` function. For our notional data, the model definition would look like this.
+
+```{r}
+model <- lm(y~x,data=not_data)
+```
+
+The first argument in the function can be read as "y is a function of x." The response variable is on the left of the tilde sign and the explanatory variable is on the right. The second argument in the function is simply assigning the data frame that holds the observations for $x$ and $y$. If we want to see the estimated parameters that result from the least squares algorithm, then we use the `summary()` function inside the `coefficients()` function.
+
+```{r}
+coefficients(summary(model))
+```
+
+There is a lot more here than we need at the moment. For now, just focus on the `Estimate` column. Those two numbers should look familiar! They are the same numbers we calculated with the summary statistic equations. But, what do those numbers mean? Let's focus on the proper interpretation of these values starting with the intercept.
+
+In general, the $y$-intercept of a linear equation is the value of $y$ when $x=0$. However, there are two subtleties we must be careful with in the context of linear regression. First, we must ask ourselves if it is even possible for the explanatory variable ($x$) to be equal to zero in real-world context. If not, then we should not try to interpret the meaning of the intercept on its own. If it is possible for the explanatory variable to be zero, then the regression intercept represents the *expected* value when $x=0$. In other words, when $x=0$ the $y$-intercept will *average* the estimated value.
+
+The slope of a linear equation is often interpreted as the rate of change in $y$ with respect to $x$. Again, the regression interpretation is similar but subtly different. In linear regression, the estimated slope is the *expected* change in $y$ for a one unit increase in $x$. Alternatively, it is the *average* change in the response variable given a one unit increase in the explanatory variable. The reason we must refer to an average is that there is some error ($\epsilon$) involved in the process we're modeling. Though the underlying relationship might be linear, the observations will not adhere to it perfectly. They might be above or below the line, so we acknowledge that by referring to average behavior.
+
+For our notional data, let's assume it is possible for $x$ to be exactly equal to zero. Then the proper interpretation of the intercept is that $y$ will average a value of 0.8 when $x=0$. For the slope, if $x$ increases by 1 then $y$ will increase by an average of 2.06. Now you'll finish the lesson by estimating and interpreting the iris parameters.
+
+## Practice 3
+
+Using the `lm()` function, fit a regression model with petal width as the response and petal length as the predictor. Produce the estimated parameters with the `summary()` and `coefficients()` functions. Then answer the following questions.
+
+-   How do the estimated parameters compare to what you manually calculated in the previous section?
+-   Is it possible for the predictor variable to be exactly equal to zero in the context of iris flowers?
+-   What is the proper interpretation of the estimated slope in the context of iris flowers?

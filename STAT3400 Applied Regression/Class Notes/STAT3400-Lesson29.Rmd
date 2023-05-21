@@ -1,0 +1,193 @@
+---
+title: "The t-distribution"
+author: "Dr. Kris Pruitt"
+date: "17 March 2023"
+output:
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(tinytex)
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+knitr::opts_chunk$set(out.width = "60%",fig.align='center')
+```
+
+The purpose of this lesson is to introduce the t-distribution in the context of confidence intervals and hypothesis tests for the mean. Students should leave this lesson with the ability to determine when the t-distribution is appropriate and to apply it as the sampling or null distribution.
+
+## Reason 1
+
+In previous lessons, we've extensively explored hypothesis tests and confidence intervals as the primary methods for inferential statistics. We also demonstrated two approaches to conducting hypothesis tests or computing confidence intervals: mathematical and computational. The mathematical approaches rely on the Central Limit Theorem (CLT). The CLT has two technical conditions:
+
+* The sample observations must be independent
+* The sample must be sufficiently large
+
+Even when these two conditions are met, the CLT only applies to means and proportions. If we are interested in other parameters, such as the median, percentile, standard deviation, or range, we cannot apply the CLT. Instead, we rely on computational approaches such as randomization and bootstrapping. These computational approaches are more general and can be applied to estimate a much wider variety of parameters. However, the accuracy of randomization and bootstrapping is still affected by independence and sample size. If the sample is so small or poorly collected that it is not representative of the population (i.e., biased), then resamples taken from it will reflect the same bias. So, even though computational approaches are far more flexible than mathematical, they are not a perfect cure for small sample sizes.
+
+A mathematical solution to the small sample size problem is to use a different distribution for the sampling distribution (confidence intervals) or null distribution (hypothesis testing). The core issue with a small sample is that it can introduce greater variability in the statistic from one sample to the next. As a result, there will be a greater standard error for a statistic based on small samples. The **t-distribution** was created specifically to model this inflated standard error. We'll begin the lesson by introducing the shape and parameters of the t-distribution.
+
+## Example 1
+
+The t-distribution is very similar to the Normal distribution in that it is symmetric and bell-shaped. However, the t-distribution has thicker tails than the Normal distribution when the sample size is small. The thicker tails model the greater variability caused by the small sample size. Another difference is that the t-distribution only has a single parameter: degrees of freedom ($df$). If we let $n$ be the sample size, then the degrees of freedom are $df=n-1$. The mean of the t-distribution is always zero and the spread is determined by $df$.
+
+Let's compare the t-distribution to the Standard Normal distribution.
+
+```{r,echo=FALSE}
+#generate values from standard normal and t-distribution
+set.seed(100)
+stnormal <- data.frame(variate=rnorm(n=10000,mean=0,sd=1))
+tdist_3df <- data.frame(variate=rt(n=10000,df=3))
+tdist_30df <- data.frame(variate=rt(n=10000,df=30))
+
+#plot density curves
+ggplot() +
+  geom_density(data=stnormal,aes(x=variate),
+               adjust=3,color='blue',size=2) +
+  geom_density(data=tdist_3df,aes(x=variate),
+               adjust=3,color='red',size=1,linetype='dashed') +
+  geom_density(data=tdist_30df,aes(x=variate),
+               adjust=3,color='red',size=1) +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Standard Normal vs. t-distributions',
+       x='Random Variate',y='Density') +
+  theme_bw()
+```
+
+The solid blue curve is the Standard Normal. For small sample sizes (e.g., $n=4$), we see that the t-distribution (dashed red curve) has thicker tails. Otherwise, it appears very similar to the Standard Normal. In fact, as the sample size increases to beyond 30 (e.g., $n=31$), the t-distribution (solid red curve) approaches the standard error of the Standard Normal. This may appear to be a minor correction for small sample sizes, but it can make the difference between rejecting and failing to reject a null hypothesis in some cases.
+
+The primary purpose of the t-distribution is to be *more conservative* when we lack a sufficient sample size. This will lead to larger p-values and wider confidence intervals. You'll be able to demonstrate this in the practice.
+
+## Practice 1
+
+Suppose you are computing a 95% confidence interval ($n=10$), but want to compare the critical value that would result from the Standard Normal distribution versus the t-distribution. Compute both critical values using the `qnorm()` and `qt()` functions. Which value is larger? What does this mean for the confidence interval?
+
+Suppose instead you are conducting a two-sided hypothesis test at the $0.05$ level of significance ($n=10$). You compute a test statistic of $2.1$, but you want to compare the p-value that would result from the Standard Normal distribution versus the t-distribution. Compute both p-values using the `pnorm()` and `pt()` functions. Which value is larger? What does this mean for the hypothesis test?
+
+------------------------------------------------------------------------
+
+
+## Reason 2
+
+Although the t-distribution is a helpful solution to the small sample size problem, it can only be applied to estimate the mean ($\mu$) or difference in means ($\mu_1-\mu_2$). The t-distribution is not an appropriate solution to small sample sizes for estimating other parameters. Additionally, in order for the t-distribution to produce accurate estimates, the original data must be relatively symmetric with few outliers. That said, the mean is the most common parameter of interest and many real world phenomena have relatively symmetric distributions. So, the t-distribution is applied frequently in situations where large samples are not available. We'll continue the lesson by constructing a **confidence interval** for the mean using the t-distribution.
+
+## Example 2
+
+Suppose we are tasked with estimating the weight of the critically endangered black rhino. Given the rarity of encountering a black rhino in the wild, we are only able to find 10 specimens. We record the weight (pounds) of each rhino in the data frame below.
+
+```{r}
+#save rhino weights in data frame
+rhino <- data.frame(weight=c(2319,2346,2579,2451,2398,2444,2626,2297,2497,2524))
+```
+
+Before constructing a confidence interval, we check to see if this data is relatively symmetric by comparing the mean and median.
+
+```{r}
+#calculate mean and median weight
+mean(rhino$weight)
+median(rhino$weight)
+```
+The mean and median are very similar, suggesting there is little if any skew in the data. Next we compute the three key components of a confidence interval: point estimate, critical value, and standard error. For this purpose, we decide to employ a 90% confidence interval.
+
+```{r}
+#calculate sample mean weight
+point <- mean(rhino$weight)
+
+#calculate critical value from t-distribution
+critical <- qt(p=0.05,df=nrow(rhino)-1,lower.tail=FALSE)
+
+#calculate standard error for weight
+error <- sd(rhino$weight)/sqrt(nrow(rhino))
+```
+
+Notice the only thing that changed from our previous mathematical calculations of confidence intervals is that the critical value comes from a t-distribution. The point estimate and standard error are the same. Now we can compute the bounds.
+
+```{r}
+#compute bounds
+lower <- point-critical*error
+upper <- point+critical*error
+
+#display bounds
+lower
+upper
+```
+
+Thus, we are 90% confident that the true mean weight of black rhinos is between 2,384 and 2,512 pounds. This is a wider interval than we would have obtained by using the Normal distribution for the critical value. But the more conservative bounds are appropriate given our estimates are only based on 10 observations. Now you can calculate a confidence interval with the t-distribution.
+
+## Practice 2
+
+Import the built-in data table `women` which includes the height and weight for 15 American women between the ages of 30 and 39. Construct a 95% confidence interval for mean height and then answer the following questions.
+
+* What is the proper interpretation of your interval, in the context of the problem?
+* Is this interval wider or narrower than what you would have obtained using the Normal distribution?
+* Would you expect your interval to be wider or narrower if you had more observations?
+
+------------------------------------------------------------------------
+
+
+## Reason 3
+
+In the previous section, we used the t-distribution as the sampling distribution for the confidence interval due to the small sample size. If instead we wanted to conduct a hypothesis test on the small sample, then we would use the t-distribution as the null distribution. We'll finish the lesson by demonstrating a hypothesis test on the mean.
+
+## Example 3
+
+Suppose a news article claims that the average black rhino weighs more than 2,400 pounds. Since we already have a data set of black rhino weights, we decide to test this claim. If we let $\mu$ be the true mean weight of black rhinos, then our hypotheses are:
+
+$$
+\begin{aligned}
+H_0:& \; \mu=2400 \\
+H_A:& \; \mu>2400
+\end{aligned}
+$$
+
+Based on the claimed margin of error in the article, we choose $\alpha=0.05$ to maintain a fair comparison. Now we calculate the test statistic. Generally, the test statistic in this scenario would be the sample mean. But it would not make sense to place the sample mean on a t-distribution (null distribution) that is centered at zero with degrees of freedom determined by the sample size. So, we must shift and scale the sample mean to create a t-statistic that can be fairly placed on the t-distribution. This is achieved with the following code:
+
+```{r}
+#calculate t-statistic
+tstat <- (point-2400)/error
+
+#display t-statistic
+tstat
+```
+
+By subtracting the null value from the sample mean, we shift the null distribution to be centered on zero. By dividing by the standard error, we account for the impact of sample size. Now we can visualize the rejection threshold and t-statistic on the t-distribution.
+
+```{r,echo=FALSE}
+#generate values from t-distribution
+set.seed(100)
+tdist <- data.frame(variate=rt(n=10000,df=9))
+
+#plot density curve
+ggplot(data=tdist,aes(x=variate)) +
+  geom_density(adjust=3,color='black',fill='sky blue') +
+  geom_vline(xintercept=qt(p=0.05,df=9,lower.tail=FALSE),
+             color='red',linetype='dashed',size=1) +
+  geom_vline(xintercept=tstat,color='red',size=1) +
+  scale_x_continuous(limits=c(-3.5,3.5),breaks=seq(-3.5,3.5,0.5)) +
+  scale_y_continuous(limits=c(0,0.4),breaks=seq(0,0.4,0.05)) +
+  labs(title='Null Distribution (t-distribution)',
+       x='Standard Errors',y='Density') +
+  theme_bw()
+```
+
+Because the t-statistic does not exceed the rejection threshold, we fail to reject the null hypothesis. Equivalently, we could calculate the p-value and compare it to the significance level.
+
+```{r}
+#compute p-value
+pt(q=tstat,df=9,lower.tail=FALSE)
+```
+
+The p-value of 10% is greater than the significance level of 5%, so we fail to reject the null hypothesis. Whether determined visually or numerically, the conclusion is the same. The article appears to be wrong. There is not sufficient evidence to suggest that the average black rhino weights more than 2,400 pounds. Now you can conduct a hypothesis test using the t-distribution.
+
+## Practice 3
+
+Using the data regarding women's heights, conduct a hypothesis of the claim that the average American woman is shorter than 5 foot 6 inches. Use a significance level of $\alpha=0.1$ and answer the following questions:
+
+* What is the conclusion of your test, in the context of the problem?
+* Is your p-value greater or less than what you would have obtained using a Normal distribution?
+* The t-distribution is sometimes referred to as *Student's* t-distribution. What is the origin of this name?
+
