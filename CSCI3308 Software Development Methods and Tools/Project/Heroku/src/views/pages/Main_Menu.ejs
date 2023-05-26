@@ -1,0 +1,125 @@
+<%- include('../partials/header') %>
+<%- include('../partials/menu') %>
+		<!-- Content -->
+		<div class="container-fluid">
+			<style>
+				#content {
+					position: relative;
+				}
+				#content img {
+					position: absolute;
+					top: 50px;
+					right: 0px;
+					width: 600px;
+					height: 380px;
+				}
+			</style>
+			
+			<div id="content">
+				<img src="../resources/img/logo.jpg" alt="Math Whiz-ard Logo Image" height="320px" width="530px">
+			</div>
+			<h2>
+				Math Whiz-ard -
+				<small class="text-muted">Practice math for free!</small>
+			</h2>
+			<br>
+			<!-- <form action="/main_menu/name" method="POST">
+				<h2 id="welcome-msg">
+					Welcome <span id="name"></span>
+				</h2>
+			</form> -->
+			<h2 id="welcome-msg">
+				Welcome <span id="Fname-welcome">
+					<script>
+						var user_name = window.location.search.split("=")[1];
+						if(user_name != undefined){
+							document.getElementById("Fname-welcome").innerHTML = user_name;
+						}
+						else{
+							document.getElementById("welcome-msg").style.visibility = "hidden";
+							document.getElementById("welcome-msg").style.height = "0px";
+						}
+					</script>
+				</span>
+			</h2>
+			
+			<br> 
+			<!-- Table for problem pages -->
+			<table width="50%">
+				<!-- Addition -->
+				<tr>
+					<td>
+						<form action="/addition">
+							<input type="submit" value="Addition" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Subtraction -->
+				<tr>
+					<td>
+						<form action="/subtraction">
+							<input type="submit" value="Subtraction" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Multiplication -->
+				<tr>
+					<td>
+						<form action="/multiplication">
+							<input type="submit" value="Multiplication" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Division -->
+				<tr>
+					<td>
+						<form action="/division">
+							<input type="submit" value="Division" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Fractions -->
+				<tr>
+					<td>
+						<form action="/fractions">
+							<input type="submit" value="Fractions" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Decimals -->
+				<tr>
+					<td>
+						<form action="/decimals">
+							<input type="submit" value="Decimals" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Algebra -->
+				<tr>
+					<td>
+						<form action="/algebra">
+							<input type="submit" value="Algebra" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<br>
+				<br>
+				<!-- Report Card -->
+				<!-- <tr>
+					<td>
+						<form action="/report_card">
+							<input type="submit" value="View Report Card" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr> -->
+			</table>
+			<br><br>
+		</div>
+		
+		<!-- Footer -->
+		<footer class="center text-center">
+			<p class="mt-5 mb-3 text-muted">&copy; Math Whiz-ard 2021</p>
+		</footer>
+		
+		<!-- Scripts -->
+<%- include('../partials/footer') %>

@@ -1,0 +1,91 @@
+<!-- algebra.html
+    +-----                -----+
+    |       ###     ######     |
+    |      ## ##   ##    ##    | 
+    |     ##   ##  ##          | 
+    |    ##     ##  ######     | 
+    |    #########       ##    | 
+    |    ##     ## ##    ##    | 
+    |    ##     ##  ######     | 
+    +-----                -----+
+-->
+<%- include('../partials/header') %>
+<%- include('../partials/menu') %>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<meta name="description" content="">
+		<title id="page-title">Algebra</title>
+		<link rel='icon' href='../resources/img/logo.jpeg' type='image/x-icon'/>
+		
+		<!-- Bootstrap core CSS -->
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+		
+		<!-- Custom styles for this template -->
+		<link href="../resources/css/singin.css" rel="stylesheet">
+		<link href="../resources/css/my_style.css" rel="stylesheet">
+		<link href="../resources/css/math_problem.css" rel="stylesheet">
+    </head>
+    <body onload="changeProblem()">
+        <!-- Content -->
+		<div class="container center text-center">
+			<h1 id="page-header">Algebra</h1>
+			
+            <!-- The problem -->
+            <div class="problem">
+				<form class="problem form-group" id="problem_form">
+					<h3>
+						<span id="numeral_a"></span>
+						<span id="operator"></span>
+						<span id="x">X</span>
+						<span id="equality_sign"></span>
+						<span id="solution"></span>
+						<span id="answer"  hidden = "hidden"></span>
+						<br><span id="user_answer">
+							<input type="userAnswer" id="inputAnswer" placeholder="What is X?" required autofocus>
+						</span>
+					</h3>
+				</form>
+				<div class="form-group">
+					<button onclick="readAnswer();" id = "submitbutton">Submit</button>
+					<button onclick="changeProblem();" id = "nextbutton">Next→</button>
+					<button id="scorebutton" onclick="score();">View Score & Quit</button>
+				</div>
+				<br>
+				<h4 id="answerMessage1"></h4>
+				<h4 id="answerMessage2"></h4>	
+				
+				<!-- Return to menu option -->
+				<form action="/Main_Menu">
+					<button type="submit" class="btn btn-primary btn-lg">Return to menu</button>
+				</form>		
+
+			</div>
+			<form class="form-group" id="missed_questions_form">
+				<h3 style="color:black;font-size:x-large;">
+					<br><span id="missed_questions_title"></span><br><br>
+					<span id="incorrect_problem_1"></span><br>
+					<span id="incorrect_answer_1"></span><br><br>
+					<span id="incorrect_problem_2"></span><br>
+					<span id="incorrect_answer_2"></span><br><br>
+                    <span id="incorrect_problem_3"></span><br>
+                    <span id="incorrect_answer_3"></span>
+                </h3>
+            </form>
+		</div>
+
+		<!-- Footer -->
+		<footer class="center text-center">
+			<p class="mt-5 mb-3 text-muted">&copy; Math Whiz-ard 2021</p>
+		</footer>
+
+		<!-- Scripts -->
+		<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+		<script src="../../resources/js/scripts.js"></script>
+		<script src="../../resources/js/algebra.js"></script>
+    </body>
+</html>

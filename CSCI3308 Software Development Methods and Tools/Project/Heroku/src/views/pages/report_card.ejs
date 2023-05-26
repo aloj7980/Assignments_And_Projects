@@ -1,0 +1,95 @@
+<!-- addition.html 
+    +-----                -----+
+    |       ###     ######     |
+    |      ## ##   ##    ##    | 
+    |     ##   ##  ##          | 
+    |    ##     ##  ######     | 
+    |    #########       ##    | 
+    |    ##     ## ##    ##    | 
+    |    ##     ##  ######     | 
+    +-----                -----+
+-->
+<%- include('../partials/header') %>
+<%- include('../partials/menu') %>
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta name="description" content="">
+		<link rel="icon" href="../resources/img/logo.jpg" type="image/x-icon"/>
+        <title>Report Card</title>
+        
+		<!--Bootstrap implementation-->
+        <!-- Latest compiled and minified CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+		
+        <!-- jQuery library -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+		
+        <!-- Popper JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+		
+        <!-- Latest compiled JavaScript -->
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+        <!-- Custom styles for this template -->
+        <link href="../resources/css/singin.css" rel="stylesheet">
+        <link href="../resources/css/my_style.css" rel="stylesheet">
+    </head>
+    <body onload="sendToReportCard();">
+
+        <!-- Content -->
+        <h2>
+            Math Whiz-ard -
+            <small class="text-muted">Practice math for free!</small>
+        </h2>
+        <div class="container center text-center">
+            
+            <h1 id="page-header">Report Card</h1>
+            <div class="container-fluid" id="report-card-div">
+                <table id="report-card-table">
+                    <thead id="report-card-head">
+                        <tr>
+                            <th>Problem #</th>
+                            <th>Operation</th>
+                            <th>Your Answer</th>
+                            <th>Correct Answer</th>
+                        </tr>
+                    </thead>
+                    <tbody id="report-card-body">
+                        <tr>
+                            <td id="problem-number"></td>
+                            <td id="operation"></td>
+                            <td id="user_answer"></td>
+                            <td id="solution"></td>
+                        </tr>
+                    </tbody>
+                </table>
+                <table id="tally-table">
+                    <tr>
+                        <th>Correct</th>
+                        <th>Incorrect</th>
+                    </tr>
+                    <tr>
+                        <td id="num_correct"></td>
+                        <td id="num_incorrect"></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+
+
+        <!-- Footer -->
+		<footer class="center text-center">
+			<p class="mt-5 mb-3 text-muted">&copy; Math Whiz-ard 2021</p>
+		</footer>
+
+        <!-- Scripts -->
+        <script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+		<script src="../resources/js/scripts.js"></script>
+        <script src="../resources/js/report_card.js"></script>
+        <!-- <script src="../resources/js/addition.js"></script> -->  <!-- DO NOT RUN THIS YET!! WILL CAUSE ERROR -->
+    </body>
+</html>
