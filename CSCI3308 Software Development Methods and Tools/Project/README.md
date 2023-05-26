@@ -80,3 +80,5 @@ We used the agile/scrum methodology to keep track of *Math Whiz-ard* on our [Jir
 - Thursdays at 7PM - 9PM MST
 - [Zoom Link Here](https://cuboulder.zoom.us/j/2172365690)
 <!-- - Zoom Link: https://cuboulder.zoom.us/j/2172365690 -->
+
+Note that this is a modified copy of the project. The node_modules folder was too big to upload via the web so some parts of the program may not run if you don't have them installed.
