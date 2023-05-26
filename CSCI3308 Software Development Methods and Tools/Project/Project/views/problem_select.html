@@ -1,0 +1,190 @@
+
+<!-- problem_select.html 
+This page will be used to present the user with a table of options that they will use to choose the type of problems they want to attempt.
+- There will be a part asking for problem type.
+- There will be a part asking for the number of problems.
+- There will be a part aking for the difficulty of the problems.
+
+    +-----                -----+
+    |       ###     ######     |
+    |      ## ##   ##    ##    | 
+    |     ##   ##  ##          | 
+    |    ##     ##  ######     | 
+    |    #########       ##    | 
+    |    ##     ## ##    ##    | 
+    |    ##     ##  ######     | 
+    +-----                -----+
+-->
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+		<meta charset="utf-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+		<meta name="description" content="">
+		<title>Addition</title>
+		<link rel='icon' href='../resources/img/logo.jpeg' type='image/x-icon'/>
+		
+		<!-- Bootstrap core CSS -->
+		<link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/css/bootstrap.min.css" integrity="sha384-GJzZqFGwb1QTTN6wy59ffF1BuGJpLSa9DkKMp0DgiMDm4iYMj70gZWKYbI706tWS" crossorigin="anonymous">
+		
+		<!-- Custom styles for this template -->
+		<!-- <link href="../resources/css/singin.css" rel="stylesheet"> -->
+		<link href="../resources/css/my_style.css" rel="stylesheet">
+		<link href="../resources/css/math_problem.css" rel="stylesheet">
+    </head>
+	<body>
+    <!-- <body class="center text-center" onload="loadAddition()"> -->
+        <!-- Navigation Bar -->
+		<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+			<a class="navbar-brand" href="home.html">
+				<img class="rounded-circle" src="../resources/img/HomeLogo.jpg" alt="Math Whiz-ard Logo" width="30" height="30">
+			</a>
+			<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarText">
+				<ul class="navbar-nav mr-auto">
+					<li class="nav-item active">
+						<a class="nav-link" href="home.html">Home <span class="sr-only">(current)</span></a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="About_Us.html">About Us </a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="main_menu.html">Main Menu</a>
+					</li>
+				</ul>
+                <!-- Login button -->
+                <form action="login.html">
+                    <div class="form-inline my-2 my-lg-0">
+                        <button class="btn btn-outline-light my-2 my-sm-0" type="submit">Login</button>
+                    </div>
+                </form>
+			</div>
+		</nav>        
+        
+        <!-- Content -->
+		<div class="container center text-center">
+			<script>
+				var selectedProblemType;  // type of problem page to send the user to
+				var selectedProblemPage;  // page link to go to
+				function readChoices(){
+					let problem_type = document.getElementById("problem_type").value;
+					let numProblems = document.getElementById("numProblems").value;
+					let problem_difficulty = document.getElementById("difficulty_select").value;
+					document.getElementById("pType").innerHTML = `Selected Problem Type: ${problem_type}`;
+					document.getElementById("numberProblems").innerHTML = `Selected Number of Problems: ${numProblems}`;
+					document.getElementById("probDifficulty").innerHTML = `Selected Difficulty: ${problem_difficulty}`;
+					switch(document.getElementById("problem_type").id){
+						case "+":{
+							selectedProblemType = "addition";
+							break;
+						}
+						case "-":{
+							selectedProblemType = "subtraction";
+							break;
+						}
+						case "*":{
+							selectedProblemType = "multiplication";
+							break;
+						}
+						case "÷":{
+							selectedProblemType = "division";
+							break;
+						}
+					}
+					selectedProblemPage = `${selectedProblemType}.html`;
+				}
+				function getProblemPage(){
+					// document.getElementById("user_form").action = selectedProblemPage;
+					return `${selectedProblemType}.html`;
+				}
+			</script>
+			<br><h1>Problem Select</h1><br>
+
+			<!-- Let the user choose how many problems to work on. 
+				The 'pre-problem' div appears before the 'problem' div appears.
+				The user will select the number of problems they want to attempt,
+				then they will submit that number with a counter and a submit button. 
+			-->
+			<form class="form-group center text-center" id="user_form" action="addition.html">
+			<!-- <form class="form-group center text-center"> -->
+				<!-- <div class="center text-center form-group"> -->
+					<table width="50%">
+						<!-- Select the type of math problem -->
+						<tr>
+							<td>
+								<label for="input_id">Select problem type</label>
+								<br>
+							</td>
+							<td>
+								<select type="problem_type" name="problem_type" id="problem_type" class="form-control">
+									<option selected>Select problem type</option>
+									<option value="Addition (+)" id="+">Addition (+)</option>
+									<option value="Subtraction (-)" id="-">Subtraction (-)</option>
+									<option value="Multiplication (*)" id="*">Multiplication (*)</option>
+									<option value="Division (÷)" id="/">Division (÷)</option>
+								</select>
+								<br>
+							</td>
+						</tr>
+						<!-- Select the number of problems -->
+						<tr>
+							<td>
+								<label for="input_id">How many problems would you like to attempt?</label>
+								<br>
+							</td> 
+							<td>
+								<input type="number" class="form-control" id="numProblems" placeholder="1-100" min="1" max="100">
+								<br>
+							</td>
+						</tr>
+						<!-- Select the problem difficulty -->
+						<tr>
+							<td>
+								<label for="input_id">What difficulty level would you like?</label>
+								<br>
+							</td> 
+							<td>
+								<select onchange="readChoices();" name="difficulty_level" id="difficulty_select" class="form-control custom-select custom-select-sm">
+									<option selected>Select Difficulty Level</option>
+									<option value="1">1</option>
+									<option value="2">2</option>
+									<option value="3">3</option>
+									<option value="4">4</option>
+									<option value="5">5</option>
+								</select>
+								<br>
+							</td>
+						</tr>         
+					</table>
+					<br>
+				
+				<!-- print choices -->
+				<h4 id="pType"></h4>
+				<h4 id="numberProblems"></h4>
+				<h4 id="probDifficulty"></h4>
+
+				<!-- begin button -->
+				<div class="form-group">
+					<input type="submit" class="btn btn-primary">
+				</div>
+			</form>
+		</div>
+
+		<!-- Footer -->
+		<footer class="center text-center">
+			<p class="mt-5 mb-3 text-muted">&copy; Math Whiz-ard 2021</p>
+		</footer>
+
+		<!-- Scripts -->
+		<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+  		<script src="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/js/bootstrap.min.js"></script>
+
+		<script src="https://code.jquery.com/jquery-3.3.1.slim.min.js" integrity="sha384-q8i/X+965DzO0rT7abK41JStQIAqVgRVzpbzo5smXKp4YfRvH+8abtTE1Pi6jizo" crossorigin="anonymous"></script>
+		<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.14.6/umd/popper.min.js" integrity="sha384-wHAiFfRlMFy6i5SRaxvfOCifBUQy1xHdJ/yoi7FRNXMRBu5WHdZYu1hA6ZOblgut" crossorigin="anonymous"></script>
+		<script src="https://stackpath.bootstrapcdn.com/bootstrap/4.2.1/js/bootstrap.min.js" integrity="sha384-B0UglyR+jN6CkvvICOB2joaf5I4l3gm9GU6Hc1og6Ls7i6U/mkkaduKaBhlAXv9k" crossorigin="anonymous"></script>
+		<script src="../resources/js/scripts.js"></script>
+		<script src="../resources/js/addition.js"></script>
+    </body>
+</html>

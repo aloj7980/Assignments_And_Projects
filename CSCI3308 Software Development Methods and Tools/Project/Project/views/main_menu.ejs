@@ -1,0 +1,171 @@
+<!DOCTYPE ejs>
+<html lang="en">
+    <head>
+        <meta charset="utf-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+        <meta name="description" content="">
+		<link rel="icon" href="/img/logo.jpg" type="image/x-icon"/>
+        <title>Main Menu</title>
+        
+		<!--Bootstrap implementation-->
+        <!-- Latest compiled and minified CSS -->
+        <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css">
+		
+        <!-- jQuery library -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+		
+        <!-- Popper JS -->
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+		
+        <!-- Latest compiled JavaScript -->
+        <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/js/bootstrap.min.js"></script>
+        <!-- Custom styles for this template -->
+        <link href="/css/singin.css" rel="stylesheet">
+        <link href="/css/my_style.css" rel="stylesheet">
+	</head>    
+    <body onload="insertName();">
+        <!-- Navigation Bar -->
+		<nav class="navbar navbar-expand-lg navbar-dark bg-dark">
+			<a class="navbar-brand" href="main_menu">
+				<img class="rounded-circle" src="/img/HomeLogo.jpg" alt="Math Whiz-ard: Main Menu" width="30" height="30">
+			</a>
+			<button class="navbar-toggler" type="button" data-toggle="collapse" data-target="#navbarText" aria-controls="navbarText" aria-expanded="false" aria-label="Toggle navigation">
+				<span class="navbar-toggler-icon"></span>
+			</button>
+			<div class="collapse navbar-collapse" id="navbarText">
+				<ul class="navbar-nav mr-auto">
+					<li class="nav-item">
+						<a class="nav-link" href="/About_Us">About Us </a>
+					</li>
+					<li class="nav-item">
+						<a class="nav-link" href="/main_menu">Main Menu</a>
+					</li>
+				</ul>
+
+				<!-- Login button -->
+				<form action="/home">
+					<div class="form-inline my-2 my-lg-0">
+						<button class="btn btn-outline-light my-2 my-sm-0" type="submit">Logout</button>
+					</div>
+				</form>
+			</div>
+		</nav>        
+	
+		<!-- Content -->
+		<div class="container-fluid">
+			<style>
+				#content {
+					position: relative;
+				}
+				#content img {
+					position: absolute;
+					top: 50px;
+					right: 0px;
+					width: 600px;
+					height: 380px;
+				}
+			</style>
+			
+			<div id="content">
+				<img src="/img/logo.jpg" alt="Math Whiz-ard Logo Image" height="320px" width="530px">
+			</div>
+			<h2>
+				Math Whiz-ard -
+				<small class="text-muted">Practice math for free!</small>
+			</h2>
+			<br>
+			<!--Use EJS (https://ejs.co/#install) to render the name-->
+			<!--<h2 id="welcome-msg">
+				Welcome <span id="name"><%= name %></span>
+			</h2>
+			-->
+			
+			<!-- <form action="/main_menu/name" method="POST"> -->
+				<h2 id="welcome-msg">
+					Welcome  <span><%= name %></span>
+				</h2>
+			<!-- </form> -->
+			
+			<br> 
+			<!-- Table for problem pages -->
+			<table width="50%">
+				<!-- Addition -->
+				<tr>
+					<td>
+						<form action="/addition">
+							<input type="submit" value="Addition" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Subtraction -->
+				<tr>
+					<td>
+						<form action="/subtraction">
+							<input type="submit" value="Subtraction" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Multiplication -->
+				<tr>
+					<td>
+						<form action="/multiplication">
+							<input type="submit" value="Multiplication" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Division -->
+				<tr>
+					<td>
+						<form action="/division">
+							<input type="submit" value="Division" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Fractions -->
+				<tr>
+					<td>
+						<form action="/fractions">
+							<input type="submit" value="Fractions" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Decimals -->
+				<tr>
+					<td>
+						<form action="/decimals">
+							<input type="submit" value="Decimals" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<!-- Algebra -->
+				<tr>
+					<td>
+						<form action="/algebra">
+							<input type="submit" value="Algebra" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+				<br>
+				<br>
+				<!-- Report Card -->
+				<tr hidden>
+					<td>
+						<form action="/report_card">
+							<input type="submit" value="View Report Card" class="btn btn-primary btn-block">
+						</form>
+					</td>
+				</tr>
+			</table>
+			<br><br>
+		</div>
+					
+		<!-- Footer -->
+		<footer class="center text-center">
+			<p class="mt-5 mb-3 text-muted">&copy; Math Whiz-ard 2021</p>
+		</footer>
+
+		<!-- Scripts -->
+		<!-- <script src="/js/scripts.js"></script> -->
+	</body>
+</html>
+								
