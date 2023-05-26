@@ -1,0 +1,203 @@
+Alex Ojemann
+
+football_db=# CREATE TABLE Universities(
+football_db(# University_Name varchar(200),
+football_db(# Date_Established date,
+football_db(# Address text,
+football_db(# Student_Population int,
+football_db(# Acceptance_Rate decimal,
+football_db(# PRIMARY KEY(University_Name)
+football_db(# );
+CREATE TABLE
+football_db=# \dt
+              List of relations
+ Schema |       Name       | Type  |  Owner   
+--------+------------------+-------+----------
+ public | football_games   | table | postgres
+ public | football_players | table | postgres
+ public | universities     | table | postgres
+(3 rows)
+
+
+football_db=# INSERT INTO Universities(University_Name, Date_Established, Address, Student_Population, Acceptance_Rate)
+football_db-# VALUES('CU Boulder','1876-04-01','1100 28th St,Boulder, CO 80303',35000,0.8);
+INSERT 0 1
+
+
+football_db=# SELECT name, major
+football_db-# FROM football_players
+football_db-# ORDER BY major;
+       name        | major 
+-------------------+-------
+ Cedric Vega       | ARTS
+ Wade Farmer       | ARTS
+ Erick Graves      | ARTS
+ Jared Castillo    | ARTS
+ Doyle Huff        | CSCI
+ Myron Walters     | CSCI
+ Charles Porter    | CSCI
+ Melba Pope        | MATH
+ Rafael Boreous    | MATH
+ Javier Washington | MATH
+(10 rows)
+
+
+football_db=# SELECT name, rushing_yards
+football_db-# FROM football_players
+football_db-# WHERE rushing_yards > 70;
+      name      | rushing_yards 
+----------------+---------------
+ Erick Graves   |            78
+ Charles Porter |           102
+ Rafael Boreous |           111
+ Jared Castillo |           113
+(4 rows)
+
+
+football_db=# SELECT *
+football_db-# FROM football_games
+football_db-# WHERE visitor_name='Nebraska';
+ visitor_name | home_score | visitor_score | game_date  |   players   
+--------------+------------+---------------+------------+-------------
+ Nebraska     |         33 |            28 | 2020-09-08 | {2,3,4,5,6}
+(1 row)
+
+
+football_db=# SELECT *
+football_db-# FROM football_games
+football_db-# WHERE home_score > visitor_score;
+  visitor_name  | home_score | visitor_score | game_date  |   players   
+----------------+------------+---------------+------------+-------------
+ Colorado State |         45 |            13 | 2020-08-31 | {1,2,3,4,5}
+ Nebraska       |         33 |            28 | 2020-09-08 | {2,3,4,5,6}
+ New Hampshire  |         45 |            14 | 2020-09-15 | {3,4,5,6,7}
+ UCLA           |         38 |            16 | 2020-09-28 | {4,5,6,7,8}
+ Arizona State  |         28 |            21 | 2020-10-06 | {5,6,7,8,9}
+(5 rows)
+
+
+football_db=# SELECT visitor_name, game_date
+football_db-# FROM football_games;
+    visitor_name     | game_date  
+---------------------+------------
+ Colorado State      | 2020-08-31
+ Nebraska            | 2020-09-08
+ New Hampshire       | 2020-09-15
+ UCLA                | 2020-09-28
+ Arizona State       | 2020-10-06
+ Southern California | 2020-10-13
+ Washington          | 2020-10-20
+ Oregon State        | 2020-10-27
+ Arizona             | 2020-11-02
+ Washington State    | 2020-11-10
+ Utah                | 2020-11-17
+ California          | 2020-11-24
+(12 rows)
+
+
+football_db=# SELECT visitor_name, game_date
+football_db-# FROM football_games
+football_db-# WHERE game_date BETWEEN '2020-09-01' AND '2020-12-31';
+    visitor_name     | game_date  
+---------------------+------------
+ Nebraska            | 2020-09-08
+ New Hampshire       | 2020-09-15
+ UCLA                | 2020-09-28
+ Arizona State       | 2020-10-06
+ Southern California | 2020-10-13
+ Washington          | 2020-10-20
+ Oregon State        | 2020-10-27
+ Arizona             | 2020-11-02
+ Washington State    | 2020-11-10
+ Utah                | 2020-11-17
+ California          | 2020-11-24
+(11 rows)
+
+
+football_db=# SELECT AVG(home_score)
+football_db-# FROM football_games;
+         avg         
+---------------------
+ 27.0833333333333333
+(1 row)
+
+
+football_db=# SELECT major, COUNT(id) AS number_of_players
+football_db-# FROM football_players
+football_db-# group by major
+football_db-# ;
+ major | number_of_players 
+-------+---------------------
+ CSCI  |                   3
+ ARTS  |                   4
+ MATH  |                   3
+(3 rows)
+
+
+football_db=# SELECT major, COUNT(id) AS number_of_players
+football_db-# FROM football_players
+football_db-# WHERE major='CSCI'
+football_db-# group by major;
+ major | number_of_players 
+-------+---------------------
+ CSCI  |                   3
+(1 row)
+
+
+
+
+football_db=# CREATE VIEW wins
+football_db-# AS
+football_db-# SELECT COUNT(*) AS winning_games
+football_db-# FROM football_games
+football_db-# WHERE home_score > visitor_score;
+CREATE VIEW
+football_db=# SELECT *
+football_db-# FROM wins;
+ winning_games 
+---------------
+             5
+(1 row)
+
+
+football_db=# CREATE VIEW games_
+football_db-# AS
+football_db-# SELECT COUNT(*) AS games
+football_db-# FROM football_games
+football_db-# ;
+CREATE VIEW
+football_db=# SELECT *
+football_db-# FROM games_;
+ games 
+-------
+    12
+(1 row)
+
+
+football_db=# SELECT CAST(wins.winning_games AS DOUBLE PRECISION) / CAST(games_.games AS DOUBLE PRECISION) * 100.0
+football_db-# FROM wins, games_;
+     ?column?      
+-------------------
+ 41.66666666666667
+(1 row)
+
+
+
+
+football_db=# SELECT COUNT(*)
+football_db-# FROM football_games
+football_db-# WHERE (select id from football_players where name = 'Cedric Vega')= ANY(players)
+football_db-# ;
+ count 
+-------
+     6
+(1 row)
+
+
+football_db=# select ((fp.rushing_yards / count(*) :: float )) as Average
+football_db-# from football_games fg, football_players fp
+football_db-# where fp.id = ANY(players) and fp.name = 'Cedric Vega' group by fp.rushing_yards;
+      average      
+-------------------
+ 4.166666666666667
+(1 row)

@@ -1,0 +1,174 @@
+Lab #6 Take Home
+Your name: Alex Ojemann
+
+
+---------------------------------------- Question 1 Query ---------------------------------------- 
+
+postgres=# CREATE VIEW orders_to_cities AS
+postgres-# SELECT ship_city, COUNT(order_id) AS num_of_orders
+postgres-# FROM orders
+postgres-# group by ship_city
+postgres-# ;
+postgres=# SELECT ship_city
+postgres-# FROM orders_to_cities
+postgres-# WHERE num_of_orders=(SELECT MAX(num_of_orders) FROM orders_to_cities);
+
+
+---------------------------------------- Question 1 Results ---------------------------------------- 					
+
+   ship_city    
+----------------
+ Rio de Janeiro
+(1 row)
+
+---------------------------------------- Question 2 Query ---------------------------------------- 
+
+postgres=# CREATE VIEW orders_to_Graz AS
+postgres-# SELECT freight
+postgres-# FROM orders
+postgres-# WHERE ship_city='Graz';
+CREATE VIEW
+postgres=# SELECT freight
+postgres-# FROM orders_to_Graz
+postgres-# WHERE freight=(SELECT MIN(freight) FROM orders_to_Graz);
+
+---------------------------------------- Question 2 Results ---------------------------------------- 					
+
+ freight 
+---------
+   11.19
+(1 row)
+
+---------------------------------------- Question 3 Query ---------------------------------------- 
+
+
+postgres=# SELECT company_name
+postgres-# FROM customers;
+
+
+---------------------------------------- Question 3 Results ---------------------------------------- 					
+
+             company_name             
+--------------------------------------
+ Alfreds Futterkiste
+ Ana Trujillo Emparedados y helados
+ Antonio Moreno Taquería
+ Around the Horn
+ Berglunds snabbköp
+ Blauer See Delikatessen
+ Blondesddsl père et fils
+ Bólido Comidas preparadas
+ Bon app'
+ Bottom-Dollar Markets
+ B's Beverages
+ Cactus Comidas para llevar
+ Centro comercial Moctezuma
+ Chop-suey Chinese
+ Comércio Mineiro
+ Consolidated Holdings
+ Drachenblut Delikatessen
+ Du monde entier
+ Eastern Connection
+ Ernst Handel
+ Familia Arquibaldo
+ FISSA Fabrica Inter. Salchichas S.A.
+ Folies gourmandes
+ Folk och fä HB
+ Frankenversand
+ France restauration
+ Franchi S.p.A.
+ Furia Bacalhau e Frutos do Mar
+ Galería del gastrónomo
+ Godos Cocina Típica
+ Gourmet Lanchonetes
+ Great Lakes Food Market
+ GROSELLA-Restaurante
+ Hanari Carnes
+ HILARION-Abastos
+ Hungry Coyote Import Store
+ Hungry Owl All-Night Grocers
+ Island Trading
+ Königlich Essen
+ La corne d'abondance
+ La maison d'Asie
+ Laughing Bacchus Wine Cellars
+ Lazy K Kountry Store
+ Lehmanns Marktstand
+ Let's Stop N Shop
+ LILA-Supermercado
+ LINO-Delicateses
+ Lonesome Pine Restaurant
+ Magazzini Alimentari Riuniti
+ Maison Dewey
+ Mère Paillarde
+ Morgenstern Gesundkost
+ North/South
+ Océano Atlántico Ltda.
+ Old World Delicatessen
+ Ottilies Käseladen
+ Paris spécialités
+ Pericles Comidas clásicas
+ Piccolo und mehr
+ Princesa Isabel Vinhos
+ Que Delícia
+ Queen Cozinha
+ QUICK-Stop
+ Rancho grande
+ Rattlesnake Canyon Grocery
+ Reggiani Caseifici
+ Ricardo Adocicados
+ Richter Supermarkt
+ Romero y tomillo
+ Santé Gourmet
+ Save-a-lot Markets
+ Seven Seas Imports
+ Simons bistro
+ Spécialités du monde
+ Split Rail Beer & Ale
+ Suprêmes délices
+ The Big Cheese
+ The Cracker Box
+ Toms Spezialitäten
+ Tortuga Restaurante
+ Tradição Hipermercados
+ Trail's Head Gourmet Provisioners
+ Vaffeljernet
+ Victuailles en stock
+ Vins et alcools Chevalier
+ Die Wandernde Kuh
+ Wartian Herkku
+ Wellington Importadora
+ White Clover Markets
+ Wilman Kala
+ Wolski  Zajazd
+(91 rows)
+
+---------------------------------------- Question 4 Query ---------------------------------------- 
+
+postgres=# Select count(product_id),category_id from products as p
+postgres-# 
+postgres-# inner join categories as c on p.category_id = c.category_id
+postgres-# 
+postgres-# group by category_id
+postgres-# 
+postgres-# having count(product_id) > 10.;
+
+---------------------------------------- Question 4 Results ---------------------------------------- 					
+
+ERROR:  column reference "category_id" is ambiguous
+LINE 1: Select count(product_id),category_id from products as p
+
+---------------------------------------- Question 5 Query ---------------------------------------- 
+
+postgres=# SELECT product_name
+postgres-# FROM products
+postgres-# WHERE units_on_order=(SELECT MAX(units_on_order) FROM products);
+
+---------------------------------------- Question 5 Results ---------------------------------------- 					
+
+       product_name        
+---------------------------
+ Louisiana Hot Spiced Okra
+(1 row)
+
+
