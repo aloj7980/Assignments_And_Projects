@@ -1,0 +1,171 @@
+---
+title: "STAT 2600: Lab 12 (2022-11-08)"
+author: "Alex Ojemann"
+output: pdf_document
+geometry: "left=1.5cm,right=1.5cm,top=1.5cm,bottom=1cm"
+---
+
+```{r, setup, echo=FALSE, include=FALSE}
+library(readr)
+library(dplyr)
+```
+
+## Your Task
+
+In this assignment you are asked to generate plots that summarize the out-of-sample model performance (of the model built in the last lab) according to three different metrics as a function of the training set size. The model in questions is the linear model built in the last lab that model sale price
+
+You are provided with this `.Rmd` template to provide a skeleton for your work. You are asked to turn in the rendered PDF with relevant code and plots (so be sure to leave `echo=TRUE` in your code chunk). Be sure to change the name of the author to your name in the YAML header above.
+
+
+## Summarizing the Results Dataframe
+
+In this code chunk, read in the `results_dataframe_lab12.csv` and summarize it by:  
+
+* first filtering to records where `PropTrain >= 0.2` and `PropTrain <= 0.8`  
+* then grouping by `PropTrain` and computing the mean, 10^th^ percentile, and 90^th^ percentile for each of the metrics `RMSE`, `MARE`, and `R2`.
+
+```{r summarizingResults}
+## change the file path to point to the "results_dataframe_lab12.csv" and read the results
+# resultsFilePath = ""
+# resultsDf = read_csv(resultsFilePath)
+
+
+## summarize the reuslts dataframe by filtering to `PropTrain` between 0.2 and 0.8;
+## then compute the mean, 10th and 90th percentile for each metric
+
+resultsDf = read_csv("results_dataframe_lab12.csv", show_col_types = FALSE)
+
+upper_bound <- function(x){quantile(x, probs = .90)}
+lower_bound <- function(x){quantile(x, probs = .10)}
+
+summaryDf = resultsDf %>% 
+    filter(between(PropTrain, .2, .8)) %>% 
+    group_by(PropTrain) %>% 
+    summarise(
+        across(
+            RMSE:R2, 
+            .fns = list(lb = lower_bound, mean = mean, ub = upper_bound),
+            .names = "{.col}_{.fn}"
+        )
+    )
+
+```
+
+
+##  Plotting the Results
+
+Next we will generate plots for each of metrics for each of the `RMSE`, `MARE`, and `R2` metrics. You are asked to plot them side by side like they appear in the assignment details. you can do this by setting the `par(mfrow = c(1, 2))` parameter like you see below.  
+
+For each pair of plot you are asked to: 
+
+* produce a line graph with the `PropTrain` on the x-axis and the relevant metric along the y-axis; you can create a line plot by passing the parameter `type = "l"` to the `plot()` function.  
+
+* change the color of the line to something other than the default color black by using the `col` parameter in `plot()`.
+
+* set the title of the first plot to "Mean <*metric*> by Train Proportion" and the "Mean <*metric*> w/ 80% Interval" where <*metric*> is the name of the relevant metric (e.g. "RMSE").  
+
+* set the label of the x-axis to "Training Set Proportion" and the y-axis <*metric*> on the left plot and blank on the second plot (you can just pass `ylab = ""` to the `plot()` function to do this).
+
+### Plotting the Lower/Upper Bounds
+
+In the second plot, you are asked to plot the 10^th^/90^th^ percentiles against the training set proportion. 
+
+* you can use the `lines()` function add lines to an existing plot.  
+
+* since you are adding these lines to an existing plot, you will need to "make room for" the upper and lower bounds by setting the `ylim` parameter in the `plot()` call.  
+        
+* plot a dashed or dotted line by setting the `lty` parameter to some numeric other than 1 in the `lines()` function.  
+        
+* again change the color of the lines to something other than black by using the `col` parameter in `lines()` function.  
+
+### Plotting RMSE
+
+```{r plottingRmse, fig.width=7.5, fig.height=4}
+par(mfrow = c(1, 2))
+with(summaryDf, plot(
+    PropTrain, RMSE_mean, type = "l", col = "blue",
+    main = "Mean RMSE by Train Proportion",
+    ylab = "RMSE", xlab = "Training Set Proportion"))
+with(summaryDf, plot(
+    PropTrain, RMSE_mean, type = "l", col = "blue",
+    ylim = c(min(RMSE_lb), max(RMSE_ub)),
+    main = "Mean RMSE w/ 80% Interval",
+    ylab = "", xlab = "Proportion Training Set"))
+with(summaryDf, lines(PropTrain, RMSE_lb, lty = 2, col = "blue"))
+with(summaryDf, lines(PropTrain, RMSE_ub, lty = 2, col = "blue"))
+
+## plot the mean value of the RMSE against the proportion training set
+
+
+## plot the mean value of the RMSE against the proportion training set
+### this time set the `ylim` to the min of the RMSE lower bounds up to the max of the RMSE upper bound
+
+
+## add the lower and upper bounds with the `lines()` function
+
+
+```
+
+
+
+### Plotting MARE
+```{r, plottingMare, fig.width=7.5, fig.height=4}
+par(mfrow = c(1, 2))
+
+with(summaryDf, plot(
+    PropTrain, MARE_mean, type = "l", col = "blue",
+    main = "Mean MARE vs. Train Proportion",
+    ylab = "MARE", xlab = "Proportion Training Set"))
+
+with(summaryDf, plot(
+    PropTrain, MARE_mean, type = "l", col = "blue",
+    ylim = c(min(MARE_lb), max(MARE_ub)),
+    main = "Mean MARE w/ 80% Interval",
+    ylab = "", xlab = "Proportion Training Set"))
+with(summaryDf, lines(PropTrain, MARE_lb, type = "l", lty = 2, col = "blue"))
+with(summaryDf, lines(PropTrain, MARE_ub, type = "l", lty = 2, col = "blue"))
+
+
+## plot the mean value of the MARE against the proportion training set
+
+
+## plot the mean value of the MARE against the proportion training set
+### this time set the `ylim` to the min of the MARE lower bounds up to the max of the MARE upper bound
+
+
+## add the lower and upper bounds with the `lines()` function
+
+
+```
+
+
+### Plotting R2
+
+```{r, plottingR2, fig.width=7.5, fig.height=4}
+par(mfrow = c(1, 2))
+
+with(summaryDf, plot(
+    PropTrain, R2_mean, type = "l", col = "blue",
+    main = "Mean R2 vs. Train Proportion",
+    ylab = "R2", xlab = "Proportion Training Set"))
+
+with(summaryDf, plot(
+    PropTrain, R2_mean, type = "l", col = "blue",
+    ylim = c(min(R2_lb), max(R2_ub)),
+    main = "Mean R2 w/ 80% Interval",
+    ylab = "R2", xlab = "Proportion Training Set"))
+
+with(summaryDf, lines(PropTrain, R2_lb, type = "l", lty = 2, col = "blue"))
+with(summaryDf, lines(PropTrain, R2_ub, type = "l", lty = 2, col = "blue"))
+
+
+## plot the mean value of the R2 against the proportion training set
+
+
+## plot the mean value of the R2 against the proportion training set
+### this time set the `ylim` to the min of the R2 lower bounds up to the max of the R2 upper bound
+
+
+## add the lower and upper bounds with the `lines()` function
+```
+
