@@ -1,1 +1,1 @@
-I took this class in Fall 2022 and received a B+ grade.
+I took this class in the Fall 2022 semester and received a B+ grade.
