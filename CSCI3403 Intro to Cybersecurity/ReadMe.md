@@ -1,1 +1,1 @@
-I took this class in the Fall 2022 semester and received an A grade. the vast majority of the assignments were websites designed by our professor with intentional security vulnerabilities that we were to exploit, so very few materials are available for me to include here.
+I took this class in the Fall 2022 semester and received an A grade. the vast majority of the assignments were websites designed by our professor with intentional security vulnerabilities that we were to exploit, so very few materials are recoverable.
