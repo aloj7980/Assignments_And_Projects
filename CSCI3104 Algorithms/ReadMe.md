@@ -1,1 +1,1 @@
-I took this class in the Spring 2022 semester and received an A grade. All assignments weren't timed while all quizzes and exams had a 45 minute time limit.
+I took this class in the Spring 2022 semester and received an A grade. All assignments weren't timed while all quizzes and exams had a 45 minute time limit. Note that not all parts of each assignment were required due to the grading structure of the class.
