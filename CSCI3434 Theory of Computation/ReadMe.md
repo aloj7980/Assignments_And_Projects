@@ -1,1 +1,1 @@
-I took this class in the Fall 2022 semester and received a B+ grade.
+I took this class in the Fall 2022 semester and received a B+ grade. All assignments and Automata Tutor problems had no time limit. All quizzes and exams had a 45 minute time limit. Not all quizzes and exams were included because some were multiple choice problems in Canvas.
