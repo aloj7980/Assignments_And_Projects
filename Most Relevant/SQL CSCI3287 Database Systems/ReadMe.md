@@ -1,0 +1,1 @@
+This was an assignment for CSCI3287 Database Systems where we were to create SQL statements in MySQL and submit them and their results as a pdf. The instructions and database are not recoverable but I got a 100% on the assignment so all the SQL statements perform their intended function.
