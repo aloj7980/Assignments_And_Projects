@@ -1,0 +1,1 @@
+This was my final coding exam for CSCI3202. The instructions were to complete two of the three problems and I completed problems 1 and 2. Problem 1 covered A* search and problem 2 covered reinforcement learning.
