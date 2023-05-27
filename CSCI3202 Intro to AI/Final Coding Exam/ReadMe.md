@@ -1,1 +1,1 @@
-This is the final coding exam for CSCI3202. We had one additional midterm in the middle of the semester but it was a multiple choice exam rather than a coding exam so it is not included here.
+This is the final coding exam for CSCI3202. The instructions were to complete two of the three problems and I completed problems 1 and 2. Problem 1 covered A* search and problem 2 covered reinforcement learning. We had one additional midterm in the middle of the semester but it was a multiple choice exam rather than a coding exam so it is not included here.
