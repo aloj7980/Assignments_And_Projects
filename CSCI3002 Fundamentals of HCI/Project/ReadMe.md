@@ -1,0 +1,1 @@
+This is my final project for CSCI3002. The video presentation was required to be one minute long or less. The Figma prototype from the presentation video can be found here: https://www.figma.com/file/KEBefzJpDSefBZqAH6jMhS/DietAid-(Milestone-3)?type=design&node-id=0-1.
