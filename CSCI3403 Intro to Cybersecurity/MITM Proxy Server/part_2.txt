@@ -1,0 +1,14 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2639
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;}
+{\colortbl;\red255\green255\blue255;}
+{\*\expandedcolortbl;;}
+\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 1. Yes the HTTP traffic is being monitored. We know because there\'92s a new entry in the mitmproxy window that shows the HTTP website I connected to.\
+\
+2. My browser knows this connection isn\'92t secure because it\'92s sending the packets to mitmproxy, which it doesn\'92t know is secure instead of Colorado.edu which it knows is secure.\
+\
+3. Without using the proxy, the certificate for colorado.edu is issued by Let\'92s Encrypt, also known as R3. When the proxy is in use, the certificate says it\'92s issued by mitmproxy.\
+\
+}
