@@ -1,0 +1,199 @@
+---
+title: "Project Paper 2"
+author: "Alex Ojemann"
+date: "2023-04-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+heart_data <- read.csv("heart.csv")
+require(dplyr)
+require(corrplot)
+library(caret)
+library(car)
+```
+
+# Introduction
+
+My project explores the prediction of heart disease based on some common bio indicators. This data is collected from five different hospitals and contains relevant indicators of cardiovascular disease. It’s an interesting problem space because cardiovascular disease is the #1 cause of death globally and it is often said to be significantly related to factors that we can easily measure like blood pressure and cholesterol so it seems like an excellent application for regression. In this paper I will be doing some exploratory data analysis and developing and analyzing my regression model.
+
+# Exploratory Data Analysis
+
+The response variable is whether the person in question has cardiovascular disease, a categorical variable represented by a 0 for those that don’t have cardiovascular disease and a 1 for those that do. The predictors I will use are age, sex, chest pain type, resting blood pressure, cholesterol, fasting blood sugar, resting electrocardiogram results, maximum heart rate achieved, exercise induced angina, oldpeak and ST slope.
+
+## Response Variable
+
+```{r, echo=FALSE}
+# Set graphical parameters to display plots side by side and reduce size
+par(mfrow = c(1, 1), mar = c(4, 4, 2, 1), cex.lab = 0.8, cex.axis = 0.8)
+hist(heart_data$HeartDisease,
+     main = "Histogram of Heart Disease", 
+        xlab = "Heart Disease", 
+        ylab = "Frequency")
+```
+
+My response variable is binary, so there can't be any outliers. We can see that there are slightly more patients that don't have heart disease than patients that do. Before significant outliers in some of the predictor variables were removed in Project Paper 1, there were more instances of heart disease than not. 
+
+This distribution would not occur if it was sampled from the general population because there are nearly as many people with heart disease as there are people without heart disease in this sample while the proportion of people with heart disease in the general population is much smaller, estimated at 7.2% in the United States. This reflects that this data is not representing the general population of people living near these hospitals, but rather the population of patients at the hospitals, specifically those who are at great enough risk of heart disease to have their biometrics in this data sets measured.
+
+```{r,echo=FALSE,results='hide'}
+m <- mean(heart_data$HeartDisease)
+
+sterr <- sqrt((mean(heart_data$HeartDisease)*(1-mean(heart_data$HeartDisease)))/nrow(heart_data))
+
+critical <- qnorm(p=0.025,mean=0,sd=1,lower.tail=FALSE)
+
+m-critical*sterr
+m+critical*sterr
+```
+
+We are 95% confident that the true proportion of patients from the hospitals in this data set that have heart disease is between 0.4413694 and 0.5130542.
+
+## Predictor Variables and Multicollinearity
+
+The predictor variables I will include in model selection from the data set are as follows:
+
+Age: The age of the patient in years.
+
+Sex: The sex of the patient.
+
+Chest Pain Type: The type of chest pain. The possible values are typical angina, atypical angina, non-anginal pain, or asymptomatic.
+
+Resting Blood Pressure: The patient's resting blood pressure in mm Hg.
+
+Cholesterol: The serum cholesterol of the patient in mm/dl.
+
+Fasting Blood Sugar: A binary representation of the fasting blood sugar of the patient. 1 if greater than 120 mg/dl, 0 otherwise.
+
+Resting ECG: The patient's resting electrocardiogram (ECG) results. A resting ECG is a non-invasive test that records the electrical activity of the heart while the patient is at rest. The possible values are normal, having ST-T wave abnormality (ST), or showing probable or definite left ventricular hypertrophy (LVH).
+
+Maximum Heart Rate: The maximum heart rate achieved by the patient.
+
+Exercise Induced Angina: Whether the patient has exercise-induced angina, which is chest pain that occurs during physical activity caused by a temporary reduction in blood flow to the heart due to narrowed or blocked coronary arteries.
+
+Oldpeak: A measurement of the amplitude of Q waves in an ECG. This is measured in "depression," or mm below the baseline level.
+
+ST_Slope: A categorical estinate of the slope of the patient's peak exercise ST segment, which is the segment of the waveform between the end of the S wave and the beginning of the T wave in an ECG. The possible values are downsloping, flat, or upsloping.
+
+```{r,echo=FALSE}
+heart_data_encoded <- model.matrix(~.-1, data = heart_data)
+
+cor_matrix <- cor(heart_data_encoded)
+
+corrplot(cor_matrix, method = "color", type = "upper", tl.cex = 0.8)
+```
+
+None of the predictor variables have a correlation > 0.5 (moderate) other than one hot encoded variables within the same category (ST_SlopeFlat and ST_SlopeUp for example).
+
+Most of the relatively high correlation values are between ExerciseAngina, OldPeak, and ST_Slope. These variables may be more advanced and associated with one another, however their correlations are all less than 0.5 thus it's not worth holding them out of feature selection. One of the few pairs of features outside these three that have a correlation magnitude above 0.35 is age and maximum heart rate, which corroborates domain knowledge, but once again the correlation isn't strong enough to assume they're redundant.
+
+```{r,echo=FALSE}
+model <- glm(HeartDisease ~ ., data = heart_data, family = "binomial")
+vif(model)
+```
+
+In addition, none of the predictor variables have a VIF over 5, with the largest being 1.63, so no predictor variables will be removed from feature selection.
+
+# Model Development
+
+The features for the model will be selected using best subset selection. Unlike forward and backward stepwise feature selection, which add or remove elements until AIC cannot be lowered any further, best subset selection won't fall into a local minimum of AIC and will always find the model with the lowest possible AIC because it tries every possible model. This is very computationally expensive because it has to evaluate many more models than forward or backward stepwise selection, but it can be used here because only one model is being created.
+
+```{r,echo=FALSE}
+library(leaps)
+library(bestglm)
+heart_data_encoded <- as.data.frame(model.matrix(~.-1, data = heart_data))
+heart_data_encoded  <- subset(heart_data_encoded , select = -c(X,SexF))
+best_subset <- bestglm(Xy=heart_data_encoded,family=binomial,method='exhaustive',IC='AIC')
+```
+
+```{r,echo=FALSE}
+summary(best_subset$BestModel)
+```
+
+## Real World Implications of Estimates
+
+The estimates in the model above represent the coefficients of each predictor variable with the log odds of the heart disease variable. They suggest that:
+
+A higher age results in a slightly increased risk of heart disease, as expected.
+
+A higher resting blood pressure results in a slightly increased risk of heart disease, as expected.
+
+Having Exercise Induced Angina results in an increased risk of heart disease.
+
+A higher oldpeak value results in an increased risk of heart disease.
+
+Males have a higher risk of heart disease than females.
+
+The chest pain types typical angina, atypical angina, and non-anginal pain have very similar associated risks of heart disease but asymptomatic chest pain is associated with significantly higher risk.
+
+A flat ST slope is associated with a higher risk of heart disease than a downward slope, however, an upward slope is associated with lower risk than both. This means that there is no continuous trend in heart disease risk as ST slope increases, rather, it peaks at a flat ST slope.
+
+The only feature that we do not have evidence to say is nonzero at the 0.05 significance level is resting blood pressure, however, we do have evidence to say it's nonzero at the 0.1 significance level so it will not be removed.
+
+## Assumptions
+
+Since our interest is prediction rather than inference, there are just two assumptions that need to be met.
+
+The first is that all of the predictor variables are linearly correlated with the log odds of the response variable. This can be demonstrated visually using the following scatterplots:
+
+```{r,echo=FALSE}
+library(ggplot2)
+library(cowplot)
+model_vars <- names(coef(best_subset$BestModel)[-1])
+# Create a function to plot log odds of response variable vs predictor variable
+plot_log_odds <- function(data, response_var, predictor_var) {
+  ggplot(data, aes_string(x = predictor_var, y = response_var)) +
+    geom_smooth(method = "glm", method.args = list(family = "binomial"), se = FALSE) +
+    xlab(paste("Predictor", predictor_var)) +
+    ylab("Log Odds HD") +
+    ggtitle(paste("Log Odds HD vs", predictor_var))
+}
+
+# Create a list of plot objects
+plot_list <- lapply(model_vars, function(var) {
+  plot_log_odds(heart_data_encoded, "HeartDisease", var)
+})
+
+# Display the plots in a grid
+plot_grid(plotlist = plot_list, nrow = 3, ncol = 4)
+
+
+```
+
+We can see very close to linear trendlines for each of the variables so the linearity assumption is met.
+
+The other assumption that must be met is independence of observations. We would not expect whether one patient in any of the hospitals from the data set has heart disease to affect whether another patient has it, so we expect this assumption to be met. One potential way in which this isn't the case is if relatives go to the same hospital and their shared genetics makes it more likely that they have the same medical conditions, but we do not expect this to occur at a large scale.
+
+
+# Model Analysis
+
+Since our interest is prediction rather than inference, we will evaluate the accuracy of the model using k fold cross validation, specifically using 10 folds as that has been deemed an optimal number of folds by some machine learning experts.
+
+```{r,echo=FALSE,results='hide'}
+
+# Specify the cross-validation method
+ctrl <- trainControl(method = "cv", number = 10)
+
+heart_data_encoded$HeartDisease <- factor(heart_data_encoded$HeartDisease, levels = c(0, 1))
+
+# Train the model using logistic regression and cross-validation
+model <- train(HeartDisease ~ Age + SexM + ChestPainTypeTA + ChestPainTypeATA + ChestPainTypeNAP + RestingBP + ExerciseAnginaY + Oldpeak + ST_SlopeFlat + ST_SlopeUp, data = heart_data_encoded, method = "glm", family = "binomial", trControl = ctrl)
+
+# Print the accuracy
+print(model$results$Accuracy)
+```
+
+The result is an average accuracy of 0.866 across the 10 folds. A similar application of logistic regression to predict heart disease in the Journal of Pharmaceutical Negative Results reported an accuracy of 0.8868, a similar value.
+
+## Real World Examples and Applications
+
+One example of the use of this predictive model is to predict the possibility of heart disease for someone who believes they may be at risk. Not only can the model classify whether they have it with over 86% accuracy, it can give an associated probability. This is useful because a person with 90% risk of heart disease may need to be more urgent in seeking treatment than someone with a 55% risk, even though both would be classified as having heart disease by the model. On the whole, with the great expense that medical care is for many, this can be a useful tool in determining whether treatment and/or preventative measures are necessary.
+
+In addition, this moodel can be useful for understanding the meaning of each of the predictor variables. It is relatively common knowledge that a higher age and resting blood pressure result in an increased risk of heart disease, but those that aren't experts in the field may not understand the meaning of oldpeak or ST slope and this provides numerical evidence for their effect on heart disease.
+
+# Conclusion
+
+In this paper I've thoroughly analyzed the data, built a predictive model using exhaustive feature selection techniques to ensure the best possible model in terms of AIC, and computed its accuracy using cross validation. An accuracy of 0.866 exceeded my expectations and is very close to the accuracy of a model from a significant research paper. Other than that none of the results surprised me much as the commonly known predictor variables all had slope estimates that made sense in context. 
+
+One thing I would do if I had more time for this project is to create and explore a contingency table to dive further into evaluating the performance of the model than just reporting the accuracy from cross validation. This would be ideal because the two types of misclassifications in the context of the problem are not of equivalent consequence. If the model says the patient has heart disease they may spend money on medical care that they didn't need to, but if the model says they don't have it and they really do, they could have serious medical consequences and die, which is obviously worse, so we may want to accept more of the former to reduce the rate of the latter.
