@@ -1,1 +1,1 @@
-I took this class in Fall 2023.
+I took this class in the Fall 2023 semester.
