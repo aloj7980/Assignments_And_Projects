@@ -1,0 +1,1 @@
+The final project for this class included a project proposal due on 11/15/2023 and a Final Project Report due on 12/13/2023.
