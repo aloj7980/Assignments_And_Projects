@@ -1,0 +1,1 @@
+This course had a final project that was assigned during the latter half of the course. I worked in a group with two other students. It was partially guided, with instructions in the 'Constrained_Lsq_Description.pdf' file. Not all code is included here.
