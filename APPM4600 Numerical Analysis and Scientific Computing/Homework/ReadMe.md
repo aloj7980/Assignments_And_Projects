@@ -1,1 +1,1 @@
-# testrep homework
+Homework assignments for APPM4600
