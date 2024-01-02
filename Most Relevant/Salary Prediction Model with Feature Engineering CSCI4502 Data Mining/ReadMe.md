@@ -1,0 +1,1 @@
+This is a course project I completed with two other students for CSCI4502 Data Mining. We created a model to predict salaries for data science related jobs using a data set from Kaggle merged with US Census population data. Only the final report is included here, see the 'CSCI4502 Data Mining' folder for all data and code used.
