@@ -1,1 +1,1 @@
-This was a take home midterm due on 10/7/2023. I scored a 400/400.
+This was a take home midterm due on 10/7/2023. I scored a 400/400. The questions can be found in the 'Midterm_Questions.docx' file and my answers can be found in the 'Data Mining Midterm.pdf' file. All additional files are code and data sets that correspond to certain problems in the exam.
