@@ -1,1 +1,1 @@
-This was an individual final coding exam for CSCI3202 Intro to AI, which I took in the fall 2021 semester. The instructions were to complete two of the three problems and I completed problems 1 and 2. Problem 1 covered A* search and problem 2 covered reinforcement learning.
+This was an individual final coding exam for CSCI3202 Intro to AI, which I took in the Fall 2021 semester. The instructions were to complete two of the three problems and I completed problems 1 and 2. Problem 1 covered A* search and problem 2 covered reinforcement learning.
