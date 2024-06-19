@@ -1,4 +1,4 @@
-NBA Inflation Adjusted Per 75 Possessions Stat Calculator
+# NBA Inflation Adjusted Per 75 Possessions Stat Calculator
 
 This is a personal project I worked on outside of class in the Summer of 2024. The end product contains clear descriptions of all steps and is designed to be easy to use even for those not familiar with inflation adjusted NBA stats, so I encourage you to test it out if you're curious.
 
