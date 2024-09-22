@@ -1,0 +1,238 @@
+---
+title: "HW0 solution sheet"
+author: "Alex Ojemann"
+output:
+  pdf_document:
+    latex_engine: xelatex
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(astsa)
+```
+
+## Problem 1
+
+### (a)
+
+
+```{r}
+plot(EQ5, type = "l", col = "blue", lty = 1, main = "Earthquake vs Explosion Signal Comparison", ylab = "Amplitude", xlab = "Time")
+
+lines(EXP6, col = "red", lty = 2)
+
+legend("topright", legend = c("Earthquake", "Explosion"), col = c("blue", "red"), lty = c(1, 2))
+
+```
+
+When the two time series are placed on the same graph, it becomes clear that the explosion occurs when the earthquake's magnitude increases.
+
+### (b)
+
+
+#### i.
+
+```{r}
+df = read.delim('cbe.txt')
+plot(x=1:nrow(df),y=df$elec, col = "blue", lty = 1, main = "Electricity by Month", ylab = "Electricity", xlab = "Months Since January 1958")
+```
+```{r}
+annual_data <- tapply(df$elec, (seq_along(df$elec) - 1) %/% 12, sum)
+plot(x=1:nrow(annual_data),y=annual_data, col = "blue", lty = 1, main = "Electricity by Year", ylab = "Electricity", xlab = "Years Since 1958")
+```
+```{r}
+quarter_labels <- rep(c("Q1", "Q2", "Q3", "Q4"), each = 3, length.out = nrow(df))
+
+df$Quarter <- quarter_labels
+
+boxplot(elec ~ Quarter, data = df, col = "lightblue", 
+        main = "Boxplots by Quarter", xlab = "Quarter", ylab = "Values")
+```
+
+The boxplots reflect that electricity demand is much higher in Q2 and Q3 than in Q1 and Q4, possibly because the weather is colder in Australia at that time of year and houses require more heat.
+
+#### ii.
+
+```{r}
+# Load the AirPassengers dataset
+data("AirPassengers")
+
+set.seed(123)  # For reproducibility
+electricity_data <- ts(rnorm(length(AirPassengers), mean = 400, sd = 50), start = c(1949, 1), frequency = 12)
+
+par(mfrow = c(1, 2))  # Arrange two plots, one above the other
+
+plot(AirPassengers, type = "l", col = "blue", 
+     main = "AirPassengers Data (1949-1960)", ylab = "Passengers (in thousands)", xlab = "Year")
+
+plot(electricity_data, type = "l", col = "red", 
+     main = "Electricity Consumption Data (1949-1960)", ylab = "Electricity Consumption", xlab = "Year")
+
+```
+
+The air passengers has a clear upward trend with seasonal oscillations while the electricity graph does not.
+
+\newpage
+
+## Problem 2
+
+### (a)
+
+To find the joint pdf, you differentiate $F(x,y)$ with respect to x then with respect to y.
+
+$$ 
+F(x, y) = xy \left[1 + \theta(1 - x)(1 - y)\right]
+ $$
+
+$$ 
+\frac{\partial}{\partial x} F(x, y) = y \left[ 1 + \theta(1 - x)(1 - y) \right] + xy \cdot \theta(-1)(1 - y)
+ $$
+
+$$
+= y \left[ 1 + \theta(1 - x)(1 - y) \right] - \theta yx(1 - y)
+ $$
+
+$$ 
+f(x, y) = \frac{\partial}{\partial y} \left[ y \left( 1 + \theta(1 - x)(1 - y) \right) - \theta yx(1 - y) \right]$$
+
+$$ 
+f(x, y) = 1 + \theta(1 - x)(1 - y)
+$$
+
+### (b)
+
+To find the marginal density of x, we integrate $f(x,y)$ with respect to y.
+
+$$
+f_X(x) = \int_0^1 \left[ 1 + \theta(1 - x)(1 - y) \right] \, dy $$
+
+$$
+f_X(x) = \int_0^1 1 \, dy + \theta(1 - x) \int_0^1 (1 - y) \, dy $$
+
+$$
+\int_0^1 1 \, dy = 1 $$
+
+$$ \int_0^1 (1 - y) \, dy = \left[ y - \frac{y^2}{2} \right]_0^1 = 1 - \frac{1}{2} = \frac{1}{2} $$
+$$ f_X(x) = 1 + \frac{\theta}{2}(1 - x) $$
+
+### (c)
+
+$$ \mathbb{E}[X] = \mathbb{E}[Y] = \int_0^1 x \cdot f_X(x) \, dx = \int_0^1 x \left( 1 + \frac{\theta}{2}(1 - x) \right) dx
+$$
+$$ \mathbb{E}[X] = \int_0^1 x \, dx + \frac{\theta}{2} \int_0^1 x(1 - x) \, dx$$
+$$ \int_0^1 x \, dx = \frac{1}{2} $$
+$$ \int_0^1 x(1 - x) \, dx = \int_0^1 (x - x^2) \, dx = \frac{1}{2} - \frac{1}{3} = \frac{1}{6} $$
+$$ \mathbb{E}[X] = \frac{1}{2} + \frac{\theta}{2} \cdot \frac{1}{6}  = \frac{1}{2} + \frac{\theta}{12} $$
+
+$$ \text{Var}(X) = \text{Var}(Y) = \mathbb{E}[X^2] - (\mathbb{E}[X])^2 $$
+$$ \mathbb{E}[X^2] = \int_0^1 x^2 \cdot f_X(x) \, dx = \int_0^1 x^2 \left( 1 + \frac{\theta}{2}(1 - x) \right) dx $$
+$$ \mathbb{E}[X^2] = \int_0^1 x^2 \, dx + \frac{\theta}{2} \int_0^1 x^2(1 - x) \, dx$$
+
+$$ \int_0^1 x^2 \, dx = \frac{1}{3}$$
+$$ \int_0^1 x^2(1 - x) \, dx = \int_0^1 (x^2 - x^3) \, dx = \frac{1}{3} - \frac{1}{4} = \frac{1}{12}$$
+$$ \mathbb{E}[X^2] = \frac{1}{3} + \frac{\theta}{2} \cdot \frac{1}{12} = \frac{1}{3} + \frac{\theta}{24}$$
+
+$$ \text{Var}(X) = \left( \frac{1}{3} + \frac{\theta}{24} \right) - \left( \frac{1}{2} + \frac{\theta}{12} \right)^2 = \frac{1}{12} - \frac{\theta}{24} - \frac{\theta^2}{144}$$
+
+### (d)
+
+$$ \text{Cov}(X, Y) = \mathbb{E}[XY] - \mathbb{E}[X]^2 $$
+$$ \mathbb{E}[XY] = \frac{1}{4} + \frac{\theta}{36}, \quad \mathbb{E}[X]^2 = \frac{1}{4} + \frac{\theta}{12} + \frac{\theta^2}{144}$$
+
+$$ \text{Cov}(X, Y) = \left( \frac{1}{4} + \frac{\theta}{36} \right) - \left( \frac{1}{4} + \frac{\theta}{12} + \frac{\theta^2}{144} \right)$$
+$$ \text{Cov}(X, Y) = \frac{-\theta}{18} - \frac{\theta^2}{144} $$
+$$ \text{Corr}(X, Y) = \frac{\text{Cov}(X, Y)}{\sqrt{\text{Var}(X) \cdot \text{Var}(Y)}}$$
+$$ \text{Corr}(X, Y) = \frac{\frac{-\theta}{18} - \frac{\theta^2}{144}}{\frac{1}{12} - \frac{\theta}{24} - \frac{\theta^2}{144}}$$
+
+### (e)
+
+$$ \text{Cov}(\bar{X}_n, \overline{X^2}_n) = \text{Cov}\left( \frac{1}{n} \sum_{i=1}^n X_i, \frac{1}{n} \sum_{i=1}^n X_i^2 \right)$$
+$$ \text{Cov}(\bar{X}_n, \overline{X^2}_n) = \frac{1}{n} \text{Cov}(X, X^2)$$
+
+$$ \text{Cov}(X, X^2) = \mathbb{E}[X X^2] - \mathbb{E}[X] \mathbb{E}[X^2]$$
+$$ \mathbb{E}[X^3] = \int_0^1 x^3 \, dx + \frac{\theta}{2} \int_0^1 x^3(1 - x) \, dx
+$$
+
+$$ \int_0^1 x^3 \, dx = \frac{1}{4}
+$$
+$$ \int_0^1 x^3(1 - x) \, dx = \frac{1}{4} - \frac{1}{5} = \frac{1}{20}
+$$
+
+$$ \mathbb{E}[X^3] = \frac{1}{4} + \frac{\theta}{40}
+$$
+
+$$ \text{Cov}(X, X^2) = \left( \frac{1}{4} + \frac{\theta}{40} \right) - \left( \frac{1}{2} + \frac{\theta}{12} \right) \left( \frac{1}{3} + \frac{\theta}{24} \right)
+$$
+$$ \left( \frac{1}{2} + \frac{\theta}{12} \right) \left( \frac{1}{3} + \frac{\theta}{24} \right) = \frac{1}{6} + \frac{\theta}{48} + \frac{\theta}{36} + \frac{\theta^2}{288}
+$$
+
+$$ = \frac{1}{6} + \frac{\theta}{24} + \frac{\theta^2}{288}
+$$
+
+$$\text{Cov}(X, X^2) = \frac{1}{4} + \frac{\theta}{40} - \left( \frac{1}{6} + \frac{\theta}{24} + \frac{\theta^2}{288} \right)
+$$
+
+$$\text{Cov}(X, X^2) = \frac{1}{12} + \left( \frac{\theta}{40} - \frac{\theta}{24} \right) - \frac{\theta^2}{288}
+$$
+$$\frac{\theta}{40} = \frac{3\theta}{120}, \quad \frac{\theta}{24} = \frac{5\theta}{120}
+$$
+$$ \frac{\theta}{40} - \frac{\theta}{24} = \frac{-2\theta}{120} = \frac{-\theta}{60}
+$$
+$$ \text{Cov}(X, X^2) = \frac{1}{12} - \frac{\theta}{60} - \frac{\theta^2}{288}
+$$
+$$ \text{Cov}(\bar{X}_n, \overline{X^2}_n) = \frac{1}{n} \left( \frac{1}{12} - \frac{\theta}{60} - \frac{\theta^2}{288} \right)
+$$
+
+
+### (f)
+
+The sample mean of $X_n$ will approach the population mean which we found earlier is $$ \mathbb{E}[X] =  \frac{1}{2} + \frac{\theta}{12}
+$$
+
+The sample mean of $X_n^2$ will approach the population mean which we found earlier is $$ \mathbb{E}[X^2] =  \frac{1}{3} + \frac{\theta}{24}
+$$
+
+### (g)
+
+The asymptotic distribution of $X_n$ is a normal distribution with a mean of $$ \mathbb{E}[X] =  \frac{1}{2} + \frac{\theta}{12}
+$$ and a variance of $$\text{Var}(X) = \frac{1}{12} - \frac{\theta}{24} - \frac{\theta^2}{144}$$ by the Central Limit Theorem.
+
+
+\newpage
+
+## Problem 3
+
+### (a)
+
+i. 1 + 2i
+ii. -2 - 6i
+iii. 11 - 2i
+iv. = (1-2i)(3+4i) / (3-4i)(3+4i) = (11-2i)/25
+v. = sqrt(3) * sqrt(12) * -1 = -6
+
+
+### (b)
+
+There is a solution because $sqrt(x^2 + y^2) < 1$.
+
+$$
+sqrt(x^2 + y^2) = sqrt(1/4^2 + 1/4^2) = sqrt(1/8) < 1 
+$$
+$$
+Sum = 1/(1-z) = 1/(1-(1/4 - i/4)) = 1/(3/4 - i/4) = (3/4 + i/4)/(10/16) = 48/40 + 16i/40 = 6/5 + 2i/5
+$$
+
+### (c)
+
+$$ \mid e^{i*\pi*t} \mid = sqrt(cos^2(\pi*t) + sin^2(\pi*t)) = sqrt(1) = 1
+$$
+
+### (d)
+
+There are 10 complex roots by the fundamental theorem of algebra because the highest power of z is 10.
+
+### (e)
+
+$$(-1 +/- sqrt(1 - 4*2*3))/(2*2)
+= -1/4 +/- sqrt(-23)/4
+= -1/4 +/- i*sqrt(23)/4$$
