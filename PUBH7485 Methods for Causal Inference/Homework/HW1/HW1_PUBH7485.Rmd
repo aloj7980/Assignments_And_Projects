@@ -1,0 +1,244 @@
+---
+title: "PUBH7485 Homework 1"
+author: "Alex Ojemann"
+date: "2024-09-20"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tableone)
+require(causaldata)
+require(labelled)
+```
+
+## Problem 1
+
+### NHEFS data
+
+```{r,echo=FALSE}
+data("nhefs", package = "causaldata")
+
+nhefs <- nhefs %>%
+  set_variable_labels(
+    seqn = "Sequence Number",
+    qsmk = "Quit Smoking",
+    sbp = "Systolic Blood Pressure",
+    dbp = "Diastolic Blood Pressure",
+    sex = "Sex",
+    age = "Age",
+    race = "Race",
+    income = "Income",
+    marital = "Marital Status",
+    school = "Years of School Completed",
+    education = "Education Level",
+    ht = "Height",
+    wt71 = "Weight in 1971",
+    wt82 = "Weight in 1982",
+    wt82_71 = "Weight Change 1971-1982",
+    birthplace = "Birthplace",
+    smokeintensity = "Cigarettes per Day (Current)",
+    smkintensity82_71 = "Cigarettes per Day Change 1971-1982",
+    smokeyrs = "Smoking Years",
+    asthma = "Asthma Diagnosis",
+    bronch = "Chronic Bronchitis",
+    tb = "Tuberculosis",
+    hf = "Heart Failure",
+    hbp = "High Blood Pressure",
+    pepticulcer = "Peptic Ulcer",
+    colitis = "Colitis",
+    hepatitis = "Hepatitis",
+    chroniccough = "Chronic Cough",
+    hayfever = "Hay Fever",
+    diabetes = "Diabetes",
+    polio = "Polio",
+    tumor = "Tumor",
+    nervousbreak = "Nervous Breakdown",
+    alcoholpy = "Alcohol Use per Year",
+    alcoholfreq = "Alcohol Frequency",
+    alcoholtype = "Type of Alcohol",
+    alcoholhowmuch = "Amount of Alcohol Consumed",
+    pica = "Pica",
+    headache = "Headache",
+    otherpain = "Other Pain",
+    weakheart = "Weak Heart",
+    allergies = "Allergies",
+    nerves = "Nervousness",
+    lackpep = "Lack of Energy",
+    hbpmed = "On Hypertension Medication",
+    boweltrouble = "Bowel Trouble",
+    wtloss = "Weight Loss",
+    infection = "Infection",
+    active = "Physically Active",
+    exercise = "Exercise Level",
+    birthcontrol = "Birth Control",
+    pregnancies = "Number of Pregnancies",
+    cholesterol = "Cholesterol Level",
+    hightax82 = "High Cigarette Tax in 1982",
+    price71 = "Price of Cigarettes in 1971",
+    price82 = "Price of Cigarettes in 1982",
+    tax71 = "Cigarette Tax in 1971",
+    tax82 = "Cigarette Tax in 1982",
+    price71_82 = "Price Change 1971-1982",
+    tax71_82 = "Tax Change 1971-1982",
+    id = "ID Number",
+    censored = "Censored",
+    older = "Older Age Group"
+  )
+
+# Recode categorical variables to have meaningful levels
+nhefs$sex <- factor(nhefs$sex, levels = c(0, 1), labels = c("Male", "Female"))
+nhefs$race <- factor(nhefs$race, levels = c(0, 1, 2), labels = c("White", "Black", "Other"))
+nhefs$qsmk <- factor(nhefs$qsmk, levels = c(0, 1), labels = c("No", "Yes"))
+nhefs$marital <- factor(nhefs$marital, levels = c(1, 2, 3, 4, 5), 
+                        labels = c("Married", "Widowed", "Divorced", "Separated", "Never Married"))
+
+# Remove unwanted follow-up columns
+nhefs_clean <- nhefs[, !(names(nhefs) %in% c("death", "yrdth", "dadth", "modth"))]
+
+vars <- setdiff(names(nhefs_clean), c("seqn", "id"))
+
+table1 <- CreateTableOne(vars = vars, strata = "qsmk", data = nhefs_clean, test = FALSE)
+
+print(table1, varLabels = TRUE, smd = TRUE)
+```
+
+## Black Politicians Data Set
+
+```{r,echo=FALSE}
+data("black_politicians", package = "causaldata")
+
+#Label columns
+black_politicians <- black_politicians %>%
+  set_variable_labels(
+    leg_black = "Black Legislator",
+    treat_out = "Treatment (Outcome in Black Rep Presence)",
+    responded = "Responded to Survey",
+    totalpop = "Total Population",
+    medianhhincom = "Median Household Income",
+    black_medianhh = "Black Median Household Income",
+    white_medianhh = "White Median Household Income",
+    blackpercent = "Black Population Percent",
+    statessquireindex = "State Squire Index",
+    nonblacknonwhite = "Non-Black, Non-White Population Percent",
+    urbanpercent = "Urban Population Percent",
+    leg_senator = "Legislator is Senator",
+    leg_democrat = "Legislator is Democrat",
+    south = "Southern State"
+  )
+
+#Label Categorical variable levels
+black_politicians$leg_black <- factor(black_politicians$leg_black, levels = c(0, 1), labels = c("No", "Yes"))
+black_politicians$treat_out <- factor(black_politicians$treat_out, levels = c(0, 1), labels = c("Control", "Treated"))
+black_politicians$responded <- factor(black_politicians$responded, levels = c(0, 1), labels = c("No", "Yes"))
+black_politicians$leg_senator <- factor(black_politicians$leg_senator, levels = c(0, 1), labels = c("No", "Yes"))
+black_politicians$leg_democrat <- factor(black_politicians$leg_democrat, levels = c(0, 1), labels = c("No", "Yes"))
+black_politicians$south <- factor(black_politicians$south, levels = c(0, 1), labels = c("No", "Yes"))
+
+vars <- c("responded", "totalpop", "medianhhincom", "black_medianhh", "white_medianhh", 
+          "blackpercent", "statessquireindex", "nonblacknonwhite", "urbanpercent", 
+          "leg_senator", "leg_democrat", "south")
+
+table1 <- CreateTableOne(vars = vars, strata = "leg_black", data = black_politicians, test = FALSE)
+
+print(table1, varLabels = TRUE, smd = TRUE)
+
+```
+
+
+
+
+## Problem 2
+
+### NHEFS data set
+
+Average treantment effect, standard error, and 95% confidence interval of weight change, SBP, and DBP for whther the subject quit smoking:
+
+```{r,echo=FALSE}
+
+library(dplyr)
+
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+nhefs <- nhefs %>%
+  set_variable_labels(
+    qsmk = "Quit Smoking Status",
+    wt82_71 = "Weight Change (1971-1982)",
+    sbp = "Systolic Blood Pressure",
+    dbp = "Diastolic Blood Pressure"
+  )
+
+calculate_ate <- function(response_var, stratification_var) {
+  treated <- nhefs %>% filter(!!sym(stratification_var) == 1)
+  control <- nhefs %>% filter(!!sym(stratification_var) == 0)
+
+  mean_treated <- mean(treated[[response_var]], na.rm = TRUE)
+  mean_control <- mean(control[[response_var]], na.rm = TRUE)
+
+  ATE <- mean_treated - mean_control
+  
+  n_treated <- sum(!is.na(treated[[response_var]]))
+  n_control <- sum(!is.na(control[[response_var]]))
+  sd_treated <- sd(treated[[response_var]], na.rm = TRUE)
+  sd_control <- sd(control[[response_var]], na.rm = TRUE)
+  pooled_sd <- sqrt(((sd_treated^2 / n_treated) + (sd_control^2 / n_control)))
+
+  z_value <- 1.96  # Z-score for 95% confidence interval
+  lower_CI <- ATE - z_value * pooled_sd
+  upper_CI <- ATE + z_value * pooled_sd
+  
+  return(list(
+    ATE = ATE,
+    SE = pooled_sd,
+    CI_95 = c(lower_CI, upper_CI)
+  ))
+}
+
+result_wt82_71 <- calculate_ate("wt82_71", "qsmk")
+
+result_sbp <- calculate_ate("sbp", "qsmk")
+
+result_dbp <- calculate_ate("dbp", "qsmk")
+
+list(
+  Weight_Change_1971_1982 = result_wt82_71,
+  Systolic_BP = result_sbp,
+  Diastolic_BP = result_dbp
+)
+
+```
+
+
+
+### Black Politicians Data Set
+
+Average treantment effect, standard error, and 95% confidence interval of letter response rate for whther the politician is black:
+
+```{r,echo=FALSE}
+
+library(dplyr)
+
+black_leg <- black_politicians %>% filter(leg_black == "Yes")
+non_black_leg <- black_politicians %>% filter(leg_black == "No")
+
+p_black_leg <- mean(black_leg$responded == "Yes", na.rm = TRUE)
+p_non_black_leg <- mean(non_black_leg$responded == "Yes", na.rm = TRUE)
+
+ATE <- p_black_leg - p_non_black_leg
+
+n_black_leg <- nrow(black_leg)
+n_non_black_leg <- nrow(non_black_leg)
+SE <- sqrt((p_black_leg * (1 - p_black_leg) / n_black_leg) + (p_non_black_leg * (1 - p_non_black_leg) / n_non_black_leg))
+
+z_value <- 1.96  # Z-score for 95% confidence interval
+lower_CI <- ATE - z_value * SE
+upper_CI <- ATE + z_value * SE
+
+list(
+  ATE = ATE,
+  SE = SE,
+  CI_95 = c(lower_CI, upper_CI)
+)
+```
+
