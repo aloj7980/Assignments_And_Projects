@@ -1,0 +1,271 @@
+---
+title: "Homework 1"
+author: "Alex Ojemann"
+date: "2024-09-30"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+require(tinytex)
+```
+
+## Problem 1
+
+$$\gamma(0) = 6 * \sigma^2$$
+$$\gamma(1) = \gamma(-1) = 4*\sigma^2$$
+$$\rho(0) = 6 * \sigma^2 / 6 * \sigma^2 = 1$$
+
+$$\rho(1) = \rho(-1) = 4*\sigma^2 / 6 * \sigma^2 = 2/3$$  
+```{r,echo=FALSE}
+# Set the seed for reproducibility
+set.seed(123)
+
+# Generate n = 100 observations from white noise Wt ~ N(0,1)
+n <- 100
+W <- rnorm(n, mean = 0, sd = 1)
+
+# Compute Xt = Wt+1 + 2Wt + Wt-1
+X <- rep(0, n)  # Preallocate space for Xt
+
+for (t in 2:(n-1)) {
+  X[t] <- W[t-1] + 2*W[t] + W[t+1]
+}
+
+# Function to compute the ACF "by hand" for lags from -max_lag to max_lag
+compute_acf_by_hand <- function(X, max_lag) {
+  n <- length(X)
+  X_mean <- mean(X)
+  acf_vals <- numeric(2 * max_lag + 1)  # Preallocate space for ACF values
+  
+  # Compute ACF for lags from -max_lag to max_lag
+  for (h in -max_lag:max_lag) {
+    if (h >= 0) {
+      cov_h <- sum((X[1:(n-h)] - X_mean) * (X[(h+1):n] - X_mean)) / (n - h)
+    } else {
+      cov_h <- sum((X[(1-h):n] - X_mean) * (X[1:(n+h)] - X_mean)) / (n + h)
+    }
+    var_X <- sum((X - X_mean)^2) / n
+    acf_vals[h + max_lag + 1] <- cov_h / var_X
+  }
+  
+  return(acf_vals)
+}
+
+
+# Theoretical ACF based on earlier work
+theoretical_acf <- function(h) {
+  if (h == 0) {
+    return(1)  # ACF at lag 0 is 1
+  } else if (abs(h) == 1) {
+    return(2/3)  # ACF at lag ±1 is 2/3
+  } else {
+    return(0)  # ACF is 0 for other lags
+  }
+}
+
+# Compute the sample ACF "by hand" for Xt
+max_lag <- 10  # Set the maximum lag to 10 for the plot
+sample_acf <- compute_acf_by_hand(X, max_lag)  # Now computes ACF for -10 to 10
+
+# Theoretical ACF values for lags from -10 to 10
+lags <- -max_lag:max_lag  # Set the x-axis from -10 to 10
+true_acf <- sapply(abs(lags), theoretical_acf)  # Reflect true ACF to negative lags
+
+# Adjust figure margins using the mar parameter
+par(mar = c(4, 4, 2, 2))
+
+# Plot the true ACF
+par(mfrow = c(2, 1))  # Two plots stacked vertically
+
+plot(lags, true_acf, type = "h", lwd = 2, col = "blue", ylim = c(0, 1), xlim = c(-10, 10),
+     main = "True ACF of X_t", xlab = "Lag", ylab = "ACF", cex.lab = 1.5, cex.axis = 1.2)
+points(lags, true_acf, col = "blue", pch = 16)
+
+# Plot the sample ACF
+plot(lags, sample_acf, type = "h", lwd = 2, col = "red", ylim = c(0, 1), xlim = c(-10, 10),
+     main = "Sample ACF of X_t", xlab = "Lag", ylab = "ACF", cex.lab = 1.5, cex.axis = 1.2)
+points(lags, sample_acf, col = "red", pch = 16)
+
+# Restore default margin settings for the combined plot
+par(mfrow = c(1, 1))  # Single plot again
+par(mar = c(4, 4, 2, 2))  # Adjust margins again for the combined plot
+
+# Plot both ACFs on the same plot for comparison
+plot(lags, true_acf, type = "h", lwd = 2, col = "blue", ylim = c(-0.2, 1), xlim = c(-10, 10),
+     main = "True ACF vs Sample ACF", xlab = "Lag", ylab = "ACF", cex.lab = 1.5, cex.axis = 1.2)
+points(lags, true_acf, col = "blue", pch = 16)
+
+# Add sample ACF on the same plot
+lines(lags, sample_acf, type = "h", lwd = 2, col = "red")
+points(lags, sample_acf, col = "red", pch = 16)
+
+# Add a legend to differentiate the true ACF and the sample ACF
+legend("topright", legend = c("True ACF", "Sample ACF"), col = c("blue", "red"), lwd = 2, pch = 16)
+
+```
+
+## Problem 2
+
+### Part a
+
+```{r,echo=FALSE,message=FALSE, warning=FALSE}
+# Load necessary libraries
+library(forecast)
+
+# Load the Johnson & Johnson data (assuming you have it loaded as 'jj')
+# If using built-in R dataset
+data("JohnsonJohnson")
+jj <- JohnsonJohnson
+
+# Step 1: Log-transform the data
+log_jj <- log(jj)
+
+# Step 2: Create a time variable for the trend
+time <- time(jj)  # Extract the time index from the data
+
+# Step 3: Create quarter dummy variables for seasonality
+Q1 <- ifelse(cycle(jj) == 1, 1, 0)  # Q1 dummy variable
+Q2 <- ifelse(cycle(jj) == 2, 1, 0)  # Q2 dummy variable
+Q3 <- ifelse(cycle(jj) == 3, 1, 0)  # Q3 dummy variable
+Q4 <- ifelse(cycle(jj) == 4, 1, 0)  # Q4 dummy variable
+
+# Step 4: Fit the regression model with trend and seasonal components
+fit <- lm(log_jj ~ 0 + time + Q1 + Q2 + Q3 + Q4)
+
+# Step 5: Display the summary of the fitted model
+summary(fit)
+
+
+
+```
+
+### Part b
+
+The average annual increase in the logged earnings per share if the model is correct is $0.1672 * 4 = 0.6688$ as shown in the summary of the regression model in part a multiplied by 4 to reflect the average yearly increase instead of the average quarterly increase.
+
+### Part c
+
+The logged earnings per share decreases from the third to the fourth quarter if the model is correct because the estimate for the Q4 indicator variable is lower than that of the Q3 indicator variable.
+
+### Part d
+
+If you attempt to include an intercept term in the model from part a, you can no longer use all of Q1, Q2, Q3, and Q4 as indicator variables. One of these will be redundant when fitting the model because one of them must be the baseline quarter from which the other quarter variables reflect the average relative difference from the baseline quarter in logged earnings per share.
+
+### Part e
+
+```{r,echo=FALSE}
+# Step 6: Check residuals to see if they resemble white noise
+residuals <- resid(fit)
+acf(residuals)  # Plot ACF of residuals to check for white noise
+
+# Step 7: Plot the original data and the fitted trend + seasonal components
+
+# Ensure that 'time' and 'fitted_values' are time series objects
+# 'log_jj' is already a time series, so convert 'fitted_values' to match its structure
+fitted_values <- ts(fitted(fit), start = start(log_jj), frequency = frequency(log_jj))
+
+# Plot the original log-transformed data (log_jj) with the fitted values
+plot(log_jj, type = "l", col = "blue", main = "Log Johnson & Johnson Data with Fitted Values",
+     ylab = "Log Transformed Data", xlab = "Time")
+
+# Add the fitted values as a red line to the plot
+lines(fitted_values, col = "red", lwd = 2)
+
+# Add a legend to the plot to differentiate the two lines
+legend("topleft", legend = c("Data", "Fitted Values"), col = c("blue", "red"), lwd = 2)
+```
+
+## Problem 3
+
+### Part a
+
+Yes, this is stationary because the mean is constant and the autocovariance only depends on the lag.
+
+$\mu = 0$
+
+$\gamma(h) = 2*\sigma^2$ when h = 0, $\gamma(h) = -\sigma^2$ when h = 3, and $\gamma(h) = 0$ otherwise.
+
+### Part b
+
+This is not stationary because the autocovariance depends on the time rather than the lag.
+
+### Part c
+
+This is not stationary because the mean is not constant.
+
+### Part d
+
+Yes, this is stationary because the mean is constant and the autocovariance only depends on the lag.
+
+$\mu = E[W_t^2] = Var(W_t) + E[W_t]^2 = Var(W_t) + 0 = \sigma^2$
+
+$\gamma(h) = E[W_t^4] - E[W_t^2]^2 = E[W_t^4] - \sigma^4$ when h = 0 and 0 otherwise.
+
+### Part e
+
+Yes, this is stationary because the mean is constant and the autocovariance only depends on the lag.
+
+$\mu = E[W_tW_{t-2}] = E[W_t]E[W_{t-2}] = 0$
+
+$\gamma(h) = E[W_t^2W_{t-2}^2] - E[W_tW_{t-2}]^2 = E[W_t^2W_{t-2}^2] - 0 = E[W_t^2W_{t-2}^2]$ when h = 0 and $E[W_tW_{t-2}W_{t+2}W_t] = E[W_t]^2E[W_{t-2}W_{t+2}] = \sigma^2 * 0 = 0$ when h = 2 and 0 otherwise.
+
+## Problem 4 
+
+X is white noise because:
+
+$\mu = E[X] = 1/2 * 0 + 1/2 * E[(1-W_{t-1})Z_t] = 1/2 * 0 + 1/4 * 0 + 1/4 * Z_t = 0$
+
+$Var(X_t) = E[X_t^2] - E[X_t]^2 = E[X_t^2] = 1/4* E[Z_t^2]  = 1/4$
+
+$\gamma(h) = 0$ for all $h \neq 0$ because $\gamma(1) = E[W_tW_{t-1}(1-W_t)(1-W_{t-1})Z_tZ_{t+1}] = E[W_tW_{t-1}(1-W_t)(1-W_{t-1})]E[Z_t]E[Z_{t+1}] = 0$
+
+X is not iid because it depends in values from the past ($W_{t-1}$})
+
+## Problem 5
+
+```{r,echo=FALSE}
+# Load necessary libraries
+library(forecast)  # for plotting ACF
+library(ggplot2)
+
+# Load the data from mystery.csv (assuming the file is in the working directory)
+df <- read.csv("mystery.csv")
+
+# Extract the data column (assuming it's the first column)
+data <- ts(df[, 1])  # Convert the data into a time series object
+
+# (a) Plot the sample ACF
+acf(data, main = "Sample ACF of the Mystery Data", lag.max = 40)
+
+# (b) Time series plot
+plot.ts(data, main = "Time Series Plot of the Mystery Data", 
+        xlab = "Time", ylab = "Value")
+
+# (b) Lag-1 plot: plot X_t against X_{t-1}
+lag_data <- data[-length(data)]  # X_{t-1}
+lag1_data <- data[-1]  # X_t
+
+# Use ggplot for a cleaner scatter plot
+lag_df <- data.frame(Xt_minus_1 = lag_data, Xt = lag1_data)
+
+ggplot(lag_df, aes(x = Xt_minus_1, y = Xt)) + 
+  geom_point(alpha = 0.6) +
+  labs(title = "Lag-1 Plot of the Mystery Data", 
+       x = expression(X[t-1]), 
+       y = expression(X[t])) +
+  theme_minimal()
+
+
+```
+
+### Part a
+
+Looking at the ACF and the series itself, it looks like it could be modeled as white noise.
+
+## Part b
+
+Seeing the lag 1 plot, it is clear that there is a relationship between $X_t$ and $X_{t-1}$, specifically a negative quadratic, so that rules out the possibility that it's white noise.
+
+
+
