@@ -1,0 +1,341 @@
+---
+title: "Homework 2"
+author: "Alex Ojemann"
+date: "2024-09-27"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+### Part a
+
+The following regression adjustments estimate the causal effect of quitting smoking on weight change, SBP, and DBP using sex, race, age, education, smoking intensity per day, number of years having smoked, exercise level, activity level, weight at the beginning of the study period, and whether the subject had high blood pressure at the beginning of the study period.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+library(dplyr)
+library(broom)
+
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Label categorical variables properly
+nhefs <- nhefs %>%
+  mutate(
+    qsmk = as.factor(qsmk), 
+    race = as.factor(race), 
+    education = as.factor(education),  
+    hbp = as.factor(hbp), 
+    exercise = as.factor(exercise),  
+    active = as.factor(active)  
+  )
+
+# Fit linear regression models for each outcome, adjusting for covariates
+
+# 1. Weight change (wt82_71)
+model_wt82_71 <- lm(wt82_71 ~ qsmk + race + age + education + smokeintensity + smokeyrs +
+                    exercise + active + wt71 + hbp, data = nhefs)
+
+# 2. Systolic blood pressure (sbp)
+model_sbp <- lm(sbp ~ qsmk + race + age + education + smokeintensity + smokeyrs +
+                exercise + active + wt71 + hbp, data = nhefs)
+
+# 3. Diastolic blood pressure (dbp)
+model_dbp <- lm(dbp ~ qsmk + race + age + education + smokeintensity + smokeyrs +
+                exercise + active + wt71 + hbp, data = nhefs)
+
+format_results <- function(model, outcome_label) {
+  # Extract the relevant statistics for qsmk (treatment effect)
+  result <- tidy(model) %>% filter(term == "qsmk1")
+
+  estimate <- round(result$estimate, 2)
+  std_error <- round(result$std.error, 2)
+  lower_CI <- round(result$estimate - 1.96 * result$std.error, 2)
+  upper_CI <- round(result$estimate + 1.96 * result$std.error, 2)
+  
+  # Create a formatted, readable summary
+  paste(
+    outcome_label, ":\n",
+    "- Estimated effect of quitting smoking: ", estimate, "\n",
+    "- Standard Error: ", std_error, "\n",
+    "- 95% Confidence Interval: [", lower_CI, ", ", upper_CI, "]\n",
+    "\n"
+  )
+}
+
+# Generate formatted results for each outcome
+output_wt82_71 <- format_results(model_wt82_71, "Weight Change (1971-1982)")
+output_sbp <- format_results(model_sbp, "Systolic Blood Pressure")
+output_dbp <- format_results(model_dbp, "Diastolic Blood Pressure")
+
+
+cat(output_wt82_71)
+cat(output_sbp)
+cat(output_dbp)
+
+```
+### Part b
+
+The following regression adjustments estimate the causal effect of quitting smoking on weight change, SBP, and DBP using the same covariates as those in part a but with squared and logarithmic terms included for the continuous numeric covariates.
+
+```{r,echo=FALSE}
+data("nhefs", package = "causaldata")
+
+# Properly label categorical variables
+nhefs <- nhefs %>%
+  mutate(
+    qsmk = as.factor(qsmk), 
+    race = as.factor(race), 
+    education = as.factor(education),  
+    hbp = as.factor(hbp), 
+    exercise = as.factor(exercise),  
+    active = as.factor(active),
+    log_age = log(age),  # Add log transformation for age
+    log_smokeintensity = log(smokeintensity + 1),  # Add log for smokeintensity (+1 to avoid log(0))
+    log_smokeyrs = log(smokeyrs + 1),  # Add log for smokeyrs
+    log_wt71 = log(wt71),  # Add log for wt71
+    age_squared = age^2,  # Add quadratic term for age
+    smokeintensity_squared = smokeintensity^2,  # Add quadratic term for smokeintensity
+    smokeyrs_squared = smokeyrs^2,  # Add quadratic term for smokeyrs
+    wt71_squared = wt71^2  # Add quadratic term for wt71
+  )
+
+# Fit linear regression models for each outcome, adjusting for covariates, including quadratic and log terms
+
+# 1. Weight change (wt82_71)
+model_wt82_71 <- lm(wt82_71 ~ qsmk + race + age + age_squared + log_age + 
+                    education + smokeintensity + smokeintensity_squared + log_smokeintensity + 
+                    smokeyrs + smokeyrs_squared + log_smokeyrs + exercise + active + 
+                    wt71 + wt71_squared + log_wt71 + hbp, data = nhefs)
+
+# 2. Systolic blood pressure (sbp)
+model_sbp <- lm(sbp ~ qsmk + race + age + age_squared + log_age + 
+                education + smokeintensity + smokeintensity_squared + log_smokeintensity + 
+                smokeyrs + smokeyrs_squared + log_smokeyrs + exercise + active + 
+                wt71 + wt71_squared + log_wt71 + hbp, data = nhefs)
+
+# 3. Diastolic blood pressure (dbp)
+model_dbp <- lm(dbp ~ qsmk + race + age + age_squared + log_age + 
+                education + smokeintensity + smokeintensity_squared + log_smokeintensity + 
+                smokeyrs + smokeyrs_squared + log_smokeyrs + exercise + active + 
+                wt71 + wt71_squared + log_wt71 + hbp, data = nhefs)
+
+# Function to format results
+format_results <- function(model, outcome_label) {
+  # Extract the relevant statistics for qsmk (treatment effect)
+  result <- tidy(model) %>% filter(term == "qsmk1")
+
+  estimate <- round(result$estimate, 2)
+  std_error <- round(result$std.error, 2)
+  lower_CI <- round(result$estimate - 1.96 * result$std.error, 2)
+  upper_CI <- round(result$estimate + 1.96 * result$std.error, 2)
+  
+  # Create a formatted, readable summary
+  paste(
+    outcome_label, ":\n",
+    "- Estimated effect of quitting smoking: ", estimate, "\n",
+    "- Standard Error: ", std_error, "\n",
+    "- 95% Confidence Interval: [", lower_CI, ", ", upper_CI, "]\n",
+    "\n"
+  )
+}
+
+# Generate formatted results for each outcome
+output_wt82_71 <- format_results(model_wt82_71, "Weight Change (1971-1982)")
+output_sbp <- format_results(model_sbp, "Systolic Blood Pressure")
+output_dbp <- format_results(model_dbp, "Diastolic Blood Pressure")
+
+# Print the formatted results
+cat(output_wt82_71)
+cat(output_sbp)
+cat(output_dbp)
+
+
+```
+
+### Part c
+
+The following regression adjustments estimate the causal effect of quitting smoking on weight change, SBP, and DBP using the same covariates as those in part a but with the product of the quit smoking covariate with each of the other covariates as additional features.
+
+```{r,echo=FALSE}
+# Load necessary packages
+library(dplyr)
+library(broom)
+
+# Load the NHEFS dataset
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Label categorical variables properly
+nhefs <- nhefs %>%
+  mutate(
+    qsmk = as.factor(qsmk), 
+    race = as.factor(race), 
+    education = as.factor(education),  
+    hbp = as.factor(hbp), 
+    exercise = as.factor(exercise),  
+    active = as.factor(active)  
+  )
+
+# Fit linear regression models with interaction terms
+
+# 1. Weight change (wt82_71) with interaction terms
+model_wt82_71 <- lm(wt82_71 ~ qsmk * age + qsmk * race + qsmk * education + qsmk * exercise + 
+                    smokeintensity + smokeyrs + active + wt71 + hbp, data = nhefs)
+
+# 2. Systolic blood pressure (sbp) with interaction terms
+model_sbp <- lm(sbp ~ qsmk * age + qsmk * race + qsmk * education + qsmk * exercise + 
+                smokeintensity + smokeyrs + active + wt71 + hbp, data = nhefs)
+
+# 3. Diastolic blood pressure (dbp) with interaction terms
+model_dbp <- lm(dbp ~ qsmk * age + qsmk * race + qsmk * education + qsmk * exercise + 
+                smokeintensity + smokeyrs + active + wt71 + hbp, data = nhefs)
+
+# Function to format and display only the main qsmk term
+format_qsmk_results <- function(model, outcome_label) {
+  # Extract the relevant statistics for qsmk (main effect only)
+  result <- tidy(model) %>% filter(term == "qsmk1")
+
+  # Format the output for readability
+  output <- paste0(outcome_label, ":\n",
+                   "- Estimated effect of quitting smoking: ", round(result$estimate, 2), "\n",
+                   "- Standard Error: ", round(result$std.error, 2), "\n",
+                   "- 95% CI: [", round(result$estimate - 1.96 * result$std.error, 2), 
+                   ", ", round(result$estimate + 1.96 * result$std.error, 2), "]\n\n")
+  
+  return(output)
+}
+
+# Generate formatted results for each outcome (only qsmk term)
+output_wt82_71 <- format_qsmk_results(model_wt82_71, "Weight Change (1971-1982)")
+output_sbp <- format_qsmk_results(model_sbp, "Systolic Blood Pressure")
+output_dbp <- format_qsmk_results(model_dbp, "Diastolic Blood Pressure")
+
+# Print the formatted results
+cat(output_wt82_71)
+cat(output_sbp)
+cat(output_dbp)
+
+
+
+```
+### Part d
+
+The following regression adjustments estimate the causal effect of quitting smoking on weight change, SBP, and DBP using the same covariates as those in parts a, b, and c but with the final models having features selected using stepwise feature selection with BIC as the information criterion.
+
+Note: when initially using stepwise feature selection, the model dropped the quit smoking variable in the SBP model. It was added back in manually after stepwise feature selection because it is the variable for which we are trying to evaluate causal relationships.
+
+```{r,echo=FALSE, message=FALSE, warning=FALSE}
+# Load necessary packages
+library(dplyr)
+library(broom)
+library(MASS)  # For stepwise feature selection
+
+# Load the NHEFS dataset
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Label categorical variables properly and create squared and log terms
+nhefs <- nhefs %>%
+  mutate(
+    qsmk = as.factor(qsmk), 
+    race = as.factor(race), 
+    education = as.factor(education),  
+    hbp = as.factor(hbp), 
+    exercise = as.factor(exercise),  
+    active = as.factor(active),
+    # Create squared and log terms
+    log_age = log(age),  # Log of age
+    age_squared = age^2,  # Age squared
+    log_smokeintensity = log(smokeintensity + 1),  # Log of smokeintensity (+1 to avoid log(0))
+    smokeintensity_squared = smokeintensity^2,  # Smokeintensity squared
+    log_smokeyrs = log(smokeyrs + 1),  # Log of smoking years
+    smokeyrs_squared = smokeyrs^2,  # Smoking years squared
+    log_wt71 = log(wt71),  # Log of weight in 1971
+    wt71_squared = wt71^2  # Weight in 1971 squared
+  )
+
+# Build initial models with all predictors, their squared and log terms, and interaction terms
+
+# 1. Weight change (wt82_71)
+model_wt82_71 <- lm(wt82_71 ~ qsmk * (age + race + education + exercise) +
+                    log_age + age_squared + log_smokeintensity + smokeintensity_squared + 
+                    log_smokeyrs + smokeyrs_squared + log_wt71 + wt71_squared + 
+                    active + wt71 + hbp, data = nhefs)
+
+# 2. Systolic blood pressure (sbp)
+model_sbp <- lm(sbp ~ qsmk * (age + race + education + exercise) +
+                log_age + age_squared + log_smokeintensity + smokeintensity_squared + 
+                log_smokeyrs + smokeyrs_squared + log_wt71 + wt71_squared + 
+                active + wt71 + hbp, data = nhefs)
+
+# 3. Diastolic blood pressure (dbp)
+model_dbp <- lm(dbp ~ qsmk * (age + race + education + exercise) +
+                log_age + age_squared + log_smokeintensity + smokeintensity_squared + 
+                log_smokeyrs + smokeyrs_squared + log_wt71 + wt71_squared + 
+                active + wt71 + hbp, data = nhefs)
+
+# Stepwise feature selection for each model
+
+n <- nrow(nhefs)
+# 1. Stepwise feature selection for weight change using BIC
+final_model_wt82_71 <- step(model_wt82_71, direction = "both", trace = FALSE, k = log(n))
+
+# 2. Stepwise feature selection for systolic blood pressure using BIC
+final_model_sbp <- step(model_sbp, direction = "both", trace = FALSE, k = log(n))
+
+# Amend the final model by adding back the qsmk variable
+final_model_sbp <- update(final_model_sbp, . ~ . + qsmk)
+
+# 3. Stepwise feature selection for diastolic blood pressure using BIC
+final_model_dbp <- step(model_dbp, direction = "both", trace = FALSE, k = log(n))
+
+# Function to format and display only the qsmk term from the final models
+format_qsmk_final_model <- function(final_model, outcome_label) {
+  # Extract the relevant statistics for qsmk (main effect only)
+  result <- tidy(final_model) %>% filter(term == "qsmk1")
+  
+  # Format the output for readability
+  output <- paste0(outcome_label, " (Selected Model):\n",
+                   "- Estimated effect of quitting smoking: ", round(result$estimate, 2), "\n",
+                   "- Standard Error: ", round(result$std.error, 2), "\n",
+                   "- 95% CI: [", round(result$estimate - 1.96 * result$std.error, 2), 
+                   ", ", round(result$estimate + 1.96 * result$std.error, 2), "]\n\n")
+  
+  return(output)
+}
+
+# Generate formatted results for each final model (only qsmk term)
+output_wt82_71 <- format_qsmk_final_model(final_model_wt82_71, "Weight Change (1971-1982)")
+output_sbp <- format_qsmk_final_model(final_model_sbp, "Systolic Blood Pressure")
+output_dbp <- format_qsmk_final_model(final_model_dbp, "Diastolic Blood Pressure")
+
+# Print the formatted results
+cat(output_wt82_71)
+cat(output_sbp)
+cat(output_dbp)
+
+```
+
+Below is the summary for the model used to predict weight change:
+
+```{r}
+summary(final_model_wt82_71)
+```
+
+Below is the summary for the model used to predict SBP:
+
+```{r}
+summary(final_model_sbp)
+```
+
+Below is the summary for the model used to predict DBP:
+
+```{r}
+summary(final_model_dbp)
+```
+
+
