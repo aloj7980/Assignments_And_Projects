@@ -1,0 +1,477 @@
+---
+title: "Homework 3"
+author: "Alex Ojemann"
+date: "2024-10-03"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+### Part a
+
+The following logistic regression model predicts whether a participant quit smoking using the following covariates: sex, race, age, education, smoking intensity, number of years smoked for, exercise level, activity level, weight in 1971, and high blood pressure.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(cobalt)   # For calculating and plotting SMDs
+library(ggplot2)  # For plotting
+library(survey)   # For weighting
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Fit the logistic regression model to predict qsmk using the listed covariates
+ps_model <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                  exercise + active + wt71 + hbp, 
+                family = binomial(), data = nhefs)
+
+summary(ps_model)
+
+# Step 1: Generate propensity scores
+nhefs$pscore <- predict(ps_model, type = "response")
+
+# Step 2: Calculate standardized mean differences (unweighted and weighted)
+
+# Calculate weights based on propensity scores
+nhefs$weights <- ifelse(nhefs$qsmk == 1, 1/nhefs$pscore, 1/(1 - nhefs$pscore))
+
+# Use the `bal.tab` function from the cobalt package to calculate SMDs
+balance_results <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                             exercise + active + wt71 + hbp, 
+                           data = nhefs, 
+                           weights = nhefs$weights, 
+                           method = "weighting", 
+                           estimand = "ATT", # or "ATE" depending on your goal
+                           un = TRUE)  # Calculate both unweighted and weighted SMDs
+
+# Step 3: Extract the standardized mean differences for plotting
+smd_data <- data.frame(
+  Covariate = rownames(balance_results$Balance),
+  Unweighted_SMD = balance_results$Balance$Diff.Un,
+  Weighted_SMD = balance_results$Balance$Diff.Adj
+)
+
+# Step 4: Create the line plot of both unweighted and weighted SMDs using ggplot2
+ggplot(smd_data, aes(x = Covariate)) +
+  geom_line(aes(y = Unweighted_SMD, color = "Unweighted"), group = 1, size = 1) +
+  geom_line(aes(y = Weighted_SMD, color = "Weighted"), group = 1, size = 1) +
+  geom_point(aes(y = Unweighted_SMD, color = "Unweighted"), size = 3) +
+  geom_point(aes(y = Weighted_SMD, color = "Weighted"), size = 3) +
+  scale_color_manual(values = c("Unweighted" = "red", "Weighted" = "blue")) +
+  labs(title = "Standardized Mean Differences Before and After Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
+### Part b
+
+The following logistic regression model includes all of the covariates from part a and squared and logarithmic terms of each of the continuous covariates.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(cobalt)   # For calculating and plotting SMDs
+library(ggplot2)  # For plotting
+library(survey)   # For weighting
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Create squared and log terms for continuous variables
+nhefs <- nhefs %>%
+  mutate(
+    age_squared = age^2,
+    log_age = log(age),
+    smokeintensity_squared = smokeintensity^2,
+    log_smokeintensity = log(smokeintensity + 1),  # +1 to avoid log(0)
+    smokeyrs_squared = smokeyrs^2,
+    log_smokeyrs = log(smokeyrs + 1),  # +1 to avoid log(0)
+    wt71_squared = wt71^2,
+    log_wt71 = log(wt71)
+  )
+
+# Fit the logistic regression model with nonlinear terms for continuous variables
+formula <- qsmk ~ sex + race + age + age_squared + log_age + 
+  education + smokeintensity + smokeintensity_squared + log_smokeintensity +
+  smokeyrs + smokeyrs_squared + log_smokeyrs +
+  exercise + active + wt71 + wt71_squared + log_wt71 + hbp
+
+model_nonlinear <- glm(formula, data = nhefs, family = binomial())
+
+summary(model_nonlinear)
+
+# Step 2: Generate propensity scores from the model
+nhefs$pscore <- predict(model_nonlinear, type = "response")
+
+# Step 3: Calculate weights based on the propensity scores
+nhefs$weights <- ifelse(nhefs$qsmk == 1, 1/nhefs$pscore, 1/(1 - nhefs$pscore))
+
+# Step 4: Calculate standardized mean differences (unweighted and weighted)
+balance_results <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                             exercise + active + wt71 + hbp, 
+                           data = nhefs, 
+                           weights = nhefs$weights, 
+                           method = "weighting", 
+                           estimand = "ATT", 
+                           un = TRUE)
+
+# Step 5: Extract SMDs for plotting
+smd_data <- data.frame(
+  Covariate = rownames(balance_results$Balance),
+  Unweighted_SMD = balance_results$Balance$Diff.Un,
+  Weighted_SMD = balance_results$Balance$Diff.Adj
+)
+
+# Step 6: Create the line plot of both unweighted and weighted SMDs
+ggplot(smd_data, aes(x = Covariate)) +
+  geom_line(aes(y = Unweighted_SMD, color = "Unweighted"), group = 1, size = 1) +
+  geom_line(aes(y = Weighted_SMD, color = "Weighted"), group = 1, size = 1) +
+  geom_point(aes(y = Unweighted_SMD, color = "Unweighted"), size = 3) +
+  geom_point(aes(y = Weighted_SMD, color = "Weighted"), size = 3) +
+  scale_color_manual(values = c("Unweighted" = "red", "Weighted" = "blue")) +
+  labs(title = "Standardized Mean Differences Before and After Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+
+### Part c
+
+Here, all of the covariates from part a and each of the pairwise interaction terms between covariates are candidates for the final logistic regression model which is selected using stepwise feature selection with BIC as the information criterion.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(cobalt)   # For calculating and plotting SMDs
+library(ggplot2)  # For plotting
+library(survey)   # For weighting
+library(MASS)     # For stepwise selection
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# List of variables
+main_vars <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs",
+               "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model with all pairwise interactions
+interaction_terms <- paste(main_vars, collapse = " + ")
+interaction_terms <- paste(interaction_terms, "+", 
+                           paste(combn(main_vars, 2, FUN = function(x) paste(x, collapse = ":")), 
+                                 collapse = " + "))
+
+# Fit the logistic regression model with pairwise interactions
+formula <- as.formula(paste("qsmk ~", interaction_terms))
+initial_model <- glm(formula, data = nhefs, family = binomial())
+
+# Step 2: Perform stepwise feature selection using BIC
+n <- nrow(nhefs)  # Sample size for BIC calculation
+final_model <- step(initial_model, direction = "both", trace = FALSE, k = log(n))
+
+summary(final_model)
+
+# Step 3: Generate propensity scores from the final selected model
+nhefs$pscore <- predict(final_model, type = "response")
+
+# Step 4: Calculate weights based on the propensity scores
+nhefs$weights <- ifelse(nhefs$qsmk == 1, 1/nhefs$pscore, 1/(1 - nhefs$pscore))
+
+# Step 5: Calculate standardized mean differences (unweighted and weighted)
+balance_results <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                             exercise + active + wt71 + hbp, 
+                           data = nhefs, 
+                           weights = nhefs$weights, 
+                           method = "weighting", 
+                           estimand = "ATT", 
+                           un = TRUE)
+
+# Step 6: Extract SMDs for plotting
+smd_data <- data.frame(
+  Covariate = rownames(balance_results$Balance),
+  Unweighted_SMD = balance_results$Balance$Diff.Un,
+  Weighted_SMD = balance_results$Balance$Diff.Adj
+)
+
+# Step 7: Create the line plot of both unweighted and weighted SMDs
+ggplot(smd_data, aes(x = Covariate)) +
+  geom_line(aes(y = Unweighted_SMD, color = "Unweighted"), group = 1, size = 1) +
+  geom_line(aes(y = Weighted_SMD, color = "Weighted"), group = 1, size = 1) +
+  geom_point(aes(y = Unweighted_SMD, color = "Unweighted"), size = 3) +
+  geom_point(aes(y = Weighted_SMD, color = "Weighted"), size = 3) +
+  scale_color_manual(values = c("Unweighted" = "red", "Weighted" = "blue")) +
+  labs(title = "Standardized Mean Differences Before and After Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### Part d
+
+Here, all of the covariates from part a are candidates for the final logistic regression model which is selected using stepwise feature selection with BIC as the information criterion.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(cobalt)   # For calculating and plotting SMDs
+library(ggplot2)  # For plotting
+library(survey)   # For weighting
+library(MASS)     # For stepwise selection
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# List of baseline covariates
+baseline_vars <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs",
+                   "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model with baseline covariates
+formula <- as.formula(paste("qsmk ~", paste(baseline_vars, collapse = " + ")))
+initial_model <- glm(formula, data = nhefs, family = binomial())
+
+# Step 2: Perform stepwise feature selection using BIC
+n <- nrow(nhefs)  # Sample size for BIC calculation
+final_model <- step(initial_model, direction = "both", trace = FALSE, k = log(n))
+
+# Step 3: Generate a summary of the final selected model
+summary(final_model)
+
+# Step 4: Generate propensity scores from the final selected model
+nhefs$pscore <- predict(final_model, type = "response")
+
+# Step 5: Calculate weights based on the propensity scores
+nhefs$weights <- ifelse(nhefs$qsmk == 1, 1/nhefs$pscore, 1/(1 - nhefs$pscore))
+
+# Step 6: Calculate standardized mean differences (unweighted and weighted)
+balance_results <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                             exercise + active + wt71 + hbp, 
+                           data = nhefs, 
+                           weights = nhefs$weights, 
+                           method = "weighting", 
+                           estimand = "ATT", 
+                           un = TRUE)
+
+# Step 7: Extract SMDs for plotting
+smd_data <- data.frame(
+  Covariate = rownames(balance_results$Balance),
+  Unweighted_SMD = balance_results$Balance$Diff.Un,
+  Weighted_SMD = balance_results$Balance$Diff.Adj
+)
+
+# Step 8: Create the line plot of both unweighted and weighted SMDs
+ggplot(smd_data, aes(x = Covariate)) +
+  geom_line(aes(y = Unweighted_SMD, color = "Unweighted"), group = 1, size = 1) +
+  geom_line(aes(y = Weighted_SMD, color = "Weighted"), group = 1, size = 1) +
+  geom_point(aes(y = Unweighted_SMD, color = "Unweighted"), size = 3) +
+  geom_point(aes(y = Weighted_SMD, color = "Weighted"), size = 3) +
+  scale_color_manual(values = c("Unweighted" = "red", "Weighted" = "blue")) +
+  labs(title = "Standardized Mean Differences Before and After Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+### Part e
+
+I would use the model from part d. The models from part a and b both have several features that have several covariates that are not significant at the p<0.05 level because there was no feature selection method used to create these models. The model from part c also has two covariates that are not significant at the p<0.05 level despite the covariates being selected using stepwise feature selection and it still has a lower AIC than that of part d. 
+
+The weighted SMDs of the model from part d are slightly higher than those of the models from part a and b, but I believe it is more important not to include several statistically insignificant covariates so the model generalizes better to new data than to have weighted SMDs closer to 0 given that none of the weighted SMDs are concerningly large. Only one of the weighted SMDs of the model from part d is above 0.1 (for the wt_71 covariate), and that weighted SMD is less than 0.15, so it is not an enormous concern.
+
+## Problem 2
+
+### Part i
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(broom)    # For extracting coefficients and confidence intervals
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Define the baseline covariates
+baseline_vars <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs", 
+                   "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model to calculate propensity scores
+initial_model <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                  exercise + active + wt71 + hbp, 
+                family = binomial(), data = nhefs)
+
+n <- nrow(nhefs)  # Sample size for BIC calculation
+ps_model <- step(initial_model, direction = "both", trace = FALSE, k = log(n))
+
+# Step 2: Generate propensity scores
+nhefs$pscore <- predict(ps_model, type = "response")
+
+# Step 3: Stratify based on propensity scores
+# Create quintiles of propensity scores for stratification
+nhefs$strata <- cut(nhefs$pscore, breaks = quantile(nhefs$pscore, probs = seq(0, 1, 0.2)), 
+                    include.lowest = TRUE, labels = FALSE)
+
+# Step 4: Function to calculate the ATE, SE, and 95% CI for a given outcome within each stratum
+calculate_stratified_ate <- function(outcome_var, data) {
+  # Create an empty list to store the results for each stratum
+  strat_results <- list()
+  
+  # Loop through each stratum
+  for (stratum in unique(data$strata)) {
+    stratum_data <- data %>% filter(strata == stratum)
+    
+    # Fit an unweighted linear regression model within the stratum
+    model <- lm(as.formula(paste(outcome_var, "~ qsmk")), data = stratum_data)
+    
+    # Extract the treatment effect estimate, standard error, and confidence intervals for qsmk
+    result <- tidy(model) %>% filter(term == "qsmk")
+    
+    strat_results[[stratum]] <- list(
+      estimate = result$estimate,
+      std_error = result$std.error,
+      n = nrow(stratum_data)  # Store the number of observations in the stratum
+    )
+  }
+  
+  # Step 5: Aggregate the stratum-specific ATEs to calculate the overall ATE
+  # Calculate a weighted average of the estimates, weighted by the size of each stratum
+  overall_ate <- sum(sapply(strat_results, function(x) x$estimate * x$n)) / sum(sapply(strat_results, function(x) x$n))
+  
+  # Calculate the pooled standard error
+  overall_se <- sqrt(sum(sapply(strat_results, function(x) (x$std_error^2) * (x$n - 1))) / (sum(sapply(strat_results, function(x) x$n)) - 1))
+  
+  # Calculate the 95% confidence interval
+  lower_CI <- overall_ate - 1.96 * overall_se
+  upper_CI <- overall_ate + 1.96 * overall_se
+  
+  list(estimate = round(overall_ate, 2), std_error = round(overall_se, 2), lower_CI = round(lower_CI, 2), upper_CI = round(upper_CI, 2))
+}
+
+# Step 6: Apply the function to each outcome and store the results
+outcome_vars <- c("wt82_71", "sbp", "dbp")  # Variable names
+outcome_desc <- c("change in weight from 1971 to 1982", "systolic blood pressure", "diastolic blood pressure")  # Descriptions
+
+ate_results <- lapply(outcome_vars, calculate_stratified_ate, data = nhefs)
+
+# Step 7: Print the results for each outcome with descriptions
+for (i in seq_along(outcome_vars)) {
+  cat("Estimated ATE, Standard Error, and 95% confidence interval of quitting smoking on", outcome_desc[i], ":\n",
+      "- Estimated ATE: ", ate_results[[i]]$estimate, "\n",
+      "- Standard Error: ", ate_results[[i]]$std_error, "\n",
+      "- 95% Confidence Interval: [", ate_results[[i]]$lower_CI, ", ", ate_results[[i]]$upper_CI, "]\n\n")
+}
+
+
+```
+### Part ii
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Load necessary libraries
+library(dplyr)
+library(survey)   # For weighted regression models
+library(broom)    # For extracting coefficients and confidence intervals
+
+# Load the NHEFS dataset from the causaldata package
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Define the baseline covariates
+baseline_vars <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs", 
+                   "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model to calculate propensity scores
+initial_model <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                  exercise + active + wt71 + hbp, 
+                family = binomial(), data = nhefs)
+
+n <- nrow(nhefs)  # Sample size for BIC calculation
+ps_model <- step(initial_model, direction = "both", trace = FALSE, k = log(n))
+
+# Step 2: Generate propensity scores
+nhefs$pscore <- predict(ps_model, type = "response")
+
+# Step 3: Calculate weights for IPW1 and IPW2
+
+# IPW1: Regular inverse probability weights
+nhefs$ipw1_weights <- ifelse(nhefs$qsmk == 1, 1 / nhefs$pscore, 1 / (1 - nhefs$pscore))
+
+# IPW2: Stabilized inverse probability weights
+p_qsmk_1 <- mean(nhefs$qsmk == 1)  # Proportion of treated individuals
+p_qsmk_0 <- mean(nhefs$qsmk == 0)  # Proportion of control individuals
+
+nhefs$ipw2_weights <- ifelse(nhefs$qsmk == 1, 
+                             p_qsmk_1 / nhefs$pscore, 
+                             p_qsmk_0 / (1 - nhefs$pscore))
+
+# Step 4: Check the difference between IPW1 and IPW2 weights
+#print(head(nhefs$ipw1_weights,20))
+#print(head(nhefs$ipw2_weights,20))
+
+# Step 5: Function to calculate ATE, SE, and 95% CI for a given outcome using glm() with weights
+calculate_ate_glm <- function(outcome_var, data, weight_var) {
+  # Fit a weighted regression model using lm(), directly applying the weights
+  model <- lm(as.formula(paste(outcome_var, "~ qsmk")), data = data, weights = data[[weight_var]])
+  
+  # Extract the treatment effect estimate, standard error, and confidence intervals for qsmk
+  result <- tidy(model) %>% filter(term == "qsmk")
+  
+  # Format the output
+  estimate <- round(result$estimate, 2)
+  std_error <- round(result$std.error, 2)
+  lower_CI <- round(result$estimate - 1.96 * result$std.error, 2)
+  upper_CI <- round(result$estimate + 1.96 * result$std.error, 2)
+  
+  list(estimate = estimate, std_error = std_error, lower_CI = lower_CI, upper_CI = upper_CI)
+}
+
+# Step 6: Apply the function to each outcome for both IPW1 and IPW2 estimators
+
+# IPW1 Results using glm() with weights
+cat("IPW1 Results:\n\n")
+ate_results_ipw1 <- lapply(outcome_vars, calculate_ate_glm, data = nhefs, weight_var = "ipw1_weights")
+
+# Print IPW1 results
+for (i in seq_along(outcome_vars)) {
+  cat("Estimated ATE, Standard Error, and 95% confidence interval of quitting smoking on", outcome_desc[i], "using IPW1:\n",
+      "- Estimated ATE: ", ate_results_ipw1[[i]]$estimate, "\n",
+      "- Standard Error: ", ate_results_ipw1[[i]]$std_error, "\n",
+      "- 95% Confidence Interval: [", ate_results_ipw1[[i]]$lower_CI, ", ", ate_results_ipw1[[i]]$upper_CI, "]\n\n")
+}
+
+# IPW2 Results using glm() with weights
+cat("IPW2 Results:\n\n")
+ate_results_ipw2 <- lapply(outcome_vars, calculate_ate_glm, data = nhefs, weight_var = "ipw2_weights")
+
+# Print IPW2 results
+for (i in seq_along(outcome_vars)) {
+  cat("Estimated ATE, Standard Error, and 95% confidence interval of quitting smoking on", outcome_desc[i], "using IPW2:\n",
+      "- Estimated ATE: ", ate_results_ipw2[[i]]$estimate, "\n",
+      "- Standard Error: ", ate_results_ipw2[[i]]$std_error, "\n",
+      "- 95% Confidence Interval: [", ate_results_ipw2[[i]]$lower_CI, ", ", ate_results_ipw2[[i]]$upper_CI, "]\n\n")
+}
+
+
+
+```
