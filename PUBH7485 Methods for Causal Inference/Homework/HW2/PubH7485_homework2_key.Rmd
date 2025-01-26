@@ -1,0 +1,456 @@
+---
+title: "PubH7485 Homework2 Key"
+date: "2024-09-27"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(7485)
+library(dplyr)
+library(labelled)
+library(causaldata)
+library(knitr)
+library(formattable)
+library(MASS)
+```
+
+```{r, include=F}
+data('nhefs')
+
+# treatment
+nhefs$qsmk 
+# outcomes of interest
+nhefs$wt82_71
+nhefs$sbp
+nhefs$dbp
+
+adj_vars <- c('sex', 'race', 'age', 'education', 'smokeintensity', 'smokeyrs', 'exercise', 'active', 'wt71', 'hbp')
+
+# imputation
+cont_vars <- c('age', 'smokeintensity', 'smokeyrs', 'wt71', 'wt82_71', 'sbp', 'dbp')
+cat_vars <- c('sex', 'race', 'education', 'exercise', 'active', 'hbp')
+
+for (var in cont_vars) {
+  nhefs[[var]][is.na(nhefs[[var]])] <- median(nhefs[[var]], na.rm = TRUE)
+}
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in cat_vars) {
+  nhefs[[var]][is.na(nhefs[[var]])] <- mode_function(nhefs[[var]])
+  nhefs[[var]] <- as.factor(nhefs[[var]]) 
+}
+```
+
+
+```{r, include=F}
+# function for calculating the ATE
+calculate_ATE <- function(model_formula, data, num_bootstraps = 100) {
+ 
+  wc_model <- lm(model_formula, data = data)
+  
+  nhefs_trt <- nhefs_con <- data
+  nhefs_trt$qsmk = 1
+  nhefs_con$qsmk = 0
+  
+  pred1_wc <- predict(wc_model, newdata = nhefs_trt, type = "response")
+  pred0_wc <- predict(wc_model, newdata = nhefs_con, type = "response")
+  ATE_wc <- mean(pred1_wc - pred0_wc)
+  
+  # Bootstrap replication for SE
+  ate_wc_boot <- c()
+  for (i in 1:num_bootstraps) {
+    nhefs_boot <- data[sample(nrow(data), size = nrow(data), replace = TRUE), ]
+    wc_model_boot <- lm(model_formula, data = nhefs_boot)
+    
+    nhefs_trt_boot <- nhefs_con_boot <- nhefs_boot
+    nhefs_trt_boot$qsmk = 1
+    nhefs_con_boot$qsmk = 0
+    
+    pred1_wc_boot <- predict(wc_model_boot, newdata = nhefs_trt_boot, type = "response")
+    pred0_wc_boot <- predict(wc_model_boot, newdata = nhefs_con_boot, type = "response")
+    ate_wc_boot <- c(ate_wc_boot, mean(pred1_wc_boot - pred0_wc_boot))
+  }
+  
+  # Calculate standard error and confidence interval
+  SE <- sd(ate_wc_boot)
+  CI <- ATE_wc + c(-1, 1) * qnorm(0.975) * SE
+  CI_str <- paste0(round(CI[1], 3), ", ", round(CI[2], 3))
+  
+  return(list(ATE = round(ATE_wc, 3), SE = round(SE, 3), CI = CI_str))
+}
+
+## for weight change
+# linear regression
+model_wc1 <- wt82_71 ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_wc1 <- calculate_ATE(model_wc1, nhefs, num_bootstraps = 100)
+
+print(result_wc1)
+
+# add non-linear term
+model_wc2 <- wt82_71 ~ qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_wc2 <- calculate_ATE(model_wc2, nhefs, num_bootstraps = 100)
+
+print(result_wc2)
+
+# add interaction term
+model_wc3 <- wt82_71 ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_wc3 <- calculate_ATE(model_wc3, nhefs, num_bootstraps = 100)
+
+print(result_wc3)
+
+## for sbp
+# linear regression
+model_sbp1 <- sbp ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_sbp1 <- calculate_ATE(model_sbp1, nhefs, num_bootstraps = 100)
+print(result_sbp1)
+
+# add non-linear term
+model_sbp2 <- sbp ~ qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_sbp2 <- calculate_ATE(model_sbp2, nhefs, num_bootstraps = 100)
+print(result_sbp2)
+
+# add interaction term
+model_sbp3 <- sbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_sbp3 <- calculate_ATE(model_sbp3, nhefs, num_bootstraps = 100)
+print(result_sbp3)
+
+## for dbp
+# linear regression
+model_dbp1 <- dbp ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_dbp1 <- calculate_ATE(model_dbp1, nhefs, num_bootstraps = 100)
+print(result_dbp1)
+
+# add non-linear term
+model_dbp2 <- dbp ~ qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_dbp2 <- calculate_ATE(model_dbp2, nhefs, num_bootstraps = 100)
+print(result_dbp2)
+
+# add interaction term
+model_dbp3 <- dbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_dbp3 <- calculate_ATE(model_dbp3, nhefs, num_bootstraps = 100)
+print(result_dbp3)
+
+```
+
+## Question 1 (20 points for each outcome, 60 points total)
+
+The calculated results are summarized in the following tables: 
+
+```{r,echo=F}
+rows <- c("ATE", "Standard Error", "95% CI")
+columns <- c("Linear Regression", "Non-linear Term", "Interaction Term")
+
+table_wc <- rbind(result_wc1, result_wc2, result_wc3)
+colnames(table_wc) <- rows
+rownames(table_wc) <- columns
+kable(table_wc, caption = "Outcome Table for Weight Change")
+
+
+table_sbp <- rbind(result_sbp1, result_sbp2, result_sbp3)
+colnames(table_sbp) <- rows
+rownames(table_sbp) <- columns
+kable(table_sbp, caption = "Outcome Table for SBP")
+
+table_dbp <- rbind(result_dbp1, result_dbp2, result_dbp3)
+colnames(table_dbp) <- rows
+rownames(table_dbp) <- columns
+kable(table_dbp, caption = "Outcome Table for DBP")
+```
+
+Note that exact numbers may vary for students depending on the model fitting.
+
+
+## Bonus point (5 points for each outcome, 15 points total)
+
+```{r,include=F}
+## for weight change
+# specify full model
+full_wc <- lm (wt82_71 ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp), data=nhefs) 
+
+# do stepwise selection
+stepwise_wc <- stepAIC(full_wc, direction = "both")
+summary(stepwise_wc)
+
+select_wc <- wt82_71 ~ qsmk + sex + poly(age,2) + education + active + poly(wt71,2) + qsmk:education +
+  qsmk:poly(age,2) + qsmk:poly(wt71,2)
+result_wc4 <- calculate_ATE(select_wc, nhefs, num_bootstraps = 100)
+print(result_wc4)
+
+## for sbp
+# specify full model
+full_sbp <- lm (sbp ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp), data=nhefs) 
+
+# do stepwise selection
+stepwise_sbp <- stepAIC(full_sbp, direction = "both")
+summary(stepwise_sbp)
+
+select_sbp <- sbp ~ qsmk + sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2)  +
+  exercise + poly(wt71,2) + qsmk:race + qsmk:exercise + qsmk:poly(smokeintensity,2) + qsmk:poly(smokeyrs,2)
+result_sbp4 <- calculate_ATE(select_sbp, nhefs, num_bootstraps = 100)
+print(result_sbp4)
+
+
+## for dbp
+# specify full model
+full_dbp <- lm (dbp ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp),data=nhefs) 
+
+# do stepwise selection
+stepwise_dbp <- stepAIC(full_dbp, direction = "both")
+summary(stepwise_dbp)
+
+select_dbp <- dbp ~ qsmk + sex + race + poly(age,2) + poly(smokeyrs,2) + exercise + 
+  active + poly(wt71,2) + qsmk:active
+result_dbp4 <- calculate_ATE(select_dbp, nhefs, num_bootstraps = 100)
+print(result_dbp4)
+```
+
+
+The calculated results are summarized in the following tables: 
+
+```{r,echo=F}
+rows_bonus <- c("ATE", "Standard Error", "95% CI")
+columns_bonus <- c("Weight Change", "SBP", "DBP")
+
+table_bonus <- rbind(result_wc4, result_sbp4, result_dbp4)
+colnames(table_bonus) <- rows_bonus
+rownames(table_bonus) <- columns_bonus
+
+kable(table_bonus, caption = "Outcome Table by Stepwise Selection")
+```
+
+The key is using stepwise selection but you can perform other variable selection methods like lasso,  etc. 
+
+# Appendix - R Code
+
+1. Impute Missing Data
+
+```{r,eval=F}
+set.seed(7485)
+data('nhefs')
+
+# treatment
+nhefs$qsmk 
+# outcomes of interest
+nhefs$wt82_71
+nhefs$sbp
+nhefs$dbp
+
+adj_vars <- c('sex', 'race', 'age', 'education', 'smokeintensity', 'smokeyrs', 'exercise', 'active', 'wt71', 'hbp')
+
+# imputation
+cont_vars <- c('age', 'smokeintensity', 'smokeyrs', 'wt71', 'wt82_71', 'sbp', 'dbp')
+cat_vars <- c('sex', 'race', 'education', 'exercise', 'active', 'hbp')
+
+for (var in cont_vars) {
+  nhefs[[var]][is.na(nhefs[[var]])] <- median(nhefs[[var]], na.rm = TRUE)
+}
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in cat_vars) {
+  nhefs[[var]][is.na(nhefs[[var]])] <- mode_function(nhefs[[var]])
+  nhefs[[var]] <- as.factor(nhefs[[var]]) 
+}
+```
+
+2. Calculate ATE, standard error and 95% CI for each outcome
+
+```{r, eval=F}
+# function for calculating the ATE
+calculate_ATE <- function(model_formula, data, num_bootstraps = 100) {
+ 
+  wc_model <- lm(model_formula, data = data)
+  
+  nhefs_trt <- nhefs_con <- data
+  nhefs_trt$qsmk = 1
+  nhefs_con$qsmk = 0
+  
+  pred1_wc <- predict(wc_model, newdata = nhefs_trt, type = "response")
+  pred0_wc <- predict(wc_model, newdata = nhefs_con, type = "response")
+  ATE_wc <- mean(pred1_wc - pred0_wc)
+  
+  # Bootstrap replication for SE
+  ate_wc_boot <- c()
+  for (i in 1:num_bootstraps) {
+    nhefs_boot <- data[sample(nrow(data), size = nrow(data), replace = TRUE), ]
+    wc_model_boot <- lm(model_formula, data = nhefs_boot)
+    
+    nhefs_trt_boot <- nhefs_con_boot <- nhefs_boot
+    nhefs_trt_boot$qsmk = 1
+    nhefs_con_boot$qsmk = 0
+    
+    pred1_wc_boot <- predict(wc_model_boot, newdata = nhefs_trt_boot, type = "response")
+    pred0_wc_boot <- predict(wc_model_boot, newdata = nhefs_con_boot, type = "response")
+    ate_wc_boot <- c(ate_wc_boot, mean(pred1_wc_boot - pred0_wc_boot))
+  }
+  
+  # Calculate standard error and confidence interval
+  SE <- sd(ate_wc_boot)
+  CI <- ATE_wc + c(-1, 1) * qnorm(0.975) * SE
+  CI_str <- paste0(round(CI[1], 3), ", ", round(CI[2], 3))
+  
+  return(list(ATE = round(ATE_wc, 3), SE = round(SE, 3), CI = CI_str))
+}
+
+## for weight change
+# linear regression
+model_wc1 <- wt82_71 ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_wc1 <- calculate_ATE(model_wc1, nhefs, num_bootstraps = 100)
+
+print(result_wc1)
+
+# add non-linear term
+model_wc2 <- qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_wc2 <- calculate_ATE(model_wc2, nhefs, num_bootstraps = 100)
+
+print(result_wc2)
+
+# add interaction term
+model_wc3 <- wt82_71 ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_wc3 <- calculate_ATE(model_wc3, nhefs, num_bootstraps = 100)
+
+print(result_wc3)
+
+## for sbp
+# linear regression
+model_sbp1 <- sbp ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_sbp1 <- calculate_ATE(model_sbp1, nhefs, num_bootstraps = 100)
+print(result_sbp1)
+
+# add non-linear term
+model_sbp2 <- sbp ~ qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_sbp2 <- calculate_ATE(model_sbp2, nhefs, num_bootstraps = 100)
+print(result_sbp2)
+
+# add interaction term
+model_sbp3 <- sbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_sbp3 <- calculate_ATE(model_sbp3, nhefs, num_bootstraps = 100)
+print(result_sbp3)
+
+## for dbp
+# linear regression
+model_dbp1 <- dbp ~ qsmk + sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp
+result_dbp1 <- calculate_ATE(model_dbp1, nhefs, num_bootstraps = 100)
+print(result_dbp1)
+
+# add non-linear term
+model_dbp2 <- dbp ~ qsmk + sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+  poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp
+result_dbp2 <- calculate_ATE(model_dbp2, nhefs, num_bootstraps = 100)
+print(result_dbp2)
+
+# add interaction term
+model_dbp3 <- dbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp)
+result_dbp3 <- calculate_ATE(model_dbp3, nhefs, num_bootstraps = 100)
+print(result_dbp3)
+
+```
+
+3. Create summary table for each outcomes
+
+```{r, eval=F}
+rows <- c("ATE", "Standard Error", "95% CI")
+columns <- c("Linear Regression", "Non-linear Term", "Interaction Term")
+
+table_wc <- rbind(result_wc1, result_wc2, result_wc3)
+colnames(table_wc) <- rows
+rownames(table_wc) <- columns
+kable(table_wc, caption = "Outcome Table for Weight Change")
+
+
+table_sbp <- rbind(result_sbp1, result_sbp2, result_sbp3)
+colnames(table_sbp) <- rows
+rownames(table_sbp) <- columns
+kable(table_sbp, caption = "Outcome Table for SBP")
+
+table_dbp <- rbind(result_dbp1, result_dbp2, result_dbp3)
+colnames(table_dbp) <- rows
+rownames(table_dbp) <- columns
+kable(table_dbp, caption = "Outcome Table for DBP")
+```
+
+4. Perform stepwise selection for each outcome (or you can perform lasso or other variable selection method)
+
+```{r,eval=F}
+## for weight change
+# specify full model
+full_wc <- lm (wt82_71 ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp), data=nhefs) 
+
+# do stepwise selection
+stepwise_wc <- stepAIC(full_wc, direction = "both")
+summary(stepwise_wc)
+
+select_wc <- wt82_71 ~ qsmk + sex + age + education + smokeyrs + active + wt71 + qsmk:education
+result_wc4 <- calculate_ATE(select_wc, nhefs, num_bootstraps = 100)
+print(result_wc4)
+
+## for sbp
+# specify full model
+full_sbp <- lm (sbp ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp), data=nhefs) 
+
+# do stepwise selection
+stepwise_sbp <- stepAIC(full_sbp, direction = "both")
+summary(stepwise_sbp)
+
+select_sbp <- sbp ~ qsmk + sex + race + age + education + wt71 + hbp + qsmk:sex + qsmk:race + qsmk:hbp
+result_sbp4 <- calculate_ATE(select_sbp, nhefs, num_bootstraps = 100)
+print(result_sbp4)
+
+
+## for dbp
+# specify full model
+full_dbp <- lm (dbp ~ qsmk * (sex + race + poly(age,2) + education + poly(smokeintensity,2) + poly(smokeyrs,2) +
+                              exercise + active + poly(wt71,2) + hbp),data=nhefs) 
+
+# do stepwise selection
+stepwise_dbp <- stepAIC(full_dbp, direction = "both")
+summary(stepwise_dbp)
+
+select_dbp <- dbp ~ qsmk + sex + race + smokeyrs + exercise + active + wt71 + hbp + qsmk : active
+result_dbp4 <- calculate_ATE(select_dbp, nhefs, num_bootstraps = 100)
+print(result_dbp4)
+
+rows_bonus <- c("ATE", "Standard Error", "95% CI")
+columns_bonus <- c("Weight Change", "SBP", "DBP")
+
+table_bonus <- rbind(result_wc4, result_sbp4, result_dbp4)
+colnames(table_bonus) <- rows_bonus
+rownames(table_bonus) <- columns_bonus
+
+kable(table_bonus, caption = "Outcome Table by Stepwise Selection")
+```
