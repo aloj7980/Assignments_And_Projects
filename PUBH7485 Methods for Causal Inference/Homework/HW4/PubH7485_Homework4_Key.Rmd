@@ -1,0 +1,685 @@
+---
+title: "PubH7485 Homework4 Key"
+date: "2024-10-18"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(7485)
+
+library(dplyr)
+library(labelled)
+library(causaldata)
+library(knitr)
+library(MASS)
+library(reshape2)
+library(ggplot2)
+library(survey)
+library(tableone)
+
+library(formattable)
+library(rms)
+library(forestplot)
+library(Matching)
+library(MatchIt)
+```
+
+```{r, include=F}
+data('nhefs')
+
+# treatment
+nhefs$qsmk 
+# outcomes of interest
+nhefs$wt82_71
+nhefs$sbp
+nhefs$dbp
+
+all_covars <- setdiff(names(nhefs), c('dadth', 'death', 'hightax82', 'modth', 'price71_82', 
+                                      'price82', 'seqn', 'yrdth', 'wt82', 'tax71_82',
+                                      'tax82', 'smokeyrs', 'smkintensity82_71',
+                                      'birthplace','id','censored','older'))
+
+adj_vars <- c('sex', 'race', 'age', 'education', 'smokeintensity', 'smokeyrs', 'exercise', 'active', 'wt71', 'hbp')
+
+
+# Convert categorical variables to factors and set levels for them in nhefs data frame
+nhefs$active <- factor(nhefs$active, levels = c(0, 1, 2), labels = c("Very active", "Moderately active", "Inactive"))
+nhefs$alcoholfreq <- factor(nhefs$alcoholfreq, levels = c(0, 1, 2, 3, 4, 5), labels = c("Almost every day", "2-3 times/week", "1-4 times/month", "< 12 times/year", "No alcohol last year", "Unknown"))
+nhefs$alcoholpy <- factor(nhefs$alcoholpy, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$alcoholtype <- factor(nhefs$alcoholtype, levels = c(1, 2, 3, 4), labels = c("Beer", "Wine", "Liquor", "Other/Unknown"))
+nhefs$allergies <- factor(nhefs$allergies, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$asthma <- factor(nhefs$asthma, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$birthcontrol <- factor(nhefs$birthcontrol, levels = c(0, 1, 2), labels = c("No", "Yes", "Missing"))
+nhefs$boweltrouble <- factor(nhefs$boweltrouble, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$bronch <- factor(nhefs$bronch, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$chroniccough <- factor(nhefs$chroniccough, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$colitis <- factor(nhefs$colitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$diabetes <- factor(nhefs$diabetes, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$education <- factor(nhefs$education, levels = c(1, 2, 3, 4, 5), labels = c("8th grade or less", "HS dropout", "HS", "College dropout", "College or more"))
+nhefs$exercise <- factor(nhefs$exercise, levels = c(0, 1, 2), labels = c("Little or no exercise", "Moderate exercise", "Much exercise"))
+nhefs$hayfever <- factor(nhefs$hayfever, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hbp <- factor(nhefs$hbp, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$hbpmed <- factor(nhefs$hbpmed, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$headache <- factor(nhefs$headache, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hepatitis <- factor(nhefs$hepatitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hf <- factor(nhefs$hf, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$marital <- factor(nhefs$marital, levels = c(1, 2, 3, 4, 5, 6, 8), labels = c("Under 17", "Married", "Widowed", "Never married", "Divorced", "Separated", "Unknown"))
+nhefs$nerves <- factor(nhefs$nerves, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$nervousbreak <- factor(nhefs$nervousbreak, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$otherpain <- factor(nhefs$otherpain, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pepticulcer <- factor(nhefs$pepticulcer, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pica <- factor(nhefs$pica, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$polio <- factor(nhefs$polio, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$qsmk <- factor(nhefs$qsmk, levels = c(0, 1), labels = c("No", "Yes"))
+nhefs$race <- factor(nhefs$race, levels = c(0, 1), labels = c("White", "Black or Other"))
+nhefs$sex <- factor(nhefs$sex, levels = c(0, 1), labels = c("Male", "Female"))
+nhefs$tb <- factor(nhefs$tb, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$tumor <- factor(nhefs$tumor, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$weakheart <- factor(nhefs$weakheart, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$wtloss <- factor(nhefs$wtloss, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$lackpep <- factor(nhefs$lackpep, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$infection <- factor(nhefs$infection, levels = c(0, 1), labels = c("Never", "Ever"))
+
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in all_covars) {
+  if (is.numeric(nhefs[[var]])) {
+    # Impute missing values for numeric variables with the median
+    nhefs[[var]][is.na(nhefs[[var]])] <- median(nhefs[[var]], na.rm = TRUE)
+    print(paste("Imputed numeric variable:", var))
+    
+  } else if (is.factor(nhefs[[var]]) || is.character(nhefs[[var]])) {
+    # Impute missing values for categorical variables with the mode
+    nhefs[[var]][is.na(nhefs[[var]])] <- mode_function(nhefs[[var]])
+    # nhefs[[var]] <- as.factor(nhefs[[var]])  # Ensure it's still a factor
+    print(paste("Imputed categorical variable:", var))
+  }
+}
+
+vars_to_include1 <- setdiff(names(nhefs), c('qsmk','wt82_71','sbp','dbp'))
+```
+
+
+## Question 1 (30 points total, 5 for each estimate)
+
+```{r, include=F}
+m1 <- glm(wt82_71 ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+m2 <- glm(sbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+m3 <- glm(dbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+p1 <- glm(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + 
+            exercise + active + poly(wt71, 2) + hbp, family = binomial(), data = nhefs)
+
+# Regression
+data_trt <- data_ctr <- nhefs[nhefs$qsmk == 'Yes', ]
+
+data_trt$qsmk = 'Yes'; data_trt$qsmk <- as.factor(data_trt$qsmk)
+data_ctr$qsmk = 'No'; data_ctr$qsmk <- as.factor(data_ctr$qsmk)
+
+pred1_wc <- predict(m1, newdata = data_trt, type = "response")
+pred0_wc <- predict(m1, newdata = data_ctr, type = "response")
+(ATT_wc <- mean(pred1_wc - pred0_wc))
+
+pred1_sbp <- predict(m2, newdata = data_trt, type = "response")
+pred0_sbp <- predict(m2, newdata = data_ctr, type = "response")
+(ATT_sbp <- mean(pred1_sbp - pred0_sbp))
+
+pred1_dbp <- predict(m3, newdata = data_trt, type = "response")
+pred0_dbp <- predict(m3, newdata = data_ctr, type = "response")
+(ATT_dbp <- mean(pred1_dbp - pred0_dbp))
+
+
+# PS regression
+nhefs$ps <- predict(p1, type = "response")
+
+m1.ps <- glm(wt82_71 ~ qsmk*rcs(ps, 5), data = nhefs)
+m2.ps <- glm(sbp ~ qsmk*rcs(ps, 5), data = nhefs)
+m3.ps <- glm(dbp ~ qsmk*rcs(ps, 5), data = nhefs)
+
+data_trt_alt <- data_ctr_alt <- nhefs
+data_trt_alt$qsmk = 'Yes'
+data_ctr_alt$qsmk = 'No'
+
+pred1.ps_wc <- predict(m1.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_wc <- predict(m1.ps, newdata = data_ctr_alt, type = "response")
+(ATT.ps_wc <- mean(pred1.ps_wc[nhefs$qsmk == 'Yes'] - pred0.ps_wc[nhefs$qsmk == 'Yes']))
+
+pred1.ps_sbp <- predict(m2.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_sbp <- predict(m2.ps, newdata = data_ctr_alt, type = "response")
+ATT.ps_sbp <- mean(pred1.ps_sbp[nhefs$qsmk == 'Yes'] - pred0.ps_sbp[nhefs$qsmk == 'Yes'])
+
+pred1.ps_dbp <- predict(m3.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_dbp <- predict(m3.ps, newdata = data_ctr_alt, type = "response")
+ATT.ps_dbp <- mean(pred1.ps_dbp[nhefs$qsmk == 'Yes'] - pred0.ps_dbp[nhefs$qsmk == 'Yes'])
+
+# PS stratification
+ps <- predict(p1, type = "response")
+
+ps_quintile <- cut(ps, 
+	breaks = c(0, quantile(ps[nhefs$qsmk == 'Yes'], p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+nA <- nrow(nhefs[nhefs$qsmk == 'Yes', ])
+nAj <- table(ps_quintile[nhefs$qsmk == 'Yes'])
+
+te_quintile_wc <- tapply(nhefs$wt82_71[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$wt82_71[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_wc <- sum(te_quintile_wc *nAj/nA))
+
+te_quintile_sbp <- tapply(nhefs$sbp[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$sbp[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_sbp <- sum(te_quintile_sbp *nAj/nA))
+
+te_quintile_dbp <- tapply(nhefs$dbp[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$dbp[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_dbp <- sum(te_quintile_dbp *nAj/nA))
+
+# IPW
+w1 <- as.numeric(nhefs$qsmk)-1
+w0 <- (1-(as.numeric(nhefs$qsmk)-1))/(1-ps)*ps
+(ATT_IPW_wc <- weighted.mean(nhefs$wt82_71, w = w1) - weighted.mean(nhefs$wt82_71, w=w0))
+(ATT_IPW_sbp <- weighted.mean(nhefs$sbp, w = w1) - weighted.mean(nhefs$sbp, w=w0))
+(ATT_IPW_dbp <- weighted.mean(nhefs$dbp, w = w1) - weighted.mean(nhefs$dbp, w=w0))
+
+```
+
+```{r, include=F}
+## matching
+# 1:1
+rownames(nhefs) <- 1:nrow(nhefs)
+mod_match1 <- matchit(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+                          poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, 
+            distance = "logit", method = "nearest", data = nhefs, ratio = 1)
+print(tail(mod_match1$match.matrix))
+
+nhefs_match <- data.frame(rbind(nhefs[nhefs$qsmk == 'Yes', ], nhefs[as.numeric(mod_match1$match.matrix), ]))
+tabmatched1.1 <- CreateTableOne(vars = adj_vars, strata = "qsmk",
+	data = nhefs_match, test = FALSE)
+t1.1 <- print(tabmatched1.1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+
+plot(mod_match1, type = "hist")
+# plot(mod_match1, type = "QQ")
+
+n1 <- table(nhefs$qsmk)[2]
+n0 <- length(as.numeric(mod_match1$match.matrix))
+
+p1_wc <- mean(nhefs$wt82_71[nhefs$qsmk == 'Yes'])
+p0_wc <- mean(nhefs$wt82_71[as.numeric(mod_match1$match.matrix)])
+p1_sbp <- mean(nhefs$sbp[nhefs$qsmk == 'Yes'])
+p0_sbp <- mean(nhefs$sbp[as.numeric(mod_match1$match.matrix)])
+p1_dbp <- mean(nhefs$dbp[nhefs$qsmk == 'Yes'])
+p0_dbp <- mean(nhefs$dbp[as.numeric(mod_match1$match.matrix)])
+
+(ATT1match_wc <- p1_wc -  p0_wc)
+(ATT1match_sbp <- p1_sbp -  p0_sbp)
+(ATT1match_dbp <- p1_dbp -  p0_dbp)
+
+# 2:1
+mod_match2 <- matchit(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+                          poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, 
+            distance = "logit", method = "nearest", data = nhefs, ratio = 2)
+print(tail(mod_match2$match.matrix))
+
+nhefs_match2 <- data.frame(rbind(nhefs[nhefs$qsmk == 'Yes', ], nhefs[as.numeric(mod_match2$match.matrix), ]))
+tabmatched2.1 <- CreateTableOne(vars = adj_vars, strata = "qsmk",
+	data = nhefs_match2, test = FALSE)
+t2.1 <- print(tabmatched2.1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+
+plot(mod_match2, type = "hist")
+# plot(mod_match2, type = "QQ")
+
+n1 <- table(nhefs$qsmk)[2]
+n0_2.1 <- length(as.numeric(mod_match2$match.matrix))
+
+p1_wc_2.1 <- mean(nhefs$wt82_71[nhefs$qsmk == 'Yes'])
+p0_wc_2.1 <- mean(nhefs$wt82_71[as.numeric(mod_match2$match.matrix)])
+p1_sbp_2.1 <- mean(nhefs$sbp[nhefs$qsmk == 'Yes'])
+p0_sbp_2.1 <- mean(nhefs$sbp[as.numeric(mod_match2$match.matrix)])
+p1_dbp_2.1 <- mean(nhefs$dbp[nhefs$qsmk == 'Yes'])
+p0_dbp_2.1 <- mean(nhefs$dbp[as.numeric(mod_match2$match.matrix)])
+
+(ATT2match_wc <- p1_wc_2.1 -  p0_wc_2.1)
+(ATT2match_sbp <- p1_sbp_2.1 -  p0_sbp_2.1)
+(ATT2match_dbp <- p1_dbp_2.1 -  p0_dbp_2.1)
+
+```
+```{r,echo=F}
+ATT_reg <- c(ATT_wc, ATT_sbp, ATT_dbp)
+ATT_ps <- c(ATT.ps_wc, ATT.ps_sbp, ATT.ps_dbp)
+ATT_pss <- c(ATT_PSS_wc, ATT_PSS_sbp, ATT_PSS_dbp)
+ATT_ipw <- c(ATT_IPW_wc, ATT_IPW_sbp, ATT_IPW_dbp)
+ATT_match_11 <- c(ATT1match_wc, ATT1match_sbp, ATT1match_dbp)
+ATT_match_21 <- c(ATT2match_wc, ATT2match_sbp, ATT2match_dbp)
+
+
+tabletext <- rbind(c("", "Weight Change", "SBP", "DBP"),
+	c("Regression", round(ATT_reg, digits = 3)),
+	c("PS Regression", round(ATT_ps, digits = 3)),
+	c("PSS", round(ATT_pss, digits=3)),
+	c("IPW", round(ATT_ipw, digits=3)),
+	c("Match 1:1", round(ATT_match_11, digits=3)),
+	c("Match 2:1", round(ATT_match_21, digits=3))
+	)
+
+ATT_table <- as.data.frame(tabletext)
+colnames(ATT_table) <- c("", "", "", "") 
+kable(ATT_table, caption = "ATT estimates using different causal methods")
+```
+The model used for obtaining ATTs could be different (based on the best model you chose from the previous homework), but the estimates should be similar. 
+
+
+## Question 2 (20 points total, 10 for plots and 10 for tables)
+
+I created histograms, SMD plot and tableones for diagnosis of the matching process. Other diagnosis (including QQ-plots) are also accepted. 
+
+We can see the matching process (for both 1:1 and 2:1 matching) gives us balance of the adjusted covariates between the 'qsmk' groups. 
+
+```{r,echo=F}
+# table diagnosis
+kable(t1.1)
+kable(t2.1)
+
+# plot diagnosis
+print("For 1:1 Matching")
+plot(mod_match1, type = "hist")
+print("For 2:1 Matching")
+plot(mod_match2, type = "hist")
+
+
+nhefs$weight_a <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps, 1 / (1 - ps)))
+dataSvy_a <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_a)
+tabUnweighted_a <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_a <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_a, test = FALSE)
+
+# Extracting SMD values
+dataPlot_a <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_a)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_a)),
+                       IPW  = as.numeric(ExtractSmd(tabWeighted_a)))
+
+# Convert to long format for ggplot
+dataPlotMelt_a <- melt(data = dataPlot_a,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+# Extracting SMD values
+dataPlot_b <- data.frame(variable  = rownames(ExtractSmd(tabmatched1.1)),
+                       Unweighted = as.numeric(ExtractSmd(tabmatched1.1)),
+                       match_1.1  = as.numeric(ExtractSmd(tabmatched1.1)))
+
+# Convert to long format for ggplot
+dataPlotMelt_b <- melt(data = dataPlot_b,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+# Extracting SMD values
+dataPlot_c <- data.frame(variable  = rownames(ExtractSmd(tabmatched2.1)),
+                       Unweighted = as.numeric(ExtractSmd(tabmatched2.1)),
+                       match_2.1  = as.numeric(ExtractSmd(tabmatched2.1)))
+
+# Convert to long format for ggplot
+dataPlotMelt_c <- melt(data = dataPlot_c,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+
+dataPlotMelt <- rbind(dataPlotMelt_a, dataPlotMelt_b[11:20, ], dataPlotMelt_c[11:20, ])
+dataPlotMelt %>%
+  arrange(desc(SMD), variable) %>%
+  mutate(variable_ordered = factor(variable, levels = unique(variable))) %>%
+  ggplot(aes(x = variable_ordered, y = SMD, group = Method, color = Method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.1, color = "black", linewidth = 0.1) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.key = element_blank()) +  xlab('Variables') + 
+  labs(title="Standardized Mean Differences for all Models")
+```
+
+
+
+# Appendix - R code
+
+## Question 1 
+
+1. Load packages and impute the dataset
+
+```{r, eval=F}
+set.seed(7485)
+
+library(dplyr)
+library(labelled)
+library(causaldata)
+library(knitr)
+library(MASS)
+library(reshape2)
+library(ggplot2)
+library(survey)
+library(tableone)
+
+library(formattable)
+library(rms)
+library(forestplot)
+library(Matching)
+library(MatchIt)
+
+data('nhefs')
+
+# treatment
+nhefs$qsmk 
+# outcomes of interest
+nhefs$wt82_71
+nhefs$sbp
+nhefs$dbp
+
+all_covars <- setdiff(names(nhefs), c('dadth', 'death', 'hightax82', 'modth', 'price71_82', 
+                                      'price82', 'seqn', 'yrdth', 'wt82', 'tax71_82',
+                                      'tax82', 'smokeyrs', 'smkintensity82_71',
+                                      'birthplace','id','censored','older'))
+
+adj_vars <- c('sex', 'race', 'age', 'education', 'smokeintensity', 'smokeyrs', 'exercise', 'active', 'wt71', 'hbp')
+
+
+# Convert categorical variables to factors and set levels for them in nhefs data frame
+nhefs$active <- factor(nhefs$active, levels = c(0, 1, 2), labels = c("Very active", "Moderately active", "Inactive"))
+nhefs$alcoholfreq <- factor(nhefs$alcoholfreq, levels = c(0, 1, 2, 3, 4, 5), labels = c("Almost every day", "2-3 times/week", "1-4 times/month", "< 12 times/year", "No alcohol last year", "Unknown"))
+nhefs$alcoholpy <- factor(nhefs$alcoholpy, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$alcoholtype <- factor(nhefs$alcoholtype, levels = c(1, 2, 3, 4), labels = c("Beer", "Wine", "Liquor", "Other/Unknown"))
+nhefs$allergies <- factor(nhefs$allergies, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$asthma <- factor(nhefs$asthma, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$birthcontrol <- factor(nhefs$birthcontrol, levels = c(0, 1, 2), labels = c("No", "Yes", "Missing"))
+nhefs$boweltrouble <- factor(nhefs$boweltrouble, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$bronch <- factor(nhefs$bronch, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$chroniccough <- factor(nhefs$chroniccough, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$colitis <- factor(nhefs$colitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$diabetes <- factor(nhefs$diabetes, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$education <- factor(nhefs$education, levels = c(1, 2, 3, 4, 5), labels = c("8th grade or less", "HS dropout", "HS", "College dropout", "College or more"))
+nhefs$exercise <- factor(nhefs$exercise, levels = c(0, 1, 2), labels = c("Little or no exercise", "Moderate exercise", "Much exercise"))
+nhefs$hayfever <- factor(nhefs$hayfever, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hbp <- factor(nhefs$hbp, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$hbpmed <- factor(nhefs$hbpmed, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$headache <- factor(nhefs$headache, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hepatitis <- factor(nhefs$hepatitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hf <- factor(nhefs$hf, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$marital <- factor(nhefs$marital, levels = c(1, 2, 3, 4, 5, 6, 8), labels = c("Under 17", "Married", "Widowed", "Never married", "Divorced", "Separated", "Unknown"))
+nhefs$nerves <- factor(nhefs$nerves, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$nervousbreak <- factor(nhefs$nervousbreak, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$otherpain <- factor(nhefs$otherpain, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pepticulcer <- factor(nhefs$pepticulcer, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pica <- factor(nhefs$pica, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$polio <- factor(nhefs$polio, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$qsmk <- factor(nhefs$qsmk, levels = c(0, 1), labels = c("No", "Yes"))
+nhefs$race <- factor(nhefs$race, levels = c(0, 1), labels = c("White", "Black or Other"))
+nhefs$sex <- factor(nhefs$sex, levels = c(0, 1), labels = c("Male", "Female"))
+nhefs$tb <- factor(nhefs$tb, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$tumor <- factor(nhefs$tumor, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$weakheart <- factor(nhefs$weakheart, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$wtloss <- factor(nhefs$wtloss, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$lackpep <- factor(nhefs$lackpep, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$infection <- factor(nhefs$infection, levels = c(0, 1), labels = c("Never", "Ever"))
+
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in all_covars) {
+  if (is.numeric(nhefs[[var]])) {
+    # Impute missing values for numeric variables with the median
+    nhefs[[var]][is.na(nhefs[[var]])] <- median(nhefs[[var]], na.rm = TRUE)
+    print(paste("Imputed numeric variable:", var))
+    
+  } else if (is.factor(nhefs[[var]]) || is.character(nhefs[[var]])) {
+    # Impute missing values for categorical variables with the mode
+    nhefs[[var]][is.na(nhefs[[var]])] <- mode_function(nhefs[[var]])
+    # nhefs[[var]] <- as.factor(nhefs[[var]])  # Ensure it's still a factor
+    print(paste("Imputed categorical variable:", var))
+  }
+}
+
+```
+
+2. Obtain ATT estimates
+
+```{r, eval=F}
+m1 <- glm(wt82_71 ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+m2 <- glm(sbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+m3 <- glm(dbp ~ qsmk * (sex + race + age + education + smokeintensity + smokeyrs + 
+                 exercise + active + wt71 + hbp), data = nhefs)
+
+p1 <- glm(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + 
+            exercise + active + poly(wt71, 2) + hbp, family = binomial(), data = nhefs)
+
+# Regression
+data_trt <- data_ctr <- nhefs[nhefs$qsmk == 'Yes', ]
+
+data_trt$qsmk = 'Yes'; data_trt$qsmk <- as.factor(data_trt$qsmk)
+data_ctr$qsmk = 'No'; data_ctr$qsmk <- as.factor(data_ctr$qsmk)
+
+pred1_wc <- predict(m1, newdata = data_trt, type = "response")
+pred0_wc <- predict(m1, newdata = data_ctr, type = "response")
+(ATT_wc <- mean(pred1_wc - pred0_wc))
+
+pred1_sbp <- predict(m2, newdata = data_trt, type = "response")
+pred0_sbp <- predict(m2, newdata = data_ctr, type = "response")
+(ATT_sbp <- mean(pred1_sbp - pred0_sbp))
+
+pred1_dbp <- predict(m3, newdata = data_trt, type = "response")
+pred0_dbp <- predict(m3, newdata = data_ctr, type = "response")
+(ATT_dbp <- mean(pred1_dbp - pred0_dbp))
+
+
+# PS regression
+nhefs$ps <- predict(p1, type = "response")
+
+m1.ps <- glm(wt82_71 ~ qsmk*rcs(ps, 5), data = nhefs)
+m2.ps <- glm(sbp ~ qsmk*rcs(ps, 5), data = nhefs)
+m3.ps <- glm(dbp ~ qsmk*rcs(ps, 5), data = nhefs)
+
+data_trt_alt <- data_ctr_alt <- nhefs
+data_trt_alt$qsmk = 'Yes'
+data_ctr_alt$qsmk = 'No'
+
+pred1.ps_wc <- predict(m1.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_wc <- predict(m1.ps, newdata = data_ctr_alt, type = "response")
+(ATT.ps_wc <- mean(pred1.ps_wc[nhefs$qsmk == 'Yes'] - pred0.ps_wc[nhefs$qsmk == 'Yes']))
+
+pred1.ps_sbp <- predict(m2.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_sbp <- predict(m2.ps, newdata = data_ctr_alt, type = "response")
+ATT.ps_sbp <- mean(pred1.ps_sbp[nhefs$qsmk == 'Yes'] - pred0.ps_sbp[nhefs$qsmk == 'Yes'])
+
+pred1.ps_dbp <- predict(m3.ps, newdata = data_trt_alt, type = "response")
+pred0.ps_dbp <- predict(m3.ps, newdata = data_ctr_alt, type = "response")
+ATT.ps_dbp <- mean(pred1.ps_dbp[nhefs$qsmk == 'Yes'] - pred0.ps_dbp[nhefs$qsmk == 'Yes'])
+
+# PS stratification
+ps <- predict(p1, type = "response")
+
+ps_quintile <- cut(ps, 
+	breaks = c(0, quantile(ps[nhefs$qsmk == 'Yes'], p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+nA <- nrow(nhefs[nhefs$qsmk == 'Yes', ])
+nAj <- table(ps_quintile[nhefs$qsmk == 'Yes'])
+
+te_quintile_wc <- tapply(nhefs$wt82_71[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$wt82_71[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_wc <- sum(te_quintile_wc *nAj/nA))
+
+te_quintile_sbp <- tapply(nhefs$sbp[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$sbp[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_sbp <- sum(te_quintile_sbp *nAj/nA))
+
+te_quintile_dbp <- tapply(nhefs$dbp[nhefs$qsmk == 'Yes'], ps_quintile[nhefs$qsmk == 'Yes'], mean) -
+	tapply(nhefs$dbp[nhefs$qsmk == 'No'], ps_quintile[nhefs$qsmk == 'No'], mean)
+(ATT_PSS_dbp <- sum(te_quintile_dbp *nAj/nA))
+
+# IPW
+w1 <- as.numeric(nhefs$qsmk)-1
+w0 <- (1-(as.numeric(nhefs$qsmk)-1))/(1-ps)*ps
+(ATT_IPW_wc <- weighted.mean(nhefs$wt82_71, w = w1) - weighted.mean(nhefs$wt82_71, w=w0))
+(ATT_IPW_sbp <- weighted.mean(nhefs$sbp, w = w1) - weighted.mean(nhefs$sbp, w=w0))
+(ATT_IPW_dbp <- weighted.mean(nhefs$dbp, w = w1) - weighted.mean(nhefs$dbp, w=w0))
+
+## matching
+# 1:1
+rownames(nhefs) <- 1:nrow(nhefs)
+mod_match1 <- matchit(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+                          poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, 
+            distance = "logit", method = "nearest", data = nhefs, ratio = 1)
+print(tail(mod_match1$match.matrix))
+
+nhefs_match <- data.frame(rbind(nhefs[nhefs$qsmk == 'Yes', ], nhefs[as.numeric(mod_match1$match.matrix), ]))
+tabmatched1.1 <- CreateTableOne(vars = adj_vars, strata = "qsmk",
+	data = nhefs_match, test = FALSE)
+t1.1 <- print(tabmatched1.1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+
+# plot(mod_match1, type = "hist")
+# plot(mod_match1, type = "QQ")
+
+n1 <- table(nhefs$qsmk)[2]
+n0 <- length(as.numeric(mod_match1$match.matrix))
+
+p1_wc <- mean(nhefs$wt82_71[nhefs$qsmk == 'Yes'])
+p0_wc <- mean(nhefs$wt82_71[as.numeric(mod_match1$match.matrix)])
+p1_sbp <- mean(nhefs$sbp[nhefs$qsmk == 'Yes'])
+p0_sbp <- mean(nhefs$sbp[as.numeric(mod_match1$match.matrix)])
+p1_dbp <- mean(nhefs$dbp[nhefs$qsmk == 'Yes'])
+p0_dbp <- mean(nhefs$dbp[as.numeric(mod_match1$match.matrix)])
+
+(ATT1match_wc <- p1_wc -  p0_wc)
+(ATT1match_sbp <- p1_sbp -  p0_sbp)
+(ATT1match_dbp <- p1_dbp -  p0_dbp)
+
+# 2:1
+mod_match2 <- matchit(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + 
+                          poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, 
+            distance = "logit", method = "nearest", data = nhefs, ratio = 2)
+print(tail(mod_match2$match.matrix))
+
+nhefs_match2 <- data.frame(rbind(nhefs[nhefs$qsmk == 'Yes', ], nhefs[as.numeric(mod_match2$match.matrix), ]))
+tabmatched2.1 <- CreateTableOne(vars = adj_vars, strata = "qsmk",
+	data = nhefs_match2, test = FALSE)
+t2.1 <- print(tabmatched2.1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+
+# plot(mod_match2, type = "hist")
+# plot(mod_match2, type = "QQ")
+
+n1 <- table(nhefs$qsmk)[2]
+n0_2.1 <- length(as.numeric(mod_match2$match.matrix))
+
+p1_wc_2.1 <- mean(nhefs$wt82_71[nhefs$qsmk == 'Yes'])
+p0_wc_2.1 <- mean(nhefs$wt82_71[as.numeric(mod_match2$match.matrix)])
+p1_sbp_2.1 <- mean(nhefs$sbp[nhefs$qsmk == 'Yes'])
+p0_sbp_2.1 <- mean(nhefs$sbp[as.numeric(mod_match2$match.matrix)])
+p1_dbp_2.1 <- mean(nhefs$dbp[nhefs$qsmk == 'Yes'])
+p0_dbp_2.1 <- mean(nhefs$dbp[as.numeric(mod_match2$match.matrix)])
+
+(ATT2match_wc <- p1_wc_2.1 -  p0_wc_2.1)
+(ATT2match_sbp <- p1_sbp_2.1 -  p0_sbp_2.1)
+(ATT2match_dbp <- p1_dbp_2.1 -  p0_dbp_2.1)
+
+ATT_reg <- c(ATT_wc, ATT_sbp, ATT_dbp)
+ATT_ps <- c(ATT.ps_wc, ATT.ps_sbp, ATT.ps_dbp)
+ATT_pss <- c(ATT_PSS_wc, ATT_PSS_sbp, ATT_PSS_dbp)
+ATT_ipw <- c(ATT_IPW_wc, ATT_IPW_sbp, ATT_IPW_dbp)
+ATT_match_11 <- c(ATT1match_wc, ATT1match_sbp, ATT1match_dbp)
+ATT_match_21 <- c(ATT2match_wc, ATT2match_sbp, ATT2match_dbp)
+
+
+tabletext <- rbind(c("", "Weight Change", "SBP", "DBP"),
+	c("Regression", round(ATT_reg, digits = 3)),
+	c("PS Regression", round(ATT_ps, digits = 3)),
+	c("PSS", round(ATT_pss, digits=3)),
+	c("IPW", round(ATT_ipw, digits=3)),
+	c("Match 1:1", round(ATT_match_11, digits=3)),
+	c("Match 2:1", round(ATT_match_21, digits=3))
+	)
+
+kable(as.data.frame(tabletext))
+```
+
+## Question 2 
+
+1. Table and plot diagnosis for the matching process
+
+```{r, eval=F}
+# table diagnosis
+kable(t1.1)
+kable(t2.1)
+
+# plot diagnosis
+plot(mod_match1, type = "hist")
+plot(mod_match2, type = "hist")
+
+
+# SMD plot
+nhefs$weight_a <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps, 1 / (1 - ps)))
+dataSvy_a <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_a)
+tabUnweighted_a <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_a <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_a, test = FALSE)
+
+dataPlot_a <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_a)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_a)),
+                       IPW  = as.numeric(ExtractSmd(tabWeighted_a)))
+
+dataPlotMelt_a <- melt(data = dataPlot_a,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+dataPlot_b <- data.frame(variable  = rownames(ExtractSmd(tabmatched1.1)),
+                       Unweighted = as.numeric(ExtractSmd(tabmatched1.1)),
+                       match_1.1  = as.numeric(ExtractSmd(tabmatched1.1)))
+
+dataPlotMelt_b <- melt(data = dataPlot_b,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+dataPlot_c <- data.frame(variable  = rownames(ExtractSmd(tabmatched2.1)),
+                       Unweighted = as.numeric(ExtractSmd(tabmatched2.1)),
+                       match_2.1  = as.numeric(ExtractSmd(tabmatched2.1)))
+
+dataPlotMelt_c <- melt(data = dataPlot_c,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+
+dataPlotMelt <- rbind(dataPlotMelt_a, dataPlotMelt_b[11:20, ], dataPlotMelt_c[11:20, ])
+dataPlotMelt %>%
+  arrange(desc(SMD), variable) %>%
+  mutate(variable_ordered = factor(variable, levels = unique(variable))) %>%
+  ggplot(aes(x = variable_ordered, y = SMD, group = Method, color = Method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.1, color = "black", linewidth = 0.1) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.key = element_blank()) +  xlab('Variables') + 
+  labs(title="Standardized Mean Differences for all Models")
+
+```
+
+
