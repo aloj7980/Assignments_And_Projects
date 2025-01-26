@@ -1,0 +1,184 @@
+---
+title: "Optimal (Single-Stage) Treatment Regimes"
+author: "David M. Vock"
+format: beamer
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+editor: visual
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+library(mediation)
+```
+
+## Key Reference
+- Valeri and VanderWeele (2013) Mediation Analysis Allowing for Exposure-Mediator Interactions and Causal Interpretation: Theoretical Assumptions and Implementation With
+SAS and SPSS Macros. Psychological Methods 
+
+
+## Overview
+
+- Typically want to know (1) does an intervention/treatment work on average, (2) for whom does it work, and (3) why does it work
+- Mediation gets at point (3)
+- Mediation more formally investigates the mechanism by which an intervention affects some outcome of interest
+- Specifically mediation models hypothesize that treatment causes some mediator variable which in turn causes the outcome model
+- Temporal ordering: treatment, mediator, and then outcome. Can think of mediator as a second "treatment" variable 
+- Heuristically, want to know what would happen if one could change the mediator (independent of treatment) and what would happen if one could change the treatment (but hold the mediator constant)
+
+## Examples
+
+- Treatment: Drug treatment program; Outcome: employment; Mediator: drug use
+- Treatment: Behavioral counseling for smoking cessation; Outcome: long-term abstinence; Mediator: self-efficacy
+- Treatment: Interpersonal-psychotherapy for adolescents; Outcome: depression symptoms; Mediator: parent-child conflict resolution
+
+## Causal Diagram
+
+![from Valeri and VanderWeele](mediation_fig.png)
+
+## Potential Outcome Notation
+- Remember: want to understand what would happen to the outcome if I could set both the treatment and the mediator to a particular level. Need to index potential outcome by both treatment & mediator
+- $Y^{a,m}$: the value of the outcome variable for a randomly selected individual if s/he received intervention $a$ and had mediator set to level $m$
+- $M^a$: the value of the mediator for a randomly selected individual if s/he received intervention $a$
+- Note that $Y^1 = Y^{1, M^1}$ and $Y^0 = Y^{0, M^0}$
+
+## Key Estimands of Interest
+- Assume that we have a binary treatment
+- Controlled Direct Effect: $E(Y_i^{1,m} - Y_i^{0,m})$ --> expresses how much the outcome would change on average if the mediator were controlled at level m uniformly in the population, but the treatment were changed from level 0 t0 level 1
+- Natural Direct Effect: $E(Y_i^{1,M_i^0} - Y_i^{0,M_i^0})$ -- > expresses how much the outcome would change if the treatment were set at level 1 versus level 0 but for each individual the mediator were kept at the level it would have taken if untreated
+- Natural Indirect Effect: $E(Y_i^{1,M_i^1} - Y^{1,M_i^0})$ --> expresses how much the outcome would change on average if the exposure were controlled at level 1, but the mediator were changed from the level it would take if $a=0$ to the level it would take if $a=1$
+
+## Key Assumptions
+
+1) no unmeasured confounding of the treatment-outcome relationship
+2) no unmeasured confounding of mediator-outcome relationship
+3) no unmeasured confounding of the treatment-mediator relationship
+4) there is no mediator-outcome confounder that is affected by the treatment
+5) Consistency: $Y = Y^{A, M}$
+
+## Key Assumptions 
+
+- Assumptions 1 and 2 are needed to identify the CDE
+- Assumptions 1-4 are needed to identify the NDE and NIE
+- Assumptions 1 and 3 are automatically satisfied if treatment is randomized 
+
+## Typical Observed Data Models
+
+- outcome model with mediator: $E(Y|A, C, M) = \theta_0 + \theta_1A + \theta_2M + \theta_3AM + \theta_4C$
+- mediator model: $E(M|A, C) = \beta_0 + \beta_1A + \beta_2C$
+
+## Key Estimands of Interest
+
+- Under the no unmeasured confounding and consistency assumptions assumptions
+- $CDE(m) = E(Y^{1, m}-Y^{0, m})$
+- $NDE = E(Y^{1, M^0}-Y^{0, M^0})$
+- $NIE = E(Y^{1, M^1}-Y^{1, M^0})$
+
+## Key Estimands of Interest
+
+- Under the no unmeasured confounding and consistency assumptions assumptions
+- $CDE(m) = (\theta_1 + \theta_3m)$
+- $NDE = \{\theta_1 +\theta_3(\beta_0 + \beta_2c) \}$
+- $NIE = (\theta_2\beta_1 +\theta_3\beta_1)$
+
+## Key Estimators of Interest
+
+- To estimate the CDE, NDE, NIE, typically we would estimate the parameters in the regression models using least squares or maximum likelihood estimators
+- Plug-in the parameter estimates into the formulas on the previous slide
+- Use bootstrap for the standard errors
+
+## Example - From mediation Package
+
+"Job Search Intervention Study (JOBS II). JOBS II is a randomized field experiment that investigates the efficacy of a job training intervention on unemployed workers. The program is designed to not only increase reemployment among the unemployed but also enhance the mental health of the job seekers. In the JOBS II field experiment, 1,801 unemployed workers were randomly assigned to treatment and control groups. Those in the treatment group participatedin job-skills workshops. In the workshops, respondents learned job-search
+skills and coping strategies for dealing with setbacks in the job-search process. Those in the control condition received a booklet describing job-search tips"
+
+## Example - From mediation Package
+
+Key variables
+
+- job_seek: A continuous scale measuring the level of job-search self-efficacy with values from 1 to 5. The mediator variable.
+- depress2: Measure of depressive symptoms post-treatment.
+- econ_hard: Level of economic hardship pre-treatment with values from 1 to 5.
+- sex: Indicator variable for sex. 1 = female
+- age: Age in years.
+
+
+## Outcome Model
+
+```{r, echo = FALSE, warning = FALSE, message=FALSE}
+data("jobs")
+outcome <- lm(depress2 ~ treat + job_seek + treat:job_seek + econ_hard + sex + age, data=jobs)
+round(summary(outcome)$coefficients, digits = 3)
+```
+
+## Mediator Model
+
+```{r, echo = FALSE}
+mediator <- lm(job_seek ~ treat + econ_hard + sex + age, data=jobs)
+round(summary(mediator)$coefficients, digits = 3)
+```
+
+## Calculating NDE and NIE
+
+```{r, echo = FALSE}
+jobs0 <- jobs
+jobs0$treat <- 0
+NDE <- mean(outcome$coefficients[2] + 
+		outcome$coefficients[7]*(predict(mediator, jobs0)))
+NIE <- outcome$coefficients[3]*mediator$coefficients[2] + 
+		outcome$coefficients[7]*mediator$coefficients[2]
+names(NIE) <- NULL
+print("NDE")
+print(NDE, digits = 3)
+print("NIE")
+print(NIE, digits = 3 )
+```
+
+## Use Bootstrap to Obtain SE
+
+```{r, echo = TRUE, cache = TRUE}
+n <- nrow(jobs)
+NDE.boot <- NULL
+NIE.boot <- NULL
+B <- 100
+for(i in 1:B) {
+	jobs.boot <- jobs[sample(1:n, n, replace = TRUE), ]
+	outcome.boot <- lm(depress2 ~ treat + job_seek + treat:job_seek + econ_hard + sex + age, data=jobs.boot)
+	mediator.boot <- lm(job_seek ~ treat + econ_hard + sex + age, data=jobs.boot)
+	jobs0.boot <- jobs.boot
+	jobs0.boot$treat <- 0
+	NDE.boot <- c(NDE.boot,
+		mean(outcome.boot$coefficients[2] + 
+		outcome.boot$coefficients[7]*(predict(mediator.boot, jobs0.boot)))
+		)
+	NIE.boot <- c(NIE.boot,
+		outcome.boot$coefficients[3]*mediator.boot$coefficients[2] + 
+		outcome.boot$coefficients[7]*mediator.boot$coefficients[2])
+}
+```
+
+## Natural Direct Effect
+
+```{r, echo = FALSE}
+print("NDE")
+print(NDE, digits = 3)
+SE_NDE<- sd(NDE.boot) 
+print("Bootstrap SE")
+print(SE_NDE, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(NDE + c(-1, 1)*qnorm(0.975)*SE_NDE, digits = 3)
+```
+
+## Natural Indirect Effect
+
+```{r, echo = FALSE}
+print("NIE")
+print(NIE, digits = 3)
+SE_NIE<- sd(NIE.boot) 
+print("Bootstrap SE")
+print(SE_NIE, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(NIE + c(-1, 1)*qnorm(0.975)*SE_NIE, digits = 3)
+```
+

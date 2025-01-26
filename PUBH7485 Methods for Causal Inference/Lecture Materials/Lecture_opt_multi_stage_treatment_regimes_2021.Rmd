@@ -1,0 +1,592 @@
+---
+title: "Optimal (Multi-Stage) Treatment Regimes"
+author: "David M. Vock"
+date: "PubH 7485/8485"
+output: beamer_presentation
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+library(dplyr)
+library(data.table)
+
+mu0 <- 6.2
+beta1 <- 1.6
+beta2 <- -0.23
+beta3 <- -0.175
+beta4 <- -0.5
+sigma0 <- sigma <- 0.35
+gamma0 <- -3.21
+gamma1 <- 0.80
+
+eta0 <- 3.68
+eta1 <- -0.58
+eta2 <- -1.18
+
+n <- 1000
+
+expit <- function(x) {
+  expit <- exp(x)/(1 + exp(x))
+  return(expit)
+}
+
+set.seed(1101985)
+
+R0 <- rep(0, n)
+logCD40 <- rnorm(n, mu0, sigma0)
+A0<- rbinom(n, 1, expit(eta0 + eta1*logCD40 + eta2*R0))
+cumA0 <- A0
+
+R1 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA0))*(cumA0 > 0 & R0 == 0) + 0*(cumA0 == 0) + 1*(R0 == 1) 
+logCD41 <- logCD40 + rnorm(n, (beta1*A0 + beta2*A0*logCD40 + beta3*(1-A0))*(1-R1) + beta4*R1, sigma)
+A1 <- rbinom(n, 1, expit(eta0 + eta1*logCD41 + eta2*R1))
+cumA1 <- A0 + A1
+
+R2 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA1))*(cumA1 > 0 & R1 == 0) + 0*(cumA1 == 0) + 1*(R1 == 1) 
+logCD42 <- logCD41 + rnorm(n, (beta1*A1 + beta2*A1*logCD41 + beta3*(1-A1))*(1-R2) + beta4*R2, sigma)
+A2 <- rbinom(n, 1, expit(eta0 + eta1*logCD42 + eta2*R2))
+cumA2 <- A0 + A1 + A2
+
+R3 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA2))*(cumA2 > 0 & R2 == 0) + 0*(cumA2 == 0) + 1*(R2 == 1) 
+logCD43 <- logCD42 + rnorm(n, (beta1*A2 + beta2*A2*logCD42 + beta3*(1-A2))*(1-R3) + beta4*R3, sigma)
+A3 <- rbinom(n, 1, expit(eta0 + eta1*logCD43 + eta2*R3))
+cumA3 <- A0 + A1 + A2 + A3
+
+R4 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA3))*(cumA3 > 0 & R3 == 0) + 0*(cumA3 == 0) + 1*(R3 == 1) 
+logCD44 <- logCD43 + rnorm(n, (beta1*A3 + beta2*A3*logCD43 + beta3*(1-A3))*(1-R4) + beta4*R4, sigma)
+
+dataHW3 <- data.frame(ID = 1:n, R0 = R0, CD40 = exp(logCD40), A0 = A0,
+  R1 = R1, CD41 = exp(logCD41), A1 = A1,
+  R2 = R2, CD42 = exp(logCD42), A2 = A2,
+  R3 = R3, CD43 = exp(logCD43), A3 = A3,
+  R4 = R4, CD44 = exp(logCD44))
+```
+
+## Optimal Single Stage Treatment Regime
+
+- Typically, to identify the optimal treatment strategy, we would posit a regression model $E(Y|A, X) = \mu(A, X; \eta)$ and estimate the parameter $\eta$ using least squares or maximum likelihood estimators which we denote by $\hat{\eta}$
+- In this case we could estimate the optimal treatment regime by $\hat{g}^{opt} = I(\mu(1,x; \hat{\eta}) \ge \mu(0, x; \hat{\eta}))$
+- We have seen that there has been work to avoid this "two-step" procedure (OWL)
+
+## Optimal Multi-Stage Treatment Regime
+
+- Previously, we have talked about estimating the anticipated (mean) response if everyone in the population were to follow a particular (dynamic) treatment regime.
+- We could test a variety of different treatment strategies and pick the one which is optimal (i.e., has the highest estimated mean response)
+- Instead I may want to find the optimal regime
+- Can we extend the regression-approach when I want to estimate a multi-stage treatment strategy?
+
+## Optimal Multi-Stage Treatment Regime
+
+First-pass approaches in the context of the HIV problem we have worked on for homework. Each of these is problematic. Why?
+
+- Consider finding the optimal first stage decision. Fit a regression model for (log) CD4 count at 6 months with covariates at baseline (0 months), treatment decision at baseline, and their interaction. That is, $E(CD4_1|A_0, L_0) = \mu(A_0, L_0; \eta_0)$. Estimate the optimal treatment regime at baseline by $\hat{g_0}^{opt} = I(\mu(1,l_0; \hat{\eta}_0) \ge \mu(0, l_0; \hat{\eta}_0))$. 
+- Then for the optimal decision at 6 months, fit a regression model for (log) CD4 count at 12 months with covariates at baseline and 6 months, treatment decision at baseline and 6 months, and possible interactions. That is, $E(CD4_2|A_1, H_1) = \mu(A_1, H_1; \eta_1)$, where $H_1 = (L_0, A_0, L_1)$. Estimate the optimal treatment regime by $\hat{g_1}^{opt} = I(\mu(1,h_1; \hat{\eta}_1) \ge \mu(0, h_1; \hat{\eta}_1))$
+- Continue on in this manner for the remaining decision points
+
+## Optimal Multi-Stage Treatment Regime
+
+First-pass approaches in the context of the HIV problem we have worked on previously. Each of these is problematic. Why?
+
+- Consider finding the optimal first stage decision. Fit a regression model for (log) CD4 count at 24 months (final outcome) with covariates at baseline (0 months), treatment decision at baseline, and their interaction. That is, $E(CD4_4|A_0, L_0) = \mu(A_0, L_0; \eta_0)$. Estimate the optimal treatment regime at baseline by $\hat{g_0}^{opt} = I(\mu(1,l_0; \hat{\eta}_0) \ge \mu(0, l_0; \hat{\eta}_0))$. 
+- Then for the optimal decision at 6 months, fit a regression model for (log) CD4 count at 24 months with covariates at baseline and 6 months, treatment decision at baseline and 6 months, and possible interactions. That is, $E(CD4_4|A_1, H_1) = \mu(A_1, H_1; \eta_1)$, where $H_1 = (L_0, A_0, L_1)$. Estimate the optimal treatment regime by $\hat{g_1}^{opt} = I(\mu(1,h_1; \hat{\eta}_1) \ge \mu(0, h_1; \hat{\eta}_1))$
+- Continue on in this manner for the remaining decision points
+
+## Optimal Multi-Stage Treatment Regime
+
+First-pass approaches in the context of the HIV problem we have worked on previously. Each of these is problematic. Why?
+
+- Consider finding the optimal first stage decision. Fit a regression model for (log) CD4 count at 24 months (final outcome) with all covariate and treatment history recorded. That is, $E(CD4_4|A_0, L_0, A_1, \ldots, A_3, L_3) = \mu(A_0, L_0, A_1, \ldots, A_3, L_3; \eta)$. Estimate the optimal treatment regime at baseline by $\hat{g_0}^{opt} = I(\mu(1,l_0, a_1, \ldots, a_3, l_3; \hat{\eta}) \ge \mu(0, l_0, a_1, \ldots, a_3, l_3; \hat{\eta}))$.
+- Then for the optimal decision at 6 months, using the same regression model as before, estimate the optimal treatment regime by $\hat{g_1}^{opt} = I(\mu(a_0,l_0, 1, \ldots, a_3, l_3; \hat{\eta}) \ge \mu( a_0,l_0, 0, \ldots, a_3, l_3; \hat{\eta}_1))$
+- Continue on in this manner for the remaining decision points
+
+## Optimal Multi-Stage Treatment Regime
+
+- The preceding examples should (hopefully) convince you that finding the optimal regime starting at the first time point and going forward is problematic
+- Ideally, we would start at the last time point and find the optimal regime at that time point using regression-based techniques. 
+- Then if we knew (or could estimate) the response assuming all subjects followed the optimal regime at the last decision point, we could use that outcome in a regression model to estimate the optimal regime at the $M -1$ decision point. 
+- We could continue using this recursive pattern until we reach the first decision point. 
+
+## Q-learning 
+
+Notation: let $H_j = (L_0, A_0, \ldots, L_j)$ denote the history (covariate and treatment) up until the $j^th$ decision point
+
+1) Start at the last decision point ($M^{th}$ time point). Finding the optimal regime at the last decision point is equivalent to a single stage decision point. Posit a regression model for the outcome ($Y$) given $H_M$ and $A_M$ (that is  $Q_M(A_M, H_M) = E(Y|A_M, H_M) = \mu(A_M, H_M; \eta_M)$) and estimate the regression parameters. Estimate the optimal treatment regime at $t_M$ by $\hat{g_M}^{opt} = I(\mu(1,h_M; \hat{\eta}_M) \ge \mu(0, h_M; \hat{\eta}_M))$.
+2) Estimate the anticipated response $V_M(H_M)$ if all subjects were to follow the optimal regime at time $t_M$. That is, $\hat{V}_M(H_M) = max_{a_M} \mu(a_M, H_M; \hat{\eta}_M)$
+
+## Q-learning 
+3) Posit a regression model for the outcome if all subjects were to follow the optimal regime at time $t_M$ given $H_{M-1}$ and $A_{M-1}$ (that is  $Q_{M-1}(A_{M-1}, H_{M-1}) = E(\hat{V}_M|A_{M-1}, H_{M-1}) = \mu(A_{M-1}, H_{M-1}; \eta_{M-1})$) and estimate the regression parameters. Estimate the optimal treatment regime at $t_{M-1}$ by $\hat{g_{M-1}}^{opt} = I(\mu(1,h_{M-1}; \hat{\eta}_{M-1}) \ge \mu(0, h_{M-1}; \hat{\eta}_{M-1}))$
+4) Estimate the anticipated response $\hat{V}_{M-1}(H_{M-1})$ if all subjects were to follow the optimal regime at time $t_M$ and $t_{M-1}$. That is, $\hat{V}_{M-1}(H_{M-1}) = max_{a_{M-1}} \mu(a_{M-1}, H_{M-1}; \hat{\eta}_{M-1})$
+
+## Q-learning 
+5) Continue repeating the previous two steps until one reaches the decision point at time $t_0$. That is, for the decision at time $t_j$, posit a regression model for the outcome if all subjects were to follow the optimal regime at all subsequent time points $(t_{j+1}, \ldots, t_M)$ given $H_{j}$ and $A_{j}$ (that is  $Q_{j}(A_{j}, H_{j}) = E(\hat{V}_j|A_{j}, H_{j}) = \mu(A_{j}, H_{j}; \eta_{j})$) and estimate the regression parameters. Estimate the optimal treatment regime at $t_{j}$ by $\hat{g_j}^{opt} = I(\mu(1,h_{j}; \hat{\eta}_{j}) \ge \mu(0, h_j; \hat{\eta}_{j}))$. Then estimate the anticipated response $\hat{V}_{j}(H_{j})$ if all subjects were to follow the optimal regime at time $t_j$ through $t_{M}$. That is, $\hat{V}_{j}(H_{j}) = max_{a_{j}} \mu(a_{j}, H_{j}; \hat{\eta}_{j})$
+
+
+## Estimated response under the optimal regimes
+
+- Note that we could estimate $E(Y^{g^{opt}})$ by $n^{-1} \sum \hat{V}_0(H_0)$ (that is the average of the anticipated response if all subjects were to follow the optimal regime from time $t_0$ onward)
+- This estimate will be upwardly biased
+- We could also estimate $E(Y^{g^{opt}})$ using the other approaches that we have learned but this would require fitting additional models  
+
+
+## HIV Example
+
+ - Start by fitting model for (log) CD4 at the final timepoint
+ - We will fit separate models for those who are resistant vs. those not 
+ - Use backward variable selection 
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+# create log CD4 values
+dataHW3 <- mutate(dataHW3,
+	logCD40 = log(CD40),
+	logCD41 = log(CD41),
+	logCD42 = log(CD42),
+	logCD43 = log(CD43),
+	logCD44 = log(CD44),
+	cumA2 = A2 + A1 + A0,
+	cumA1 =  A1 + A0
+	)
+```
+
+
+
+## HIV Example - 18 month treatment decision
+- Model among those who are not resistant at 18 months
+```{r, echo = TRUE}
+m3_R30 <- lm(logCD44 ~ logCD43 + cumA2 + A3 + 
+		(logCD43 + cumA2)*A3, 
+	data = dataHW3[which(dataHW3$R3 == 0), ])
+round(summary(m3_R30)$coefficients, digits = 2)
+```
+
+## HIV Example - 18 month treatment decision
+- Model among those who are resistant at 18 months
+```{r, echo = TRUE}
+m3_R31 <- lm(logCD44 ~ logCD43 + cumA2 + A3 + 
+		(logCD43 + cumA2)*A3, 
+	data = dataHW3[which(dataHW3$R3 == 1), ])
+round(summary(m3_R31)$coefficients, digits = 2)
+```
+
+## HIV Example - 18 month treatment decision
+- Get the optimal treatment for each individual
+
+```{r, echo = TRUE, size = "small"}
+dataHW3_A31 <- dataHW3_A30 <- dataHW3
+dataHW3_A31$A3 <- 1; dataHW3_A30$A3 <- 0
+predA30 <- predA31 <- NA
+R31 <- which(dataHW3_A30$R3 == 1)
+R30 <- which(dataHW3_A30$R3 == 0)
+predA30[R31] <- predict(m3_R31, newdata = dataHW3_A30[R31, ])
+predA31[R31] <- predict(m3_R31, newdata = dataHW3_A31[R31, ])
+predA30[R30] <- predict(m3_R30, newdata = dataHW3_A30[R30, ])
+predA31[R30] <- predict(m3_R30, newdata = dataHW3_A31[R30, ])
+gopt3 <- ifelse(predA31 > predA30, 1, 0)
+table(gopt3)
+```
+
+## HIV Example - 18 month treatment decision
+- Estimate the value function
+
+```{r, echo = TRUE, size = "tiny", fig.height = 5}
+dataHW3$V3 <- pmax(predA31, predA30)
+hist(dataHW3$V3)
+```
+
+## HIV Example - 12 month treatment decision
+- Model among those who are not resistant at 12 months
+```{r, echo = TRUE}
+m2_R20 <- lm(V3 ~ logCD42 + cumA1 + A2 + 
+		(logCD42 + cumA1)*A2, 
+	data = dataHW3[which(dataHW3$R2 == 0), ])
+round(summary(m2_R20)$coefficients, digits = 2)
+```
+
+## HIV Example - 12 month treatment decision
+- Model among those who are resistant at 12 months
+```{r, echo = TRUE}
+m2_R21 <- lm(V3 ~ logCD42 + cumA1 + A2 + 
+		(logCD42 + cumA1)*A2, 
+	data = dataHW3[which(dataHW3$R2 == 1), ])
+round(summary(m2_R21)$coefficients, digits = 2)
+```
+
+## HIV Example - 12 month treatment decision
+- Get the optimal treatment for each individual
+
+```{r, echo = TRUE, size = "small"}
+dataHW3_A21 <- dataHW3_A20 <- dataHW3
+dataHW3_A21$A2 <- 1; dataHW3_A20$A2 <- 0
+predA20 <- predA21 <- NA
+R21 <- which(dataHW3$R2 == 1)
+R20 <- which(dataHW3$R2 == 0)
+predA20[R21] <- predict(m2_R21, newdata = dataHW3_A20[R21, ])
+predA21[R21] <- predict(m2_R21, newdata = dataHW3_A21[R21, ])
+predA20[R20] <- predict(m2_R20, newdata = dataHW3_A20[R20, ])
+predA21[R20] <- predict(m2_R20, newdata = dataHW3_A21[R20, ])
+gopt2 <- ifelse(predA21 > predA20, 1, 0)
+table(gopt2)
+```
+
+## HIV Example - 12 month treatment decision
+- Estimate the value function
+
+```{r, echo = TRUE, size = "tiny", fig.height = 5}
+dataHW3$V2 <- pmax(predA21, predA20)
+hist(dataHW3$V2)
+```
+
+## HIV Example - 6 month treatment decision
+- Model among those who are not resistant at 6 months
+```{r, echo = TRUE}
+m1_R10 <- lm(V2 ~ logCD41 + A0 + A1 + 
+		(logCD41 + A0)*A1, 
+	data = dataHW3[which(dataHW3$R1 == 0), ])
+round(summary(m1_R10)$coefficients, digits = 2)
+```
+
+## HIV Example - 6 month treatment decision
+- Model among those who are resistant at 6 months
+```{r, echo = TRUE}
+m1_R11 <- lm(V2 ~ logCD41 + A1 + 
+		(logCD41)*A1, 
+	data = dataHW3[which(dataHW3$R1 == 1), ])
+round(summary(m1_R11)$coefficients, digits = 2)
+```
+
+## HIV Example - 6 month treatment decision
+- Get the optimal treatment for each individual
+
+```{r, echo = TRUE, size = "small"}
+dataHW3_A11 <- dataHW3_A10 <- dataHW3
+dataHW3_A11$A1 <- 1; dataHW3_A10$A1 <- 0
+predA10 <- predA11 <- NA
+R11 <- which(dataHW3$R1 == 1)
+R10 <- which(dataHW3$R1 == 0)
+predA10[R11] <- predict(m1_R11, newdata = dataHW3_A10[R11, ])
+predA11[R11] <- predict(m1_R11, newdata = dataHW3_A11[R11, ])
+predA10[R10] <- predict(m1_R10, newdata = dataHW3_A10[R10, ])
+predA11[R10] <- predict(m1_R10, newdata = dataHW3_A11[R10, ])
+gopt1 <- ifelse(predA11 > predA10, 1, 0)
+table(gopt1)
+```
+
+## HIV Example - 6 month treatment decision
+- Estimate the value function
+
+```{r, echo = TRUE, size = "tiny", fig.height = 5}
+dataHW3$V1 <- pmax(predA11, predA10)
+hist(dataHW3$V1)
+```
+
+
+## HIV Example - 0 month treatment decision
+- Model among those who are not resistant at 6 months
+```{r, echo = TRUE}
+m0 <- lm(V1 ~ logCD40 + A0 + 
+		(logCD40)*A0, 
+	data = dataHW3)
+round(summary(m0)$coefficients, digits = 2)
+```
+
+
+
+## HIV Example - 0 month treatment decision
+- Get the optimal treatment for each individual
+
+```{r, echo = TRUE, size = "small"}
+dataHW3_A01 <- dataHW3_A00 <- dataHW3
+dataHW3_A01$A0 <- 1; dataHW3_A00$A0 <- 0
+predA00 <- predA01 <- NA
+predA00 <- predict(m0, newdata = dataHW3_A00)
+predA01 <- predict(m0, newdata = dataHW3_A01)
+gopt0 <- ifelse(predA01 > predA00, 1, 0)
+table(gopt0)
+```
+
+## HIV Example - 0 month treatment decision
+- Estimate the value function
+
+```{r, echo = TRUE, size = "tiny", fig.height = 5}
+dataHW3$V0 <- pmax(predA01, predA00)
+hist(dataHW3$V0)
+```
+
+## HIV Example
+
+- Potential improvement for derived DTR
+
+```{r, echo = TRUE}
+mean(dataHW3$V0)
+mean(dataHW3$logCD44)
+```
+
+## Estimation of Dynamic Treatment Regimes with IPW
+
+- Here we can obtain an estimate of the anticipated response for any decision rule involving as few of covariates as we would like
+- Adjustment for confounding is taken care of using the weights 
+- Challenge of IPW estimators is that they tend to be highly variable (large standard errors). 
+- In particular very similar decision rules can lead to very different estimates of the anticipated response. Why?
+
+## Optimal Treatment Regimes within a (simple) Class
+
+- Suppose we wanted to find the optimal rule for the HIV problem of the form "give treatment if CD4 count is less than $x$ and the patient is not resistant"
+- That is, we want to find the optimal $x$
+- We could choose a fine grid for $x$ (i.e., 200, 210, . . ., 600) and estimate the anticipated response under each $x$ and pick the maximum
+- BUT - very similar decision rules can lead to very different estimates of the anticipated response.
+- How could we fix that problem?
+
+## Dynamic Marginal Structural Models
+
+1) Ensure that the decision rule we want to estimate can be index by some value $x$ (or several values if relevant)
+2) Create a grid of $x$ values over the range of values that we wish to estimate, e.g. $(x_1, \ldots, x_p)$
+3) For $x_1$, obtain the inverse probability weights to estimate that regime of interest
+4) Create a dataset with the response variable ($Y$), the weights just calculated in step 3 (call this $W$), and a covariate (call this $X$) which is equal to $x_1$ for all individuals in the dataset
+
+## Note on Step 3
+
+- The denominator of the weights is the probability that a particular subject would have followed the treatment regime of interest given their covariate history
+- The numerator of the weights is an indicator for whether or not a subject's observed treatment history is consistent (or compliant with) the treatment regime of interest
+- We have shown that (when combined with the numerator) the denominator can be rewritten as the probability that a particular subject would have followed  their observed treatment history. That is, $\frac{1}{\prod_{j=0}^M P_{A_j|\overline{A}_{j-1}, \overline{L}_j}(A_{ij}|\overline{A}_{i,j-1}, \overline{L}_{ij})}$
+
+
+## Dynamic Marginal Structural Models
+
+5) For $x_2$, obtain the inverse probability weights to estimate that regime of interest
+6) Create a dataset with the response variable ($Y$), the weights just calculated in step 5 (call this $W$), and a covariate (call this $X$) which is equal to $x_2$ for all individuals in the dataset
+7) Combine this dataset with the one in step 4
+8) Repeat 5-7 for $x_3, \ldots, x_p$
+
+## Dynamic Marginal Structural Models
+
+9) With the combined dataset, fit regression model with $Y$ as the outcome, $X$ (and functions thereof) as the predictor, and $W$ as the weight. Want to fit a flexible model (e.g., with quadratic or higher order polynomial terms)
+10) Find the value of $x$ which maximizes the anticipated response from this model . For example, suppose I fit a quadratic model $\beta_0 + \beta_1 X  + \beta_2X^2$. Which value of $X$ gives the maximum? (CALCULUS!)
+
+
+## HIV Example
+
+- Consider the following dynamic treatment regime: "Give treatment if the current CD4 count falls below x as long as the patient has not become resistant; otherwise do not treat."
+- Want to understand how the average CD4 count at 24 months would vary across different values of x
+
+## HIV Example
+
+ - Start by fitting model for probability of receiving treatment
+```{r, echo=FALSE, warning = FALSE, message = FALSE}
+# create log CD4 values
+dataHW3 <- mutate(dataHW3,
+	logCD40 = log(CD40),
+	logCD41 = log(CD41),
+	logCD42 = log(CD42),
+	logCD43 = log(CD43),
+	logCD44 = log(CD44)
+	)
+
+dataHW3_long <- melt(setDT(dataHW3), id = 1L,
+	measure = patterns("^logCD4", "^CD4", "^R", "^A"),
+	value.name = c("logCD4", "CD4", "R", "A"))
+dataHW3_long <- data.frame(dataHW3_long)
+dataHW3_long <- dataHW3_long[order(dataHW3_long$ID), ]
+dataHW3_long <- 
+	dataHW3_long %>%
+	group_by(ID) %>%
+	mutate(lag_logCD4 = lag(logCD4, n = 1, default = NA),
+		lag_A = lag(A, n = 1, default = NA),
+		cum_A = cumsum(A),
+		lag_cum_A = lag(cum_A, n = 1, default = NA),
+		lag_R = lag(R, n = 1, default = NA))
+
+# model for probability of receiving treatment
+dataHW3_long <- mutate(dataHW3_long,
+	time = as.numeric(variable) - 1,
+	logCD4_diff = logCD4 - lag_logCD4)
+dataHW3_long <- as.data.frame(dataHW3_long)
+
+m3 <- glm(A ~ logCD4 + R, family = "binomial", 
+		data = dataHW3_long)
+round(summary(m3)$coefficients, digits = 2)
+```
+
+
+## Denomoninator Weights (Part 1)
+- calculate the probability of receiving treatment (i.e. A = 1) and 
+- probability the participant received treatment they actually did
+
+```{r, echo = TRUE}
+dataHW3_long <- mutate(dataHW3_long,
+	pred_trt = predict(m3, newdata = dataHW3_long, type = "response"),
+	pred_trt_received = (pred_trt^A)*(1-pred_trt)^(1-A))
+```
+
+## Denomoninator Weights (Part 2)
+- calculate denominator weights
+```{r, echo = TRUE}
+dataHW3$den_wt <- tapply(dataHW3_long$pred_trt_received, 
+	dataHW3_long$ID, prod, na.rm = TRUE)
+```
+
+## Numerator Weights
+- Sample of data, let's assume that x = 200, which subject below are compliant with the regime of interest
+```{r, echo = FALSE, size = "tiny"}
+threshold <- 200
+dataHW3 <- mutate(dataHW3, 
+		# find which treatment a subject was supposed to receive
+		# based on the regime
+		A0_regime = ifelse(CD40 < threshold & R0 == 0, 1, 0),
+		A1_regime = ifelse(CD41 < threshold & R1 == 0, 1, 0),
+		A2_regime = ifelse(CD42 < threshold & R2 == 0, 1, 0),
+		A3_regime = ifelse(CD43 < threshold & R3 == 0, 1, 0),
+		# find out whether or not they were compliant
+		compliant0 = ifelse(A0 == A0_regime, 1, 0),
+		compliant1 = ifelse(A1 == A1_regime, 1, 0),
+		compliant2 = ifelse(A2 == A2_regime, 1, 0),
+		compliant3 = ifelse(A3 == A3_regime, 1, 0),
+		# get numerator weight
+		num_wt = compliant0*compliant1*compliant2*compliant3,
+		# overall weight
+		wt = num_wt/den_wt
+	)
+comp <- which(dataHW3$num_wt == 1)
+sample.use <- sample(c(sample(comp, 5, replace = FALSE), 
+	sample((1:1000)[-comp], 5, replace = TRUE)), 10, replace = FALSE)
+round(dataHW3[sample.use,  
+	c("R0", "CD40", "A0", "R1", "CD41", "A1", "R2", "CD42", "A2", "R3", "CD43", "A3")])
+```
+
+## Numerator Weights
+- Program the weights in R
+```{r, echo = TRUE, size = "tiny"}
+threshold <- 200
+dataHW3 <- mutate(dataHW3, 
+		# find which treatment a subject was supposed to receive
+		# based on the regime
+		A0_regime = ifelse(CD40 < threshold & R0 == 0, 1, 0),
+		A1_regime = ifelse(CD41 < threshold & R1 == 0, 1, 0),
+		A2_regime = ifelse(CD42 < threshold & R2 == 0, 1, 0),
+		A3_regime = ifelse(CD43 < threshold & R3 == 0, 1, 0),
+		# find out whether or not they were compliant
+		compliant0 = ifelse(A0 == A0_regime, 1, 0),
+		compliant1 = ifelse(A1 == A1_regime, 1, 0),
+		compliant2 = ifelse(A2 == A2_regime, 1, 0),
+		compliant3 = ifelse(A3 == A3_regime, 1, 0),
+		# get numerator weight
+		num_wt = compliant0*compliant1*compliant2*compliant3,
+		# overall weight
+		wt = num_wt/den_wt
+	)
+```
+
+## Get IPW Estimate of Anticipated Response
+
+- Weighted mean on both the original and log scale
+
+```{r, echo = TRUE}
+weighted.mean(dataHW3$logCD44, dataHW3$wt) 
+weighted.mean(dataHW3$CD44, dataHW3$wt)
+```
+
+## Consider a sequence of different x's
+
+- Repeat the same procedure for $x = 200, 210, 220, \ldots, 800$
+```{r, echo = FALSE, cache = TRUE}
+mean.logCD44 <- NULL
+mean.CD44 <- NULL
+threshold.vec <- seq(from = 200, to = 800, by = 10)
+for(i in 1:length(threshold.vec)) {
+  threshold <- threshold.vec[i]
+dataHW3 <- mutate(dataHW3, 
+		# find which treatment a subject was supposed to receive
+		# based on the regime
+		A0_regime = ifelse(CD40 < threshold & R0 == 0, 1, 0),
+		A1_regime = ifelse(CD41 < threshold & R1 == 0, 1, 0),
+		A2_regime = ifelse(CD42 < threshold & R2 == 0, 1, 0),
+		A3_regime = ifelse(CD43 < threshold & R3 == 0, 1, 0),
+		# find out whether or not they were compliant
+		compliant0 = ifelse(A0 == A0_regime, 1, 0),
+		compliant1 = ifelse(A1 == A1_regime, 1, 0),
+		compliant2 = ifelse(A2 == A2_regime, 1, 0),
+		compliant3 = ifelse(A3 == A3_regime, 1, 0),
+		# get numerator weight
+		num_wt = compliant0*compliant1*compliant2*compliant3,
+		# overall weight
+		wt = num_wt/den_wt
+	)
+mean.logCD44 <- c(mean.logCD44, weighted.mean(dataHW3$logCD44, dataHW3$wt)) 
+mean.CD44 <- c(mean.CD44, weighted.mean(dataHW3$CD44, dataHW3$wt))
+}
+par(mfrow = c(1, 2))
+plot(threshold.vec, mean.logCD44, xlab = "CD4 Threshold", main = "Mean log CD4 at 24 mo.")
+plot(threshold.vec, mean.CD44, xlab = "CD4 Threshold", main = "Mean CD4 at 24 mo.")
+
+```
+
+## Dynamic Marginal Structural Model
+
+- Intuitively may want to "smooth out" these plots 
+- One way to do this would be to have the estimated mean response be the outcome and threshold be the predictor (with possible nonlinear terms) in a regression model
+- Such an approach ignores the fact that the precision of the estimated mean varies across different thresholds 
+- A more sophisticated approach: For each threshold, create a dataset with the response, IP weights, and threshold (same value for all subjects). Stack datasets across different thresholds and fit weighted regression model with threshold (and nonlinear terms) as predictor
+
+## Dynamic Marginal Structural Model
+- Include restricted cubic spline basis in model. Output for model of mean CD44 shown
+
+```{r, echo = FALSE,  warning= FALSE, message=FALSE, size = "tiny"}
+library(rms)
+threshold.vec <- seq(from = 200, to = 800, by = 10)
+data.MSM <- matrix(NA, nrow = 1000*length(threshold.vec), ncol = 4)
+
+for(i in 1:length(threshold.vec)) {
+  threshold <- threshold.vec[i]
+dataHW3 <- mutate(dataHW3, 
+		# find which treatment a subject was supposed to receive
+		# based on the regime
+		A0_regime = ifelse(CD40 < threshold & R0 == 0, 1, 0),
+		A1_regime = ifelse(CD41 < threshold & R1 == 0, 1, 0),
+		A2_regime = ifelse(CD42 < threshold & R2 == 0, 1, 0),
+		A3_regime = ifelse(CD43 < threshold & R3 == 0, 1, 0),
+		# find out whether or not they were compliant
+		compliant0 = ifelse(A0 == A0_regime, 1, 0),
+		compliant1 = ifelse(A1 == A1_regime, 1, 0),
+		compliant2 = ifelse(A2 == A2_regime, 1, 0),
+		compliant3 = ifelse(A3 == A3_regime, 1, 0),
+		# get numerator weight
+		num_wt = compliant0*compliant1*compliant2*compliant3,
+		# overall weight
+		wt = num_wt/den_wt
+	)
+data.MSM[(1000*(i-1)+ 1) : (1000*i),] <- as.matrix(cbind(dataHW3[, c("CD44", "logCD44", "wt")], 
+  rep (threshold, 1000)))
+#print(i)
+}
+colnames(data.MSM) <- c("CD44", "logCD44", "wt", "threshold")
+data.MSM <- as.data.frame(data.MSM)
+MSM.CD4 <- lm(CD44 ~ rcs(threshold, 5), weight = wt, data = data.MSM)
+round(summary(MSM.CD4)$coefficients, digits = 2)
+```
+
+## Dynamic Marginal Structural Model
+- Pointwise IPW estimators compared with dynamic MSM
+
+```{r, echo = FALSE}
+MSM.logCD4 <- lm(logCD44 ~ rcs(threshold, 5), weight = wt, data = data.MSM)
+newdata.use <- data.frame(threshold = threshold.vec)
+mean.CD44.MSM <- predict(MSM.CD4, newdata = newdata.use)
+mean.logCD44.MSM <- predict(MSM.logCD4, newdata = newdata.use)
+
+par(mfrow = c(1, 2))
+plot(threshold.vec, mean.logCD44, xlab = "CD4 Threshold", main = "Mean log CD4 at 24 mo.")
+lines(threshold.vec, mean.logCD44.MSM, lty = 1)
+plot(threshold.vec, mean.CD44, xlab = "CD4 Threshold", main = "Mean CD4 at 24 mo.")
+lines(threshold.vec, mean.CD44.MSM, lty = 1)
+```
+
+## Standard Errors
+
+- Note that subjects can be consistent with more than one regime 
+- Subjects appear more than once in dataset with nonzero weights $\rightarrow$ correlated data
+- Bootstrap can account for this, need to resample individuals not rows of data (when in long format)

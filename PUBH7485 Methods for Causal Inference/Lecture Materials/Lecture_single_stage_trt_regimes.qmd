@@ -1,0 +1,395 @@
+---
+title: "Optimal (Single-Stage) Treatment Regimes"
+author: "David M. Vock"
+format: beamer
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+editor: visual
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+library(ranger)
+library(rpart)
+library(rpart.plot)
+library(Matching)
+```
+
+## Overview of Point Exposure Studies
+
+- Up to this point we have considered treatments $A = \{0, 1\}$  and have compared the mean response in the population had everyone received treatment 1 to the response had everyone received treatment 0
+- Collected baseline covariates $X$ but we only used $X$ to adjust for possible confounding (provided we were willing to make the assumption that $\{Y^1, Y^0 \}$ were independent of $A$ given $X$).
+
+## Idea of a Treatment Regime
+
+- Could have (counterfactually) given treatment 1 to some patients and treatment 0 to others depending on their value $X$
+- Formally, a treatment regime is a function $g$ which maps from the sample space of $X$ to the set of possible treatments (here, $\{0,1\}$) so that if $g(x) = 0$ we assign treatment 0 to individuals with $X = x$ and if $g(x) = 1$ we assign treatment 1
+
+## Potential Outcome Notation
+
+- For any treatment regime $g$ we can define the potential outcome
+$Y^g = Y^0I\{g(X)=0 \}+ Y^1I\{g(X)=1 \}$
+
+to denote the response of a randomly chosen individual from our population if they were assigned treatment according to regime $g$
+
+## Two Key Questions
+
+- Denote the class of all such treatment regimes (i.e., the class of all functions) by $\mathcal{G}$
+
+1) For a fixed $g \in \mathcal{G}$, what is the expected outcome if all participants were to follow that regime $g$? How does it compare to a different regime $g'$
+2) Which is the optimal treatment $g^{opt} \in \mathcal{G}$ i.e., the treatment regime which maximizes the expected response? $g^{opt} = argmax_{g \in \mathcal{G}} E(Y^g)$ or $E(Y^{g^{opt}}) \ge E(Y^g)$ for all $g \in \mathcal{G}$
+
+We will first deal with point 1 in this set of slides
+
+## Expected Response Under a Treatment Regime
+
+1) Regression-based methods
+2) Inverse probability weighted methods
+
+## Expected Response Under a Treatment Regime - Regression
+
+- Posit a regression model $E(Y|A, X) = \mu(A, X; \eta)$ and estimate the parameter $\eta$ using least squares or maximum likelihood estimators which we denote by $\hat{\eta}$
+- Estimate the anticipated response under regime $g(X)$ as $\hat{E}(Y^{g}) = n^{-1} \sum_{i=1}^n \mu(g(X_i), X_i; \hat{\eta}) = n^{-1} \sum_{i=1}^n \mu(1, X; \hat{\eta})g(X_i) + \mu(0, X; \hat{\eta})(1-g(X_i))$
+
+## Example: Voting Data Set
+
+- Suppose we are interested in the regime in which registered voters under 60 years of age would be called and possibly contrary to fact answered the call reminding them to vote. 
+- In the notation we have developed, this regime would be denoted as $g(X_i) = I(\mbox{AGE}_i < 60 \mbox{years})$
+- Fit logistic regression model for voting in 1998 with covariates for telephone call, number of voters in household, age, voting in 1996, new voter, party affiliation, and ward
+- Include interaction between telephone call and number of voters in household, age, voting in 1996, new voter, party affiliation
+```{r, echo = TRUE, warning=FALSE, include = FALSE}
+data(GerberGreenImai)
+imai <- GerberGreenImai
+```
+
+## Regression Output
+```{r, echo = TRUE, warning = FALSE}
+m1 <- glm(VOTED98 ~ PHN.C1*(PERSONS + VOTE96.1 + NEW + MAJORPTY + AGE) + WARD, data = imai, family = "binomial")
+round(summary(m1)$coefficients[c(1:7, 36:40), ], digits = 3)
+```
+
+## Anticipated Response Under Regime g(X)
+
+```{r, echo = TRUE, warning = FALSE, cache = TRUE}
+data_g <- imai
+data_g$PHN.C1 = ifelse(data_g$AGE < 60, 1, 0)
+pred_g <- predict(m1, newdata = data_g, type = "response")
+Average_g <- mean(pred_g)
+set.seed(1101985)
+B <- 100
+Average_g.boot <- NULL
+n <- nrow(imai)
+for(i in 1:B) {
+  imai.boot <- imai[sample(1:n, n, replace = TRUE), ]
+  m1.boot <- glm(VOTED98 ~ PHN.C1*(PERSONS + VOTE96.1 + 
+      NEW + MAJORPTY + AGE) + WARD, data = imai.boot, 
+    family = "binomial")
+  data_g.boot <- imai.boot
+  data_g.boot$PHN.C1 = ifelse(data_g.boot$AGE < 60, 1, 0)
+  pred_g.boot <- predict(m1.boot, newdata = data_g.boot, 
+    type = "response")
+  Average_g.boot <- c(Average_g.boot, mean(pred_g.boot))
+}
+SE <- sd(Average_g.boot) 
+CI <- Average_g + c(-1, 1)*qnorm(0.975)*SE
+```
+
+## Anticipated Response Under Regime g(X)
+
+```{r, echo = FALSE}
+print("Average Result Under Regime g")
+print(Average_g, digits = 3)
+print("Bootstrap SE")
+print(SE, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(CI, digits = 3)
+```
+
+## Anticipated Response Under Static Regime $g(X_i) = 1$
+
+```{r, echo = FALSE, cache = TRUE}
+data_trt <-imai
+data_trt$PHN.C1 = 1
+pred1 <- predict(m1, newdata = data_trt, type = "response")
+Average_1 <- mean(pred1)
+set.seed(1101985)
+B <- 100
+Average_1.boot <- NULL
+n <- nrow(imai)
+for(i in 1:B) {
+  imai.boot <- imai[sample(1:n, n, replace = TRUE), ]
+  m1.boot <- glm(VOTED98 ~ PHN.C1*(PERSONS + VOTE96.1 + 
+      NEW + MAJORPTY + AGE) + WARD, data = imai.boot, 
+    family = "binomial")
+  data_trt.boot <- imai.boot
+  data_trt.boot$PHN.C1 = 1
+  pred1.boot <- predict(m1.boot, newdata = data_trt.boot, 
+    type = "response")
+  Average_1.boot <- c(Average_1.boot, mean(pred1.boot))
+}
+SE1 <- sd(Average_1.boot) 
+CI1 <- Average_1 + c(-1, 1)*qnorm(0.975)*SE
+
+print("Average Result Under Regime 1")
+print(Average_1, digits = 3)
+print("Bootstrap SE")
+print(SE1, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(CI1, digits = 3)
+```
+
+## Expected Response Under a Treatment Regime - IPW
+
+- Propose to estimate $E(Y^g)$ by $\tfrac{1}{n} \sum_{i=1}^n \frac{A_ig(X_i) +(1-A_i)(1-g(X_i))}{\pi(X_i; \hat{\gamma})g(X_i) + (1-\pi(X_i; \hat{\gamma}))(1-g(X_i))}Y_i$
+- Note that the numerator is equivalent to $I(A_i = g(X_i)$ and denominator is equivalent to $P(A_i = g(X_i) |X_i)$
+- Some people estimate $E(Y^1)$ by $\tfrac{1}{n} \sum_{i=1}^n \frac{I(A_i = g(X_I))}{P(A_i = g(X_i) |X_i)}Y_i / \tfrac{1}{n} \sum_{i=1}^n \frac{I(A_i = g(X_I))}{P(A_i = g(X_i) |X_i)}$
+- Note that $\tfrac{1}{n} \sum_{i=1}^n \frac{I(A_i = g(X_I))}{\pi(X_i; \hat{\gamma})g(X_i) + (1-\pi(X_i; \hat{\gamma}))(1-g(X_i))} \approx 1$ so the estimators are very similar
+
+## Propensity Score Model
+
+```{r, echo = TRUE}
+p1 <- glm(PHN.C1 ~ (PERSONS + VOTE96.1 + NEW + MAJORPTY + AGE), 
+  data = imai, family = "binomial")
+round(summary(p1)$coefficients, digits = 3)
+```
+
+## Form Inverse Probability Weights
+```{r, echo = TRUE}
+pred <- predict(p1, type = "response")
+g <- ifelse(imai$AGE < 60, 1, 0)
+wg <- ifelse(imai$PHN.C1 == g,1,0)/(pred*g + (1-pred)*(1-g))
+```
+
+
+## IPW Adjustments
+```{r, echo = TRUE}
+Average_g_IPW <- mean(imai$VOTED98*wg) 
+print(Average_g_IPW, digits = 3)
+Average_g_IPW2 <- weighted.mean(imai$VOTED98, wg) 
+print(Average_g_IPW2, digits = 3)
+```
+
+## Bootstrap
+```{r, echo = TRUE, cache= TRUE}
+set.seed(1101985)
+B <- 100
+Average_g_IPW.boot <- NULL
+Average_g_IPW2.boot <- NULL
+n <- nrow(imai)
+for(i in 1:B) {
+  imai.boot <- imai[sample(1:n, n, replace = TRUE), ]
+  p1.boot <- glm(PHN.C1 ~ (PERSONS + VOTE96.1 + NEW + 
+      MAJORPTY + AGE), 
+  data = imai.boot, family = "binomial")
+  pred.boot <- predict(p1.boot, type = "response")
+  g.boot <- ifelse(imai.boot$AGE < 60, 1, 0)
+  wg.boot <- ifelse(imai.boot$PHN.C1 == g.boot,1,0)/(pred.boot*g.boot + (1-pred.boot)*(1-g.boot))
+  Average_g_IPW.boot <- c(Average_g_IPW.boot, 
+    mean(imai.boot$VOTED98*wg.boot))
+  Average_g_IPW2.boot <- c(Average_g_IPW2.boot, 
+    weighted.mean(imai.boot$VOTED98, wg.boot))
+  }
+```
+
+## Results IPW1
+```{r, echo = FALSE}
+print("Average Treatment Effect")
+print(Average_g_IPW, digits = 3)
+SE_IPW <- sd(Average_g_IPW.boot) 
+print("Bootstrap SE")
+print(SE_IPW, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(Average_g_IPW + c(-1, 1)*qnorm(0.975)*SE_IPW, digits = 3)
+```
+
+## Results IPW2
+```{r, echo = FALSE}
+print("Average Treatment Effect")
+print(Average_g_IPW2, digits = 3)
+SE_IPW2 <- sd(Average_g_IPW2.boot) 
+print("Bootstrap SE")
+print(SE_IPW2, digits = 3)
+print("Bootstrap Normal 95% CI")
+print(Average_g_IPW2 + c(-1, 1)*qnorm(0.975)*SE_IPW2, digits = 3)
+```
+
+
+## Two Key Questions
+
+- Denote the class of all such treatment regimes (i.e., the class of all functions) by $\mathcal{G}$
+
+1) For a fixed $g \in \mathcal{G}$, what is the expected outcome if all participants were to follow that regime $g$? How does it compare to a different regime $g'$
+2) Which is the optimal treatment $g^{opt} \in \mathcal{G}$ i.e., the treatment regime which maximizes the expected response? $g^{opt} = argmax_{g \in \mathcal{G}} E(Y^g)$ or $E(Y^{g^{opt}}) \ge E(Y^g)$ for all $g \in \mathcal{G}$
+
+We will first deal with point 2 in this set of slides
+
+## Identifying the Optimal Regime
+
+- Note: this notation will help us once we get to optimal decision rules at multiple time points
+- Let $Q(a, x) = E(Y^a|X = x)$ for $a = 0,1$ and $V(x) = \max_{a=0,1}Q(a, x)$
+- Then $g^{opt}(x) = argmax_{a = 0,1}Q(a,x)$ and $E(Y^{g^{opt}}|X=x) = V(x)$
+- Note that the argmax may not be well-defined if $Q(1,x) = Q(0, x)$ and we define a priori one treatment to be the default. 
+- We can show that $g^{opt}$ defined in this way satisfies $E(Y^{g^{opt}}) \ge E(Y^g)$ for all $g \in \mathcal{G}$ 
+
+## Using Observed Data
+
+- Up until now, we have defined the optimal regime in terms of potential outcomes
+- Under the assumption of consistency and no unmeasured confounding we note that $Q(a, x) = E(Y^a |X =x) = E(Y|A=a, X=x) = \mu(a,x)$
+- Thus the optimal regime is $g^{opt} = I(\mu(1,x) \ge \mu(0, x))$
+
+## Using Observed Data
+
+- Typically, to identify the optimal treatment strategy, we would posit a regression model $E(Y|A, X) = \mu(A, X; \eta)$ and estimate the parameter $\eta$ using least squares or maximum likelihood estimators which we denote by $\hat{\eta}$
+- Note that $X$ must include all confounders, can include addtional pre-treatment variables as well
+- In this case we could estimate the optimal treatment regime by $\hat{g}^{opt} = I(\mu(1,x; \hat{\eta}) \ge \mu(0, x; \hat{\eta}))$ or $\hat{g}^{opt} = I(\mu(1,x; \hat{\eta}) - \mu(0, x; \hat{\eta})) \ge 0$
+- Note that $\hat{V}(x) = \max_{a=0,1} \mu(a,x; \hat{\eta})$
+- Thus $\hat{E}(Y^{g^{opt}}) = n^{-1} \sum_{i=1}^n \hat{V}(x)$
+
+## Using Observed Data
+
+- Note that if we assume a regression model of the form $h \{E(Y|A, X)\} = \eta_0 + \eta_1^TX + \eta_2A + \eta_3^TAX$ for some monotone link function $h(\cdot)$, then $g^{opt} = I(\eta_2 + \eta_3^TX > 0)$ $\rightarrow$ linear decision rule
+- Linear decision rules may not be the most interpretable
+- This decision rule can involve a large number of covariates BUT cannot just drop covariates to create a simpler decision rule if the covariate is a confounder 
+
+## Using Observed Data
+
+- Note on asymptotic properties of the mean response if all subjects were to follow $g^{opt}$
+- There is a complication that comes because we are using the max function to estimate $Y^{g^{opt}}$. Because the maximum is not a smooth function, we may have difficulty differentiating the estimating function with respect to its parameters which is implicitly assumed in the theory of asymptotic normality.
+
+
+## Example: Voting Data Set
+
+- Fit logistic regression model for voting in 1998 with covariates for telephone call, number of voters in household, age, voting in 1996, new voter, party affiliation, and ward
+- Include interaction between telephone call and number of voters in household, age, voting in 1996, new voter, party affiliation
+```{r, echo = TRUE, warning=FALSE, include = FALSE}
+data(GerberGreenImai)
+imai <- GerberGreenImai
+```
+
+
+## Regression Output
+```{r, echo = TRUE, warning = FALSE}
+m1 <- glm(VOTED98 ~ PHN.C1*(PERSONS + VOTE96.1 + NEW + MAJORPTY + AGE) + WARD, data = imai, family = "binomial")
+round(summary(m1)$coefficients[c(1:7, 36:40), ], digits = 3)
+```
+
+## Determine Optimal Treatment Assignment for Each Subject
+```{r, echo = TRUE, warning = FALSE}
+data_trt <- data_ctr <-imai
+data_trt$PHN.C1 = 1
+data_ctr$PHN.C1 = 0
+pred1 <- predict(m1, newdata = data_trt, type = "response")
+pred0 <- predict(m1, newdata = data_ctr, type = "response")
+opt_treat <- ifelse(pred1>pred0, 1, 0)
+```
+
+## Determine Optimal Treatment Assignment for Each Subject
+
+- Based on this model the estimated optimal regime is $I(0.536 + 0.071\mbox{PERSONS} + 0.184\mbox{VOTE96.1} + 0.388\mbox{NEW} + 0.053\mbox{MAJORPTY} -0.007\mbox{AGE})$
+- Table show how many individual classified in each grouping
+
+```{r, echo = TRUE, warning = FALSE}
+table(opt_treat)
+```
+
+
+
+## More Interpretable Decision Rules
+- The optimal treatment regime may be a complicated function of the covariates
+- Indeed if we use some machine learning technique or ensemble methods, we may not even be able to write the optimal treatment regime in closed form
+- We may be willing to sacrifice some "optimality" for interpretability
+- For example, I may want a decision rule that only depends on one or two covariates or that takes the form of a list (i.e., if age > 40 and BMI > 25 then give treatment 1 otherwise treatment 0)
+- Note that I can't (necessarily) fit a simpler interaction model (why?)
+
+## Virtual Twin Approach
+
+- General idea is that we can fit flexible (i.e., uninterpretable) models for $E(Y|A, X) = \mu(A, X)$. This allows us to ensure that we have incorporated all confounders and we have the "right" model for the conditional expectation
+- For each subject $i$, we can estimate the conditional average treatment effect as $Z_i = \hat{\mu}(1, X_i) - \hat{\mu}(0, X_i)$. (Can think of this as the "personalized" treatment effect)
+- Then use $Z_i$ as the outcome in a "simple" and "interpretable" model (e.g., linear regression, regression trees) with only a subset of available covariates 
+- Open question: How big to grow the tree? How to do variable selection?
+
+## Virtual Twin Approach
+
+- Step 1a: Will fit a random forest to estimate $E(Y|A, X) = \mu(A, X)$
+
+```{r, echo = TRUE}
+data_trt_only <- imai[which(imai$PHN.C1 == 1), ]
+data_ctr_only <- imai[which(imai$PHN.C1 == 0), ]
+m1_treat <- ranger(factor(VOTED98) ~ PERSONS + VOTE96.1 + NEW + 
+		MAJORPTY + AGE, data = data_trt_only, seed = 110985, probability = TRUE)
+m1_ctr <- ranger(factor(VOTED98) ~PERSONS + VOTE96.1 + NEW + 
+		MAJORPTY + AGE, data = data_ctr_only, seed = 110985, probability = TRUE)
+```
+
+## Virtual Twin Approach
+
+- Step 1b: Estimate the conditional average treatment effect as $Z_i = \hat{\mu}(1, X_i) - \hat{\mu}(0, X_i)$
+
+```{r, echo = TRUE}
+pred1 <- predict(m1_treat, data = data_trt)$predictions[, 2]
+pred1[imai$PHN.C1 == 1] <- m1_treat$predictions[, 2]
+pred0 <- predict(m1_ctr, data = data_ctr)$predictions[, 2]
+pred0[imai$PHN.C1 == 0] <- m1_ctr$predictions[, 2]
+imai$Z <- pred1 - pred0
+```
+
+## Virtual Twin Approach
+
+- Step 2: Find interpretable subgroups using recursive partitioning
+
+```{r, fig.height=3, echo = TRUE}
+fit <- rpart(Z ~ PERSONS + VOTE96.1 + NEW + 
+		MAJORPTY + AGE + WARD, 
+	data = imai, method = "anova",
+	maxdepth = 3)
+rpart.plot(fit)
+```
+
+## Virtual Twin Approach
+
+- Virtual twins is best thought of as a subgroup identification algorithm
+- Splits chosen by recursive partitioning (or other step 2 method) are done to explain variability
+- May want a method that more directly targets the decision rule
+
+## C-learning 
+
+- Short for classification learning
+- Overview: finding the optimal treatment regime is ultimately a classification problem. We want to classify which subjects benefit more from treatment 1 versus treatment 0.
+- Challenge here is that the labels (i.e., which treatment is most beneficial) is not directly observed. Also, the cost of misclassification is not the same for each subject (why?)
+- Idea is to use $I(Z_i > 0)$ as the label and $|Z_i|$ as the misclassification weight in "off-the-shelf" classification software (e.g., SVM, decision trees, etc.)
+- Could use a doubly robust version of $Z_i$
+
+## C-learning 
+
+- Use random forests in step 1 to estimate $Z_i$
+- Then in step 2
+
+```{r, fig.height=3, echo = TRUE}
+imai$Z_label <- ifelse(imai$Z > 0, 1, 0)
+imai$Z_weight <- abs(imai$Z)
+fit <- rpart(Z_label ~ PERSONS + VOTE96.1 + NEW + 
+		MAJORPTY + AGE + WARD, 
+	data = imai, weights = Z_weight,
+	maxdepth = 3); rpart.plot(fit)
+```
+
+## C-learning 
+
+- Use random forests in step 1 to estimate $Z_i$
+- Then in step 2, only want to assign treatment if estimated CATE is greater than 0.05 
+
+```{r, fig.height=3, echo = TRUE}
+imai$Z_label <- ifelse(imai$Z > 0.05, 1, 0)
+imai$Z_weight <- abs(imai$Z)
+fit <- rpart(Z_label ~ PERSONS + VOTE96.1 + NEW + 
+		MAJORPTY + AGE + WARD, 
+	data = imai, weights = Z_weight,
+	maxdepth = 3); rpart.plot(fit)
+```

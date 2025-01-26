@@ -1,0 +1,119 @@
+---
+title: "What Variables Do We Want to Include"
+author: "David M. Vock"
+format: beamer
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+editor: visual
+---
+
+## Overview
+
+-   Often have a large number of variables included in an observational dataset
+
+-   We have discussed various methods to estimate the causal effect which rely on fitting regression models without a lot of discussion on which variables to include or not include
+
+-   The only thing that we have definitively stated is that $X$ needs to ensure that that $\{Y^1, Y^0\}$ are independent of $A$ conditioned on $X$
+
+## DAGs
+
+-   In some applications it makes sense to draw the causal structure/relationship among variables (regardless of whether they are measured)
+-   Arrows point in the direction of causal effect
+-   Known as a directed acyclic graph (“Directed:” edges imply a direction. “Acyclic:” no cycles, a variable cannot cause itself, either directly or through another variable.)
+
+## Example DAG
+
+![caption](DAG_graphics.png)
+
+## DAGs
+
+-   There is a lot of theory relating probability theory (conditional independence) to DAGs with some unusual terms (d-separation, collider, etc.)
+-   In particular, IF you have drawn the correct DAG, DAG will tell you which variables you would need to adjust for (causal reasoning) and which you should not
+-   In my experience, can spend a lot of time learning the "rules" of DAGs without a lot of benefit
+
+## Causal Discovery
+
+-   Ongoing work to be able to learn the DAG from just data alone
+-   May not represent causal relationships without additional assumptions
+
+## Some Simple Rules
+
+To understand causal effect of $A$ on $Y$
+
+-   Never adjust for variables which come after treatment decision or when randomization would have occurred. These are (intermediate) outcomes
+-   Do not care about the relationship between pre-treatment variables
+-   This leaves four types of variables
+
+1)  Common causes of $A$ and $Y$
+2)  Causes of $Y$ alone
+3)  Causes of $A$ alone
+4)  Causes of neither $A$ or $Y$
+
+## Causal Inference: Target Trial
+
+-   Throughout the course we have thought about trying to use analytical tools to mimic the randomized trial that we would have liked to perform (target trial)
+-   Framework works well for interventions which you can control (pharmaceutical treatment, surgery, behavioral intervention, income, etc.) and at what time point they are delivered
+-   Part of specifying target trial is the inclusion/exclusion criteria, intervention (type, intensity/dosage, timing), follow-up and outcomes
+-   Framework leaves out many factors which we may be interested in (particularly race/ethnicity, gender, etc.)
+
+## Causal Inference: Non-Target Trial
+
+-   Causal methods are useful to create balance among certain characteristics between different groups
+-   Important to think of what characteristics AT WHAT TIME POINT we want balanced
+-   In other words, WHEN would you have done the randomization - Balancing on different characteristics at different time points gives insight on when differences emerge
+-   For example, ER doctor looking at outcomes by race/ethnicity for those presenting with chest pain can or cannot balance on laboratory values at presentation
+
+## Causal Inference: Non-Target Trial
+
+![caption](gender_bias.png)
+
+## Some Simple Rules
+
+-   Which of the 4 types of variables do we want to include in regression adjustment?
+-   Simulation!
+
+```{r, echo = TRUE}
+results <- NULL
+num.sim <- 25
+sample.size <- 30
+set.seed(1101985)
+for(i in 1:num.sim){
+	X1 <- rnorm(sample.size, mean = 0, sd = 1)
+	X2 <- rnorm(sample.size, mean = 0, sd = 1)
+	X3 <- rnorm(sample.size, mean = 0, sd = 1)
+	X4 <- rnorm(sample.size, mean = 0, sd = 1)
+	
+	#generate data
+	Y1 <- 1 + X1 + X2 + rnorm(sample.size, mean = 0, sd = 1)
+	Y0 <- X1 + X2 + rnorm(sample.size, mean = 0, sd = 1)
+	
+	expit <- function(x) {
+		expit <- exp(x)/(1+exp(x))
+		return(expit)
+	}
+	A <- rbinom(sample.size, 1, expit(0.5*X1 + 0.5*X3))
+	Y <- Y1*A + Y0*(1-A)
+	observed.data <- data.frame(Y, A, X1, X2, X3, X4)
+	
+	m1 <- lm(Y~ A*(X4), data = observed.data)
+	data_trt <- data_ctr <-observed.data
+	data_trt$A = 1
+	data_ctr$A = 0
+	pred1 <- predict(m1, newdata = data_trt, type = "response")
+	pred0 <- predict(m1, newdata = data_ctr, type = "response")
+	ATE_reg <- mean(pred1 - pred0)
+	
+	p1 <- glm(A ~ X4, family = "binomial", data = observed.data)
+	ps <- predict(p1, type = "response")
+	w1 <- observed.data$A/ps
+	w0 <- (1-observed.data$A)/(1-ps)
+	
+	ATE_IPW2 <- weighted.mean(observed.data$Y, w1) - 
+	weighted.mean(observed.data$Y, w0)
+	
+	results <- rbind(results, c(ATE_reg, ATE_IPW2))
+}
+apply(results, 2, mean)
+apply(results, 2, sd)
+```

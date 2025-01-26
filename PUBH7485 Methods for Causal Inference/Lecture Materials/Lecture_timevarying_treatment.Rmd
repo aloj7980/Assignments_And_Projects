@@ -1,0 +1,190 @@
+---
+title: "Introduction to Time-Varying Treatments"
+author: "David M. Vock"
+date: "PubH 7485/8485"
+output: beamer_presentation
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+library(dplyr)
+library(data.table)
+
+beta0 <- 6.2
+beta1 <- 1.6
+beta2 <- -0.23
+beta3 <- -0.175
+beta4 <- -0.5
+sigma0 <- sigma <- 0.35
+gamma0 <- -3.21
+gamma1 <- 0.80
+
+eta0 <- 3.68
+eta1 <- -0.58
+eta2 <- -1.18
+
+n <- 1000
+
+expit <- function(x) {
+  expit <- exp(x)/(1 + exp(x))
+  return(expit)
+}
+
+set.seed(1101985)
+
+R0 <- rep(0, n)
+logCD40 <- rnorm(n, beta0, sigma0)
+A0<- rbinom(n, 1, expit(eta0 + eta1*logCD40 + eta2*R0))
+cumA0 <- A0
+
+R1 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA0))*(cumA0 > 0 & R0 == 0) + 0*(cumA0 == 0) + 1*(R0 == 1) 
+logCD41 <- logCD40 + rnorm(n, (beta1*A0 + beta2*A0*logCD40 + beta3*(1-A0))*(1-R1) + beta4*R1, sigma)
+A1 <- rbinom(n, 1, expit(eta0 + eta1*logCD41 + eta2*R1))
+cumA1 <- A0 + A1
+
+R2 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA1))*(cumA1 > 0 & R1 == 0) + 0*(cumA1 == 0) + 1*(R1 == 1) 
+logCD42 <- logCD41 + rnorm(n, (beta1*A1 + beta2*A1*logCD41 + beta3*(1-A1))*(1-R2) + beta4*R2, sigma)
+A2 <- rbinom(n, 1, expit(eta0 + eta1*logCD42 + eta2*R2))
+cumA2 <- A0 + A1 + A2
+
+R3 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA2))*(cumA2 > 0 & R2 == 0) + 0*(cumA2 == 0) + 1*(R2 == 1) 
+logCD43 <- logCD42 + rnorm(n, (beta1*A2 + beta2*A2*logCD42 + beta3*(1-A2))*(1-R3) + beta4*R3, sigma)
+A3 <- rbinom(n, 1, expit(eta0 + eta1*logCD43 + eta2*R3))
+cumA3 <- A0 + A1 + A2 + A3
+
+R4 <- rbinom(n, 1, expit(gamma0 + gamma1*cumA3))*(cumA3 > 0 & R3 == 0) + 0*(cumA3 == 0) + 1*(R3 == 1) 
+logCD44 <- logCD43 + rnorm(n, (beta1*A3 + beta2*A3*logCD43 + beta3*(1-A3))*(1-R4) + beta4*R4, sigma)
+
+dataHW3 <- data.frame(ID = 1:n, R0 = R0, CD40 = exp(logCD40), A0 = A0,
+  R1 = R1, CD41 = exp(logCD41), A1 = A1,
+  R2 = R2, CD42 = exp(logCD42), A2 = A2,
+  R3 = R3, CD43 = exp(logCD43), A3 = A3,
+  R4 = R4, CD44 = exp(logCD44))
+```
+
+
+## Introduction
+
+- Focused on point exposure studies - wanted to evaluate the effect of a treatment given at a single time point or a single treatment decision made at a single time point on a response
+- In many cases, however, treatment decisions are more complex, evolving over time 
+- Certainly the case for many chronic diseases and long-term conditions
+- For example, cancer, HIV, cardiovascular disease, diabetes, hypertension, substance abuse, smoking, ADHD, mental health conditions
+
+## Framework
+
+- Assume that treatment decisions are made at a finite number of decision points denoted by $t_0, \ldots, t_M$. 
+- May be fixed or random times
+- Examples: dose adjustment for hypertensive patients, whether or not to "start" treatment - e.g., when to do bariatric surgery, when to implant device, etc.   
+
+## A Recent Example
+
+![JAMA; September 2, 2019](jama.png)
+
+
+## A Recent Example
+
+![JAMA; September 2, 2019](jama_methods.png)
+
+## A Recent Example
+
+- Studies in which treatment is time-varying often "shoehorned" into looking like point-exposure studies
+- What are the potential biases from doing that in this study?
+
+
+## Why Don't "Standard" Methods Work
+
+- Obviously, this approach to estimating the mean response if all individuals followed a particular treatment assignment involves quite a bit of modeling
+- Why can't we just specify one model for the outcome? Key followup questions - which covariates to include?
+- If include just baseline covariates and treatment history then there will be residual confounding (biased treatment estimates)
+- If include all the covariate history and treatment history then this will "block" some of the effect of treatment on outcome (that is some of the effect of early treatment on the outcome is through the treatment's effect on the longitudinal covariates)
+- The later would essentially just estimate a controlled direct effect (to use terminology from mediation)
+
+## Observed Data
+
+- Observed data from such longitudinal studies can be summarized as the time ordered variables
+- $(L_0, A_0, L_1, A_1, \ldots, L_M, A_M, Y)$
+- $L_0$ - all the covariate information obtained prior to any treatment at decision point $t_0$ (baseline covariates)
+- $A_0$ - first treatment given at time $t_0$ among a possible set of treatments $\mathcal{A}_0$
+- $L_j$ - denotes any additional covariates obtained between decision points $t_{j-1}$ and $t_j$
+- $A_j$ - treatment given at the decision point $t_j$ among the set of treatment $\mathcal{A}_j$
+- $Y$ - outcome of interest, response variable. Note that this is determined after the final treatment time $t_M$.
+
+## Overbar Notation
+
+- Use the "overbar" notation to denote the history of the time-dependent variables. That is.,
+- $\overline{L}_j = (L_0, \ldots, L_j)$ and $\overline{A}_j = (A_0, \ldots, A_j)$
+- For brevity $\overline{L} = (L_0, \ldots, L_M)$ and $\overline{A} = (A_0, \ldots, A_M)$
+- Thus the observed longitudinal data on subject $i$ is given by $O_i = (\overline{L}_i, \overline{A}_i, Y_i)$
+
+## Potential Outcomes
+
+- Set of potential outcomes given by
+- $W = (L_0, L_1^{a_0}, L_2^{\overline{a}_1}, \ldots, L_M^{\overline{a}_{M-1}}, Y^{\overline{a}_{M}})$
+- for any $a_j \in \mathcal{A}_j$ for $j = 0, \ldots, M$
+- Note that we need to consider potential outcomes for both the "outcome" and all the time-dependent covariates
+
+## Key Question
+
+- Can we deduce the distribution of the potential outcomes for a fixed $\overline{a}$ - that is the distribution of $(L_0, L_1^{a_0}, L_2^{\overline{a}_1}, \ldots, L_M^{\overline{a}_{M-1}}, Y^{\overline{a}_{M}})$
+- Based on the distribution of the observed data - that is the distribution of $(L_0, A_0, \ldots, L_M, A_M, Y)$
+- What assumptions will we need? Can we generalize consistency and no unmeasured confounding?
+
+## Key Assumptions
+
+1) Consistency: $Y = \sum_{\overline{a}_M \in \overline{\mathcal{A}}_M} Y^{\overline{a}_M}I(\overline{A}_M = \overline{a}_M)$
+2) Sequential Ignorability: $A_j$ is independent of all potential outcomes (including $Y^{\overline{a}_M}$) given $\overline{L}_j$ and $\overline{A}_{j-1}$
+3) Positivity: $0 \le P(A_j = 1 | \overline{L}_j, \overline{A}_{j-1}) \le 1$
+
+
+## Hypothetical Example 
+
+- Completely hypothetical example involving HIV disease circa 1990
+- Patients come into the clinic every three months to have their CD4 counts measured
+- Physicians have to decide whether or not to treat the patient for the next six months until their next visit
+- The goal is to have a large a CD4 count as possible after two years
+- Because it is known that treatment can eventually lead to mutation of the HIV virus and resistance testing, resistance testing is also conducted after the initiation of treatment
+
+## Working Assumptions
+
+- log CD4 counts are (conditionally) normally distributed
+- If treatment is effective then CD4 counts should increase from their previous value following treatment. However, we expect greater increases when CD4 counts are lower (i.e., an interaction between treatment and CD4 counts)
+- Without treatment CD4 counts will decline
+- The accumulation of treatment over time makes it more likely that a patient will become resistant to treatment
+- Once a patient becomes resistant then their CD4 counts will decline with or without treatment
+
+## Notation
+
+- $t_0$ is the first time a patient is seen; $t_j = 6j$ months afterward and $M = 3$. Response of interest is ascertained at 24 months
+- For $j = 0, \ldots, M$ let $A_j$ denote the indicator of treatment assignment at time $t_j$
+- Let $lCD4_j$, $j = 0, \ldots, M+1$ denote the log CD4 at time $t_j$
+- Let $R_j$, $j = 1, \ldots, M+1$ denote the resistance status at time $t_j$ where $R_j = 1$ if resistant and 0 otherwise
+
+## Notation
+
+- Overall we have 
+
+$L_0 = lCD4_0$
+
+$L_1 = \{lCD4_1, R_1\}$
+
+$\vdots$
+
+$L_M = \{lCD4_M, R_M\}$
+
+$Y = \{lCD4_{M+1}, R_{M+1}\}$
+
+## Example Data
+
+```{r, echo = FALSE, cache = TRUE}
+print(round(head(dataHW3)))
+```
+
+

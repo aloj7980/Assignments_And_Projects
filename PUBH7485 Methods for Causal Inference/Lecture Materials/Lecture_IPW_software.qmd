@@ -1,0 +1,137 @@
+---
+title: "Inverse Probability Weighting in R"
+author: "David M. Vock"
+format: beamer
+theme: "Boadilla"
+colortheme: "whale"
+fonttheme: "structurebold"
+editor: visual
+---
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+def.chunk.hook  <- knitr::knit_hooks$get("chunk")
+knitr::knit_hooks$set(chunk = function(x, options) {
+  x <- def.chunk.hook(x, options)
+  ifelse(options$size != "normalsize", paste0("\\", options$size,"\n\n", x, "\n\n \\normalsize"), x)
+})
+```
+
+## Inverse Probability Weighting in MSM 
+
+We can use IPW weights to estimate the parameters of marginal structural models. Among other things, this helps us control for confounding.
+
+This amounts to fitting a model where the outcome of interest is regressed on the exposure of interest, with each observation weighted by the inverse of the probability of the observed exposure level given the observed value of the confounders.
+
+These slides follow the examples given by the authors of the `ipw` package (van der Wal and Geskus, 2011).
+
+```{r, message=F}
+library(ipw)
+```
+
+## Point Treatments: Data
+
+We'll simulate data from 1,000 individuals. Each individual has binary exposure $A$, continuous response $Y$, and continuous confounder $L$ such that:
+
+- $L \sim N(10,5)$
+- $logit(P(A=1)) = L - 10$
+- $Y = 10A + 0.5L + N(-10,5)$
+
+```{r, size = "tiny"}
+set.seed(1738)
+N <- 1000
+data <- data.frame(l = rnorm(N,10,5))
+a.logit <- data$l - 10
+prob.a <- exp(a.logit) / (1 + exp(a.logit))
+data$a <- rbinom(N, 1, prob.a)
+data$y <- 10*data$a + 0.5*data$l + rnorm(N,-10,5)
+```
+
+## The ipwpoint() function
+
+We want to estimate the stabilized weights:
+
+$$ sw_i = \frac{P(A_i = a_i)}{P(A_i = a_i | L_i = l_i)} $$
+
+```{r, size = "tiny"}
+w1 <- ipwpoint(exposure = a, family = "binomial", link = "logit", 
+                 numerator = ~ 1, denominator = ~ l, data = data)
+```
+
+The `ipwpoint()` function is very handy. We must specify
+
+- an `exposure`
+- model specifications `family` and `link`
+- model formulas `numerator` and `denominator`
+- optional truncation factor `trunc`
+
+## Plotting weights
+
+We can plot the weights:
+
+```{r, size = "tiny", fig.height=6}
+ipwplot(weights = w1$ipw.weights, logscale = FALSE,
+        main = "Stabilized weights", xlim = c(0, 8))
+```
+
+## Numerator and denominator models 
+
+We can also look at the models used in the numerator and denominator:
+```{r, eval=F}
+summary(w1$num.mod)
+summary(w1$den.mod)
+```
+
+## Putting it all together 
+
+```{r, message=F, size = "tiny"}
+library(survey)
+data$w <- w1$ipw.weights
+msm <- svyglm(y ~ a, design = svydesign(~ 1, weights = ~ w, data = data))
+coef(msm)
+confint(msm)
+```
+
+## Time-varying exposures: data 
+
+Now we'll illustrate the use of the `ipw` package for time-varying exposures. The `haartdat` dataset is a simulated time series dataset.
+
+```{r, size = "tiny"}
+data("haartdat")
+haartdat[1:10,]
+```
+
+We'll want to adjust for the confounding CD4 counts, which vary over time. The treatment `haartind` is also time-varying.
+
+## The ipwtm() function 
+
+We use the `ipwtm` function to estimate weights. We adjust for sex and age in both the numerator and denominator while adjusting for CD4 count in only the denominator. The `type` option tells R that we only want to estimate weights up until exposure begins.
+
+$$ sw_{ij} = \prod_{k=0}^j \frac{P(H_{ik} = h_{ik} | \bar{H}_{ik-1} = \bar{h}_{ik-1}, \textbf{V}_i=\textbf{v}_i)}{P(H_{ik} = h_{ik} | \bar{H}_{ik-1} = \bar{h}_{ik-1},\bar{L}_{ik-1} = \bar{l}_{ik-1}, \textbf{V}_i=\textbf{v}_i)} $$
+
+```{r, size = "tiny"}
+w2 <- ipwtm(exposure = haartind, family = "survival",
+              numerator = ~ sex + age, 
+              denominator = ~ cd4.sqrt + sex + age,
+              id = patient, tstart = tstart, timevar = fuptime, type = "first",
+              data = haartdat)
+```
+
+## Plotting the weights 
+```{r, size = "tiny", fig.height=6}
+ipwplot(weights = w2$ipw.weights, timevar = haartdat$fuptime,
+        binwidth = 100, ylim = c(-1.5, 1.5), main = "Stabilized weights",
+        xaxt = "n", yaxt = "n")
+axis(side = 1, at = c(0, 5, 10, 15, 20, 25, 30, 35),
+     labels = as.character(c(0, 5, 10, 15, 20, 25, 30, 35)*100))
+axis(side = 2, at = c(-1.5, -1, -0.5, 0, 0.5, 1, 1.5),
+     labels = as.character(c(-1.5, -1, -0.5, 0, 0.5, 1, 1.5)))
+```
+
+## Putting it all together 
+
+```{r, size = "tiny"}
+summary(coxph(Surv(tstart, fuptime, event) ~ haartind + cluster(patient),
+              data = haartdat, weights = w2$ipw.weights))
+```
