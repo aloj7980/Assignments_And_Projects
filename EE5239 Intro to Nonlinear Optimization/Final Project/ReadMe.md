@@ -1,1 +1,1 @@
-x
+This project explores the implementation and testing of the IPOPT algorithm on selected Hock-Schittkowski problems from the CUTEST dataset. The IPOPT (Interior Point Optimizer) algorithm is used for solving constrained optimization problems.
