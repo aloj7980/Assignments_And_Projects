@@ -1,0 +1,524 @@
+---
+title: "PubH7485 Homework3 Key"
+date: "2024-10-05"
+output:
+  pdf_document:
+    latex_engine: xelatex
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(7485)
+library(dplyr)
+library(labelled)
+library(causaldata)
+library(knitr)
+library(formattable)
+library(MASS)
+library(reshape2)
+library(ggplot2)
+library(boot) 
+library(randomForest)
+library(survey)
+library(tableone)
+
+```
+
+```{r, include=F}
+data('nhefs')
+
+# treatment
+nhefs$qsmk 
+# outcomes of interest
+nhefs$wt82_71
+nhefs$sbp
+nhefs$dbp
+
+all_covars <- setdiff(names(nhefs), c('dadth', 'death', 'hightax82', 'modth', 'price71_82', 
+                                      'price82', 'seqn', 'yrdth', 'wt82', 'tax71_82',
+                                      'tax82', 'smokeyrs', 'smkintensity82_71',
+                                      'birthplace','id','censored','older'))
+
+adj_vars <- c('sex', 'race', 'age', 'education', 'smokeintensity', 'smokeyrs', 'exercise', 'active', 'wt71', 'hbp')
+
+
+# Convert categorical variables to factors and set levels for them in nhefs data frame
+nhefs$active <- factor(nhefs$active, levels = c(0, 1, 2), labels = c("Very active", "Moderately active", "Inactive"))
+nhefs$alcoholfreq <- factor(nhefs$alcoholfreq, levels = c(0, 1, 2, 3, 4, 5), labels = c("Almost every day", "2-3 times/week", "1-4 times/month", "< 12 times/year", "No alcohol last year", "Unknown"))
+nhefs$alcoholpy <- factor(nhefs$alcoholpy, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$alcoholtype <- factor(nhefs$alcoholtype, levels = c(1, 2, 3, 4), labels = c("Beer", "Wine", "Liquor", "Other/Unknown"))
+nhefs$allergies <- factor(nhefs$allergies, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$asthma <- factor(nhefs$asthma, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$birthcontrol <- factor(nhefs$birthcontrol, levels = c(0, 1, 2), labels = c("No", "Yes", "Missing"))
+nhefs$boweltrouble <- factor(nhefs$boweltrouble, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$bronch <- factor(nhefs$bronch, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$chroniccough <- factor(nhefs$chroniccough, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$colitis <- factor(nhefs$colitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$diabetes <- factor(nhefs$diabetes, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$education <- factor(nhefs$education, levels = c(1, 2, 3, 4, 5), labels = c("8th grade or less", "HS dropout", "HS", "College dropout", "College or more"))
+nhefs$exercise <- factor(nhefs$exercise, levels = c(0, 1, 2), labels = c("Little or no exercise", "Moderate exercise", "Much exercise"))
+nhefs$hayfever <- factor(nhefs$hayfever, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hbp <- factor(nhefs$hbp, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$hbpmed <- factor(nhefs$hbpmed, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$headache <- factor(nhefs$headache, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hepatitis <- factor(nhefs$hepatitis, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$hf <- factor(nhefs$hf, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$marital <- factor(nhefs$marital, levels = c(1, 2, 3, 4, 5, 6, 8), labels = c("Under 17", "Married", "Widowed", "Never married", "Divorced", "Separated", "Unknown"))
+nhefs$nerves <- factor(nhefs$nerves, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$nervousbreak <- factor(nhefs$nervousbreak, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$otherpain <- factor(nhefs$otherpain, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pepticulcer <- factor(nhefs$pepticulcer, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$pica <- factor(nhefs$pica, levels = c(0, 1, 2), labels = c("Never", "Ever", "Missing"))
+nhefs$polio <- factor(nhefs$polio, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$qsmk <- factor(nhefs$qsmk, levels = c(0, 1), labels = c("No", "Yes"))
+nhefs$race <- factor(nhefs$race, levels = c(0, 1), labels = c("White", "Black or Other"))
+nhefs$sex <- factor(nhefs$sex, levels = c(0, 1), labels = c("Male", "Female"))
+nhefs$tb <- factor(nhefs$tb, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$tumor <- factor(nhefs$tumor, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$weakheart <- factor(nhefs$weakheart, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$wtloss <- factor(nhefs$wtloss, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$lackpep <- factor(nhefs$lackpep, levels = c(0, 1), labels = c("Never", "Ever"))
+nhefs$infection <- factor(nhefs$infection, levels = c(0, 1), labels = c("Never", "Ever"))
+
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in all_covars) {
+  if (is.numeric(nhefs[[var]])) {
+    # Impute missing values for numeric variables with the median
+    nhefs[[var]][is.na(nhefs[[var]])] <- median(nhefs[[var]], na.rm = TRUE)
+    print(paste("Imputed numeric variable:", var))
+    
+  } else if (is.factor(nhefs[[var]]) || is.character(nhefs[[var]])) {
+    # Impute missing values for categorical variables with the mode
+    nhefs[[var]][is.na(nhefs[[var]])] <- mode_function(nhefs[[var]])
+    # nhefs[[var]] <- as.factor(nhefs[[var]])  # Ensure it's still a factor
+    print(paste("Imputed categorical variable:", var))
+  }
+}
+
+```
+
+
+
+## Question 1 (30 points total, 20 points for the plot, 10 points for the choice of model and justification)
+
+From the plot, we can see that the propensity score weighting is useful in achieving balance. Generally, Model b  with the nonlinear terms seems to work the best, with all SMDs less than 0.1 and having a smallest average SMD of 0.0164. 
+
+(The key is using random forest to select the set of covariates for Model d, however, any optimal method is acceptable.)
+
+```{r,echo=F}
+# (a) The logistic regression model with just main effects.
+# Logistic regression with main effects
+ps_model_a <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs + exercise + active + wt71 + hbp, family = binomial(), data = nhefs)
+nhefs$ps_a <- predict(ps_model_a, type = "response")
+nhefs$weight_a <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_a, 1 / (1 - ps_a)))
+
+# Calculate weighted and unweighted SMDs
+dataSvy_a <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_a)
+tabUnweighted_a <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_a <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_a, test = FALSE)
+
+# Extracting SMD values
+dataPlot_a <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_a)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_a)),
+                       Weighted_a  = as.numeric(ExtractSmd(tabWeighted_a)))
+
+# Convert to long format for ggplot
+dataPlotMelt_a <- melt(data = dataPlot_a,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+# (b) The same set of covariates as in (a) but allow for nonlinear terms in the continuous covariates. 
+# Logistic regression with main effects and nonlinear terms in the continuous covariates
+ps_model_b <- glm(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, family = binomial(), data = nhefs)
+nhefs$ps_b <- predict(ps_model_b, type = "response")
+nhefs$weight_b <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_b, 1 / (1 - ps_b)))
+
+# Calculate weighted and unweighted SMDs
+dataSvy_b <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_b)
+tabUnweighted_b <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_b <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_b, test = FALSE)
+
+# Extracting SMD values
+dataPlot_b <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_b)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_b)),
+                       Weighted_b  = as.numeric(ExtractSmd(tabWeighted_b)))
+
+# Convert to long format for ggplot
+dataPlotMelt_b <- melt(data = dataPlot_b,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+
+
+# (c) The same set of covariates as in (a) but allowing for all pairwise interactions and performing some form of variable selection (e.g., forward selection using AIC).
+# Allowing for all pairwise interactions and performing some form of variable selection (e.g., forward selection using AIC).
+full_model_c <- glm(qsmk ~ (sex + race + age + education + smokeintensity + smokeyrs + exercise + active + wt71 + hbp)^2, family = binomial(), data = nhefs)
+ps_model_c <- step(full_model_c, trace=0, direction="forward", criteria="AIC")
+nhefs$ps_c <- predict(ps_model_c, type="response")
+nhefs$weight_c <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_c, 1 / (1 - ps_c)))
+
+# Calculate weighted and unweighted SMDs
+dataSvy_c <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_c)
+tabUnweighted_c <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_c <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_c, test = FALSE)
+
+# Extracting SMD values
+dataPlot_c <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_c)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_c)),
+                       Weighted_c = as.numeric(ExtractSmd(tabWeighted_c)))
+
+# Convert to long format for ggplot
+dataPlotMelt_c <- melt(data = dataPlot_c,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+
+# (d) A logistic regression model considering all available baseline covariates and some form of variable selection.
+# Fit a random forest model and select top 10 important covariates
+rf_model <- randomForest(as.formula(paste("qsmk ~", paste(all_covars[-c(1:3,13)], collapse = " + "))), data = nhefs)
+important_vars <- importance(rf_model)[order(importance(rf_model)[, "MeanDecreaseGini"], decreasing = TRUE), ]
+top_10_vars <- row.names(as.data.frame(important_vars[1:10]))
+
+formula_d <- as.formula(paste("qsmk ~", paste(top_10_vars, collapse=" + ")))
+
+ps_model_d <- glm(formula_d, family = binomial(), data = nhefs)
+nhefs$ps_d <- predict(ps_model_d, type = "response")
+nhefs$weight_d <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_d, 1 / (1 - ps_d)))
+
+# Calculate weighted and unweighted SMDs
+dataSvy_d <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_d)
+tabUnweighted_d <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_d <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_d, test = FALSE)
+
+# Extracting SMD values
+dataPlot_d <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_d)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_d)),
+                       Weighted_d  = as.numeric(ExtractSmd(tabWeighted_d)))
+
+# Convert to long format for ggplot
+dataPlotMelt_d <- melt(data = dataPlot_d,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+dataPlotMelt <- rbind(dataPlotMelt_a, dataPlotMelt_b[11:20, ], dataPlotMelt_c[11:20, ], dataPlotMelt_d[11:20, ])
+dataPlotMelt %>%
+  arrange(desc(SMD), variable) %>%
+  mutate(variable_ordered = factor(variable, levels = unique(variable))) %>%
+  ggplot(aes(x = variable_ordered, y = SMD, group = Method, color = Method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.1, color = "black", linewidth = 0.1) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.key = element_blank()) +  xlab('Variables') + 
+  labs(title="Standardized Mean Differences for all Models")
+```
+
+
+```{r,echo=F}
+#(e) Select one of these models to use in question 2 and justify your choice.
+# Calculating average SMD for each model
+average_smd_a <- mean(dataPlot_a$Weighted)
+average_smd_b <- mean(dataPlot_b$Weighted)
+average_smd_c <- mean(dataPlot_c$Weighted)
+average_smd_d <- mean(dataPlot_d$Weighted)
+
+# Combining the averages into a single data frame
+smd_averages <- data.frame(
+  Model = c("Model A", "Model B", "Model C", "Model D"),
+  Average_SMD = c(average_smd_a, average_smd_b, average_smd_c, average_smd_d)
+)
+
+kable(smd_averages)
+
+```
+
+
+## Question 2 (30 points total, 10 points for each outcome)
+
+The calculated results are summarized in the following tables: 
+
+```{r, echo=F, warning=F}
+nhefs$qsmk_numeric <- as.numeric(nhefs$qsmk == "Yes")
+
+calculate_effects <- function(data, outcome, formula) {
+  # Fit propensity score model
+  ps_model <- glm(formula, family = binomial(), data = data)
+  data$ps <- predict(ps_model, type = "response")
+  
+  # pss
+  data$ps_quintile <- cut(data$ps, breaks = quantile(data$ps, probs = seq(0, 1, by = 0.2)), 
+                          include.lowest = TRUE, labels = FALSE)
+  
+  te_quintile <- tapply(data[[outcome]][data$qsmk_numeric == 1], 
+                        data$ps_quintile[data$qsmk_numeric == 1], mean, na.rm = TRUE) -
+                 tapply(data[[outcome]][data$qsmk_numeric == 0], 
+                        data$ps_quintile[data$qsmk_numeric == 0], mean, na.rm = TRUE)
+  PSS <- sum(te_quintile * table(data$ps_quintile) / nrow(data), na.rm = TRUE)
+  # ATE_PSS_wt82_71 <- sum(effects_wt82_71 * nj / nrow(nhefs), na.rm = TRUE)
+  
+  # IPW calculations
+  data$w1 <- data$qsmk_numeric / data$ps
+  data$w0 <- (1 - data$qsmk_numeric) / (1 - data$ps)
+  IPW1 <- mean(data[[outcome]] * data$w1) - mean(data[[outcome]] * data$w0)
+  IPW2 <- weighted.mean(data[[outcome]], data$w1) - weighted.mean(data[[outcome]], data$w0)
+  
+  B <- 1000
+  nj <- table(nhefs$ps_quintile)
+  ATE_PSS.boot <- NULL
+  ATE_IPW.boot <- NULL
+  ATE_IPW2.boot <- NULL
+  n <- nrow(nhefs)
+  
+  for(i in 1:B) {
+    
+    data.boot <- data[sample(1:n, n, replace = TRUE), ]
+    p1.boot <- glm(formula, data = data.boot, family = "binomial")
+    ps.boot <- predict(p1.boot, type = "response")
+    
+    ps_quintile.boot <- cut(ps.boot, 
+  		breaks = c(0, quantile(ps.boot, p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+    
+    nj.boot <- table(ps_quintile.boot)
+    
+  	te_quintile.boot <- tapply(data.boot[[outcome]][data.boot$qsmk_numeric == 1], 
+  		ps_quintile.boot[data.boot$qsmk_numeric == 1], mean) -
+  	tapply(data.boot[[outcome]][data.boot$qsmk_numeric == 0], 
+  	       ps_quintile.boot[data.boot$qsmk_numeric == 0], mean)
+  	
+  	ATE.boot <- sum(te_quintile.boot * nj.boot/ nrow(data.boot), na.rm = TRUE)
+    ATE_PSS.boot <- c(ATE_PSS.boot, ATE.boot)
+
+    w1.boot <- data.boot$qsmk_numeric/ps.boot
+    w0.boot <- (1-data.boot$qsmk_numeric)/(1-ps.boot)
+    
+    ATE_IPW.boot <- c(ATE_IPW.boot, 
+      mean(data.boot[[outcome]]*w1.boot) - mean(data.boot[[outcome]]*w0.boot))
+    ATE_IPW2.boot <- c(ATE_IPW2.boot, 
+      weighted.mean(data.boot[[outcome]], w1.boot) - weighted.mean(data.boot[[outcome]], w0.boot))
+    
+  }
+  
+  results <- data.frame(
+    ATE = round(c(PSS, IPW1, IPW2), 3),  # Round ATE values to 3 decimal places
+  `Standard Error` = round(c(sd(ATE_PSS.boot), sd(ATE_IPW.boot), sd(ATE_IPW2.boot)), 3),  
+  `95% CI` = c(
+    sprintf("%.3f, %.3f", PSS - qnorm(0.975) * sd(ATE_PSS.boot), PSS + qnorm(0.975) * sd(ATE_PSS.boot)),
+    sprintf("%.3f, %.3f", IPW1 - qnorm(0.975) * sd(ATE_IPW.boot), IPW1 + qnorm(0.975) * sd(ATE_IPW.boot)),
+    sprintf("%.3f, %.3f", IPW2 - qnorm(0.975) * sd(ATE_IPW2.boot), IPW2 + qnorm(0.975) * sd(ATE_IPW2.boot))
+  )
+  )
+  rownames(results) <- c("PSS", "IPW1", "IPW2")
+  colnames(results)[3] <- "95% CI"
+  colnames(results)[2] <- "Standard Error"
+  
+  return(results)
+}
+
+formula_test <- "qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp"
+kable(calculate_effects(nhefs, "wt82_71",  formula_test),caption = 'Results for Weight Change')
+kable(calculate_effects(nhefs, "sbp",  formula_test),caption = 'Results for SBP')
+kable(calculate_effects(nhefs, "dbp",  formula_test),caption = 'Results for DBP')
+```
+
+Note that depend on different models you are using, the results may be a little different. 
+
+
+# Appendix - R code
+
+## Question 1 
+
+```{r, eval=F}
+### Logistic regression with main effects
+ps_model_a <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs + exercise + active + wt71 + hbp, family = binomial(), data = nhefs)
+nhefs$ps_a <- predict(ps_model_a, type = "response")
+nhefs$weight_a <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_a, 1 / (1 - ps_a)))
+
+# Calculate weighted and unweighted SMDs
+dataSvy_a <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_a)
+tabUnweighted_a <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_a <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_a, test = FALSE)
+
+dataPlot_a <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_a)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_a)),
+                       Weighted_a  = as.numeric(ExtractSmd(tabWeighted_a)))
+
+# Convert to long format for ggplot
+dataPlotMelt_a <- melt(data = dataPlot_a,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+### Logistic regression with main effects and nonlinear terms in the continuous covariates
+ps_model_b <- glm(qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp, family = binomial(), data = nhefs)
+nhefs$ps_b <- predict(ps_model_b, type = "response")
+nhefs$weight_b <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_b, 1 / (1 - ps_b)))
+
+dataSvy_b <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_b)
+tabUnweighted_b <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_b <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_b, test = FALSE)
+
+dataPlot_b <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_b)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_b)),
+                       Weighted_b  = as.numeric(ExtractSmd(tabWeighted_b)))
+
+dataPlotMelt_b <- melt(data = dataPlot_b,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+### Allowing for all pairwise interactions and performing some form of variable selection (e.g., forward selection using AIC).
+full_model_c <- glm(qsmk ~ (sex + race + age + education + smokeintensity + smokeyrs + exercise + active + wt71 + hbp)^2, family = binomial(), data = nhefs)
+ps_model_c <- step(full_model_c, trace=0, direction="forward", criteria="AIC")
+nhefs$ps_c <- predict(ps_model_c, type="response")
+nhefs$weight_c <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_c, 1 / (1 - ps_c)))
+
+dataSvy_c <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_c)
+tabUnweighted_c <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_c <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_c, test = FALSE)
+
+dataPlot_c <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_c)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_c)),
+                       Weighted_c = as.numeric(ExtractSmd(tabWeighted_c)))
+
+dataPlotMelt_c <- melt(data = dataPlot_c,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+
+### A logistic regression model considering all available baseline covariates and fit a random forest model to select top 10 important covariates
+rf_model <- randomForest(as.formula(paste("qsmk ~", paste(all_covars[-c(1:3,13)], collapse = " + "))), data = nhefs)
+important_vars <- importance(rf_model)[order(importance(rf_model)[, "MeanDecreaseGini"], decreasing = TRUE), ]
+top_10_vars <- row.names(as.data.frame(important_vars[1:10]))
+
+formula_d <- as.formula(paste("qsmk ~", paste(top_10_vars, collapse=" + ")))
+
+ps_model_d <- glm(formula_d, family = binomial(), data = nhefs)
+nhefs$ps_d <- predict(ps_model_d, type = "response")
+nhefs$weight_d <- with(nhefs, ifelse(qsmk == "Yes", 1 / ps_d, 1 / (1 - ps_d)))
+
+dataSvy_d <- svydesign(ids = ~ 1, data = nhefs, weights = ~ weight_d)
+tabUnweighted_d <- CreateTableOne(vars = adj_vars, strata = "qsmk", data = nhefs, test = FALSE)
+tabWeighted_d <- svyCreateTableOne(vars = adj_vars, strata = "qsmk", data = dataSvy_d, test = FALSE)
+
+dataPlot_d <- data.frame(variable  = rownames(ExtractSmd(tabUnweighted_d)),
+                       Unweighted = as.numeric(ExtractSmd(tabUnweighted_d)),
+                       Weighted_d  = as.numeric(ExtractSmd(tabWeighted_d)))
+
+dataPlotMelt_d <- melt(data = dataPlot_d,
+                     id.vars = c("variable"),
+                     variable.name = "Method",
+                     value.name = "SMD")
+
+# Prepare dataset for ggplot
+dataPlotMelt <- rbind(dataPlotMelt_a, dataPlotMelt_b[11:20, ], dataPlotMelt_c[11:20, ], dataPlotMelt_d[11:20, ])
+dataPlotMelt %>%
+  arrange(desc(SMD), variable) %>%
+  mutate(variable_ordered = factor(variable, levels = unique(variable))) %>%
+  ggplot(aes(x = variable_ordered, y = SMD, group = Method, color = Method)) +
+  geom_line() +
+  geom_point() +
+  geom_hline(yintercept = 0.1, color = "black", linewidth = 0.1) +
+  coord_flip() +
+  theme_bw() +
+  theme(legend.key = element_blank()) +  xlab('Variables') + 
+  labs(title="Standardized Mean Differences for all Models")
+```
+
+## Question 2
+
+```{r, eval=F}
+nhefs$qsmk_numeric <- as.numeric(nhefs$qsmk == "Yes")
+
+calculate_effects <- function(data, outcome, formula) {
+  
+  # Fit propensity score model
+  ps_model <- glm(formula, family = binomial(), data = data)
+  data$ps <- predict(ps_model, type = "response")
+  
+  # pss
+  data$ps_quintile <- cut(data$ps, breaks = quantile(data$ps, probs = seq(0, 1, by = 0.2)), 
+                          include.lowest = TRUE, labels = FALSE)
+  
+  te_quintile <- tapply(data[[outcome]][data$qsmk_numeric == 1], 
+                        data$ps_quintile[data$qsmk_numeric == 1], mean, na.rm = TRUE) -
+                 tapply(data[[outcome]][data$qsmk_numeric == 0], 
+                        data$ps_quintile[data$qsmk_numeric == 0], mean, na.rm = TRUE)
+  PSS <- sum(te_quintile * table(data$ps_quintile) / nrow(data), na.rm = TRUE)
+  
+  # IPW
+  data$w1 <- data$qsmk_numeric / data$ps
+  data$w0 <- (1 - data$qsmk_numeric) / (1 - data$ps)
+  IPW1 <- mean(data[[outcome]] * data$w1) - mean(data[[outcome]] * data$w0)
+  IPW2 <- weighted.mean(data[[outcome]], data$w1) - weighted.mean(data[[outcome]], data$w0)
+  
+  # Perform bootstrap 
+  B <- 1000
+  nj <- table(nhefs$ps_quintile)
+  ATE_PSS.boot <- NULL
+  ATE_IPW.boot <- NULL
+  ATE_IPW2.boot <- NULL
+  n <- nrow(nhefs)
+  
+  for(i in 1:B) {
+    
+    data.boot <- data[sample(1:n, n, replace = TRUE), ]
+    p1.boot <- glm(formula, data = data.boot, family = "binomial")
+    ps.boot <- predict(p1.boot, type = "response")
+    
+    ps_quintile.boot <- cut(ps.boot, 
+  		breaks = c(0, quantile(ps.boot, p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+    
+    nj.boot <- table(ps_quintile.boot)
+    
+  	te_quintile.boot <- tapply(data.boot[[outcome]][data.boot$qsmk_numeric == 1], 
+  		ps_quintile.boot[data.boot$qsmk_numeric == 1], mean) -
+  	tapply(data.boot[[outcome]][data.boot$qsmk_numeric == 0], 
+  	       ps_quintile.boot[data.boot$qsmk_numeric == 0], mean)
+  	
+  	ATE.boot <- sum(te_quintile.boot * nj.boot/ nrow(data.boot), na.rm = TRUE)
+    ATE_PSS.boot <- c(ATE_PSS.boot, ATE.boot)
+
+    w1.boot <- data.boot$qsmk_numeric/ps.boot
+    w0.boot <- (1-data.boot$qsmk_numeric)/(1-ps.boot)
+    
+    ATE_IPW.boot <- c(ATE_IPW.boot, 
+      mean(data.boot[[outcome]]*w1.boot) - mean(data.boot[[outcome]]*w0.boot))
+    ATE_IPW2.boot <- c(ATE_IPW2.boot, 
+      weighted.mean(data.boot[[outcome]], w1.boot) - weighted.mean(data.boot[[outcome]], w0.boot))
+    
+  }
+  
+  results <- data.frame(
+    ATE = round(c(PSS, IPW1, IPW2), 3),  # Round ATE values to 3 decimal places
+  `Standard Error` = round(c(sd(ATE_PSS.boot), sd(ATE_IPW.boot), sd(ATE_IPW2.boot)), 3),  
+  `95% CI` = c(
+    sprintf("%.3f, %.3f", PSS - qnorm(0.975) * sd(ATE_PSS.boot), PSS + qnorm(0.975) * sd(ATE_PSS.boot)),
+    sprintf("%.3f, %.3f", IPW1 - qnorm(0.975) * sd(ATE_IPW.boot), IPW1 + qnorm(0.975) * sd(ATE_IPW.boot)),
+    sprintf("%.3f, %.3f", IPW2 - qnorm(0.975) * sd(ATE_IPW2.boot), IPW2 + qnorm(0.975) * sd(ATE_IPW2.boot))
+  )
+  )
+  
+  rownames(results) <- c("PSS", "IPW1", "IPW2")
+  colnames(results)[3] <- "95% CI"
+  colnames(results)[2] <- "Standard Error"
+  
+  return(results)
+}
+
+formula_test <- "qsmk ~ sex + race + poly(age, 2) + education + poly(smokeintensity, 2) + poly(smokeyrs, 2) + exercise + active + poly(wt71, 2) + hbp"
+kable(calculate_effects(nhefs, "wt82_71",  formula_test),caption = 'Result for Weight Change')
+kable(calculate_effects(nhefs, "sbp",  formula_test),caption = 'Result for SBP')
+kable(calculate_effects(nhefs, "dbp",  formula_test),caption = 'Result for DBP')
+```
