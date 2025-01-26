@@ -1,0 +1,891 @@
+---
+title: "PubH7485 Homework5 Answerkey"
+date: "2024-11-01"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+set.seed(7485)
+
+library(dplyr)
+library(labelled)
+library(causaldata)
+library(knitr)
+library(MASS)
+library(reshape2)
+library(ggplot2)
+library(survey)
+library(tableone)
+library(randomForest)
+library(MatchIt)
+
+library(formattable)
+library(rms)
+library(forestplot)
+library(Matching)
+```
+
+```{r, include=F}
+# load and impute dataset
+tico_7485 <- read.csv(file.choose(), header=T) 
+
+tico_7485$active <- factor(tico_7485$active, levels = c(0,1), labels = c('placebo', 'active'))
+tico_7485$gender <- factor(tico_7485$gender, levels = c(1,2), labels = c('male', 'female'))
+tico_7485$asthmahx <- factor(tico_7485$asthmahx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$copdhx <- factor(tico_7485$copdhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$diabeteshx <- factor(tico_7485$diabeteshx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$chfhx <- factor(tico_7485$chfhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$hypertenshx <- factor(tico_7485$hypertenshx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$malignhx <- factor(tico_7485$malignhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$renalhx <- factor(tico_7485$renalhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$immuno_supp <- factor(tico_7485$immuno_supp, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$ordpulmbl <- factor(tico_7485$ordpulmbl, levels = c(2,3,4), labels = c('no O2', 'low O2', 'high O2'))
+tico_7485$corticobl <- factor(tico_7485$corticobl, levels = c(0,1), labels = c('no', 'yes'))
+
+tico_7485 <- set_variable_labels(tico_7485, asthmahx = "Asthma", 
+                                 copdhx = 'COPD',
+                                 diabeteshx = 'Diabetes requiring medication' ,
+                                 chfhx = 'CHF',
+                                 hypertenshx = 'Hypertension requiring medication', 
+                                 malignhx = 'Malignancy (active or receiving treatment)',
+                                 renalhx= 'Renal impairment',
+                                 immuno_supp = 'Immunosuppressed',
+                                 newsbl = 'New Score',
+                                 creatbl = 'Creatinine (mg/dL)',
+                                 crpbl='C-reactive protein',
+                                 lymphbl = 'Lymphocytes (10^9/L)',
+                                 ordpulmbl = 'Pulm ordinal', 
+                                 vl_rslt_log10 = 'Log 10 of Viral load copies/mL')
+
+# sapply(tico_7485, function(x) sum(is.na(x)))
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in names(tico_7485)) {
+  if (is.numeric(tico_7485[[var]])) {
+    tico_7485[[var]][is.na(tico_7485[[var]])] <- median(tico_7485[[var]], na.rm = TRUE)
+    print(paste("Imputed numeric variable:", var))
+    
+  } else if (is.factor(tico_7485[[var]])) {
+    tico_7485[[var]][is.na(tico_7485[[var]])] <- mode_function(tico_7485[[var]])
+    print(paste("Imputed categorical variable:", var))
+  }
+}
+
+t1 <- CreateTableOne(var = names(tico_7485)[2:19], data = tico_7485, strata = 'corticobl')
+t11 <- print(t1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+```
+
+## Question 1 (10 points)
+
+```{r, echo=F}
+kable(t11, caption = "Summary Statistics Stratified by the use of corticosteroids")
+```
+
+
+## Question 2 (5 points)
+
+The table below presented the unadjusted mean difference in hospitalized free days and 95% CI. The difference is significant since the 95% CI does not contain 0. 
+
+```{r, echo=F}
+num_t1 <- table(tico_7485$corticobl)[2]
+num_c1 <- table(tico_7485$corticobl)[1]
+
+## for hospital_free_28
+hf28_t <- tico_7485$hospital_free_28[tico_7485$corticobl == 'yes']
+hf28_c <- tico_7485$hospital_free_28[tico_7485$corticobl == 'no']
+et_hf28 <- mean(hf28_t, na.rm = T)
+ec_hf28 <- mean(hf28_c, na.rm = T)
+
+# Unadjusted ATE
+ate_hf28 <- et_hf28 - ec_hf28
+# Standard Error
+se_hf28 <- sqrt(var(hf28_t, na.rm = T)/num_t1 + var(hf28_c, na.rm = T)/num_c1)
+# Confidence Interval
+conf_int_hf28 <- ate_hf28 + c(-1, 1)*qnorm(0.975)*se_hf28
+
+output1 <- data.frame(
+  Type = 'ATE', 
+  Estimate = round(ate_hf28, 3),
+  SE = round(unname(se_hf28), 3),
+  CI_Lower = round(conf_int_hf28[1], 3),
+  CI_Upper = round(conf_int_hf28[2], 3)
+)
+
+kable(output1, caption = "Unadjusted ATE for Hospital-Free Days")
+```
+
+
+## Question3 (10 points)
+
+The ATE and ATT estimates using regression model are presented below. The differences are not significant since both confidence intervals contain 0. 
+
+```{r, include=F}
+calculate_ATE_ATT <- function(model_formula, data, num_bootstraps = 100) {
+ 
+  # Fit initial outcome model
+  hf28_model <- lm(model_formula, data = data)
+  
+  # Data for ATE (all individuals set to treated and control)
+  data_trt <- data_con <- data
+  data_trt$corticobl = 'yes'
+  data_con$corticobl = 'no'
+  
+  # Predicted outcomes for ATE
+  pred1_hf28 <- predict(hf28_model, newdata = data_trt, type = "response")
+  pred0_hf28 <- predict(hf28_model, newdata = data_con, type = "response")
+  ATE_hf28 <- mean(pred1_hf28 - pred0_hf28)
+  
+  # Data for ATT (only treated individuals set to control)
+  data_att_trt <- data[data$corticobl == 'yes', ]
+  data_att_con <- data_att_trt
+  data_att_con$corticobl = 'no'
+  
+  # Predicted outcomes for ATT
+  pred1_att_hf28 <- predict(hf28_model, newdata = data_att_trt, type = "response")
+  pred0_att_hf28 <- predict(hf28_model, newdata = data_att_con, type = "response")
+  ATT_hf28 <- mean(pred1_att_hf28 - pred0_att_hf28)
+  
+  # Bootstrap replication for SE
+  ate_hf28_boot <- c()
+  att_hf28_boot <- c()
+  
+  for (i in 1:num_bootstraps) {
+    data_boot <- data[sample(nrow(data), size = nrow(data), replace = TRUE), ]
+    hf28_model_boot <- lm(model_formula, data = data_boot)
+    
+    # Bootstrap for ATE
+    data_trt_boot <- data_con_boot <- data_boot
+    data_trt_boot$corticobl = 'yes'
+    data_con_boot$corticobl = 'no'
+    pred1_hf28_boot <- predict(hf28_model_boot, newdata = data_trt_boot, type = "response")
+    pred0_hf28_boot <- predict(hf28_model_boot, newdata = data_con_boot, type = "response")
+    ate_hf28_boot <- c(ate_hf28_boot, mean(pred1_hf28_boot - pred0_hf28_boot))
+    
+    # Bootstrap for ATT
+    data_att_boot_trt <- data_boot[data_boot$corticobl == 'yes', ]
+    data_att_boot_con <- data_att_boot_trt
+    data_att_boot_con$corticobl = 'no'
+    pred1_att_hf28_boot <- predict(hf28_model_boot, newdata = data_att_boot_trt, type = "response")
+    pred0_att_hf28_boot <- predict(hf28_model_boot, newdata = data_att_boot_con, type = "response")
+    att_hf28_boot <- c(att_hf28_boot, mean(pred1_att_hf28_boot - pred0_att_hf28_boot))
+  }
+  
+  # Calculate standard errors and confidence intervals
+  SE_ATE <- sd(ate_hf28_boot)
+  SE_ATT <- sd(att_hf28_boot)
+  CI_ATE_lower <- ATE_hf28 - qnorm(0.975) * SE_ATE
+  CI_ATE_upper <- ATE_hf28 + qnorm(0.975) * SE_ATE
+  CI_ATT_lower <- ATT_hf28 - qnorm(0.975) * SE_ATT
+  CI_ATT_upper <- ATT_hf28 + qnorm(0.975) * SE_ATT
+  
+  # Return results as separate CI bounds
+  return(list(
+    ATE = round(ATE_hf28, 3), SE_ATE = round(SE_ATE, 3), 
+    CI_ATE_lower = round(CI_ATE_lower, 3), CI_ATE_upper = round(CI_ATE_upper, 3),
+    ATT = round(ATT_hf28, 3), SE_ATT = round(SE_ATT, 3), 
+    CI_ATT_lower = round(CI_ATT_lower, 3), CI_ATT_upper = round(CI_ATT_upper, 3)
+  ))
+}
+
+
+full_model <-  paste('hospital_free_28 ~ corticobl * (', paste(names(tico_7485)[1:19], collapse = ' + '), ')')
+full_hf28 <- lm(as.formula(full_model), data=tico_7485) 
+
+# do stepwise selection
+stepwise_hf28 <- stepAIC(full_hf28, direction = "both")
+# summary(stepwise_hf28)
+
+select_hf28 <- hospital_free_28 ~ corticobl + gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10 + corticobl:bmi +
+  corticobl:lymphbl 
+result_hf28 <- calculate_ATE_ATT(model_formula = select_hf28, data = tico_7485, num_bootstraps = 100)
+# print(result_hf28)
+```
+
+
+```{r, echo=F}
+output2 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(result_hf28$ATE, result_hf28$ATT),
+  SE = c(result_hf28$SE_ATE, result_hf28$SE_ATT),
+  CI_Lower = c(result_hf28$CI_ATE_lower, result_hf28$CI_ATT_lower),
+  CI_Upper = c(result_hf28$CI_ATE_upper, result_hf28$CI_ATT_upper)
+)
+
+
+kable(output2, caption = "ATE and ATT Estimates from Regression Model")
+```
+
+Note that I was using the regression model from stepwise model selection; the results may be slightly different when using other models. 
+
+## Question 4 (35 points total; 5 points for a, 10 points for b, c, d)
+
+a) 
+
+```{r,include=F}
+# a) Find the IPW standardized mean difference among treatment groups
+ps_model <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10, family = binomial(), data = tico_7485)
+tico_7485$ps <- predict(ps_model, type = "response")
+tico_7485$weight <- with(tico_7485, ifelse(corticobl == "yes", 1 / ps, 1 / (1 - ps)))
+
+dataSvy <- svydesign(ids = ~ 1, data = tico_7485, weights = ~ weight)
+
+tabWeighted <- svyCreateTableOne(vars = names(tico_7485)[2:19], strata = "corticobl", data = dataSvy, test = FALSE)
+t2 <- print(tabWeighted, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+```
+
+```{r,echo=F}
+kable(t2, caption = "Summary Statistics Stratified by the use of corticosteroids using IPW")
+```
+
+b) The ATE and ATT estimates using PSS are presented below. The differences are not significant since both confidence intervals contain 0. 
+
+```{r,echo=F}
+# b) ATE and ATT with PSS
+# ATE estimate
+tico_7485$corticobl_numeric <- as.numeric(tico_7485$corticobl == "yes")
+ps <- predict(ps_model, type = "response")
+
+ps_quintile_ate <- cut(ps, breaks = quantile(ps, probs = seq(0, 1, by = 0.2)), 
+                       include.lowest = TRUE, labels = FALSE)
+te_quintile <- tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'], 
+                      ps_quintile_ate[tico_7485$corticobl == 'yes'], mean) -
+               tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'no'], 
+                      ps_quintile_ate[tico_7485$corticobl == 'no'], mean)
+ATE_PSS <- sum(te_quintile * table(ps_quintile_ate) / nrow(tico_7485), na.rm = TRUE)
+
+# ATT estimate
+ps_quintile_att <- cut(ps, 
+	breaks = c(0, quantile(ps[tico_7485$corticobl == 'yes'], p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+nA <- nrow(tico_7485[tico_7485$corticobl == 'yes', ])
+nAj <- table(ps_quintile_att[tico_7485$corticobl == 'yes'])
+te_quintile_att <- tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'], 
+                         ps_quintile_att[tico_7485$corticobl == 'yes'], mean) -
+	tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'no'], 
+	       ps_quintile_att[tico_7485$corticobl == 'no'], mean)
+ATT_PSS <- sum(te_quintile_att * nAj / nA, na.rm = TRUE)
+
+# bootstrap to get the SE and CI
+B <- 100
+ATE_PSS.boot <- NULL
+ATT_PSS.boot <- NULL
+n <- nrow(tico_7485)
+
+for(i in 1:B) {
+
+  tico.boot <- tico_7485[sample(1:n, n, replace = TRUE), ]
+  ps_model.boot <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10,
+                 data = tico.boot, family = "binomial")
+  
+  ps.boot <- predict(ps_model.boot, type = "response")
+  
+  # ATE
+  ps_quintile.boot <- cut(ps.boot,
+                          breaks = quantile(ps.boot, probs = seq(0, 1, by = 0.2), na.rm = TRUE),
+                          include.lowest = TRUE, labels = FALSE)
+  
+  te_quintile.boot <- tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'yes'],
+                             ps_quintile.boot[tico.boot$corticobl == 'yes'], mean) -
+    tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'no'],
+           ps_quintile.boot[tico.boot$corticobl == 'no'], mean)
+  
+  nj.boot <- table(ps_quintile.boot)
+  ATE.boot <- sum(te_quintile.boot * nj.boot / n, na.rm = TRUE)
+  
+  ATE_PSS.boot <- c(ATE_PSS.boot, ATE.boot)
+  
+  # ATT
+  ps_quintile.boot_att <- cut(ps.boot,
+                              breaks = c(0, quantile(ps.boot[tico.boot$corticobl == 'yes'], 
+                                                     probs = c(0.2, 0.4, 0.6, 0.8), na.rm = TRUE), 1),
+                              include.lowest = TRUE, labels = FALSE)
+  
+  nA.boot <- sum(tico.boot$corticobl == 'yes')
+  nAj.boot <- table(ps_quintile.boot_att[tico.boot$corticobl == 'yes'])
+  
+  te_quintile_att.boot <- tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'yes'],
+                                 ps_quintile.boot_att[tico.boot$corticobl == 'yes'], mean) -
+    tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'no'],
+           ps_quintile.boot_att[tico.boot$corticobl == 'no'], mean)
+  
+  ATT.boot <- sum(te_quintile_att.boot * nAj.boot / nA.boot, na.rm = TRUE)
+  
+  ATT_PSS.boot <- c(ATT_PSS.boot, ATT.boot)
+}
+
+SE_ATE_PSS <- sd(ATE_PSS.boot)
+SE_ATT_PSS <- sd(ATT_PSS.boot)
+
+CI_ATE_PSS <- ATE_PSS + c(-1, 1) * qnorm(0.975) * SE_ATE_PSS
+CI_ATT_PSS <- ATT_PSS + c(-1, 1) * qnorm(0.975) * SE_ATT_PSS
+
+output3 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(ATE_PSS, ATT_PSS),
+  SE = c(SE_ATE_PSS, SE_ATT_PSS),
+  CI_Lower = c(CI_ATE_PSS[1], CI_ATT_PSS[1]),
+  CI_Upper = c(CI_ATE_PSS[2], CI_ATT_PSS[2])
+)
+
+kable(output3, caption = "ATE and ATT Estimates using PSS")
+```
+
+c) The ATE and ATT estimates using IPW are presented below. The differences are not significant since both confidence intervals contain 0. 
+
+```{r, echo=F}
+# ATE and ATT estimates using IPW
+# ATE
+w1 <- as.numeric(tico_7485$corticobl_numeric)/ps
+w0 <- (1-tico_7485$corticobl_numeric)/(1-ps)
+ATE_IPW <- mean(tico_7485$hospital_free_28*w1) - mean(tico_7485$hospital_free_28*w0)
+
+# ATT
+w1 <- tico_7485$corticobl_numeric
+w0 <- (1-tico_7485$corticobl_numeric)/(1-ps)*ps
+ATT_IPW <- weighted.mean(tico_7485$hospital_free_28,w=w1) - 
+	weighted.mean(tico_7485$hospital_free_28,w=w0)
+
+# bootstrap
+B <- 100
+n <- nrow(tico_7485)
+ATE_IPW.boot <- NULL
+ATT_IPW.boot <- NULL
+
+for(i in 1:B) {
+
+  tico.boot <- tico_7485[sample(1:n, n, replace = TRUE), ]
+  
+  p1.boot <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + bmi + newsbl + 
+                   creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10, data = tico.boot, family = "binomial")
+  ps.boot <- predict(p1.boot, type = "response")
+  
+  w1.boot <- as.numeric(tico.boot$corticobl_numeric) / ps.boot
+  w0.boot <- (1 - tico.boot$corticobl_numeric) / (1 - ps.boot)
+  
+  ATE_IPW.boot <- c(ATE_IPW.boot, 
+                    mean(tico.boot$hospital_free_28 * w1.boot) - 
+                    mean(tico.boot$hospital_free_28 * w0.boot))
+  
+  w1_att.boot <- tico.boot$corticobl_numeric
+  w0_att.boot <- (1 - tico.boot$corticobl_numeric) / (1 - ps.boot) * ps.boot
+  
+  ATT_IPW.boot <- c(ATT_IPW.boot, 
+                    weighted.mean(tico.boot$hospital_free_28, w = w1_att.boot) - 
+                    weighted.mean(tico.boot$hospital_free_28, w = w0_att.boot))
+}
+
+SE_ATE_IPW <- sd(ATE_IPW.boot)
+CI_ATE_IPW <- ATE_IPW + c(-1, 1) * qnorm(0.975) * SE_ATE_IPW
+
+SE_ATT_IPW <- sd(ATT_IPW.boot)
+CI_ATT_IPW <- ATT_IPW + c(-1, 1) * qnorm(0.975) * SE_ATT_IPW
+
+output4 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(ATE_IPW, ATT_IPW),
+  SE = c(SE_ATE_IPW, SE_ATT_IPW),
+  CI_Lower = c(CI_ATE_IPW[1], CI_ATT_IPW[1]),
+  CI_Upper = c(CI_ATE_IPW[2], CI_ATT_IPW[2])
+)
+
+kable(output4, caption = "ATE and ATT Estimates using IPW")
+
+```
+
+d) i.
+```{r, include=F}
+# d) 1:1 matching 
+# i.Find the standardized mean difference among the matched cohort.
+rownames(tico_7485)<-1:nrow(tico_7485)
+mod_match<-matchit(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + bmi + newsbl + creatbl + crpbl + lymphbl +
+                     ordpulmbl + vl_rslt_log10,distance="logit",method="nearest",data=tico_7485,ratio=1,replace=TRUE)
+#print(tail(mod_match$match.matrix))
+
+matched_pairs <- na.omit(mod_match$match.matrix)  # to check if controls re used or not
+n_matched <- nrow(matched_pairs)
+print(n_matched) 
+
+tico_match <- data.frame(rbind(tico_7485[tico_7485$corticobl == 'yes', ],
+	tico_7485[as.numeric(mod_match$match.matrix), ]))
+
+tico_match <- set_variable_labels(tico_match, asthmahx = "Asthma", 
+                                 copdhx = 'COPD',
+                                 diabeteshx = 'Diabetes requiring medication' ,
+                                 chfhx = 'CHF',
+                                 hypertenshx = 'Hypertension requiring medication', 
+                                 malignhx = 'Malignancy (active or receiving treatment)',
+                                 renalhx= 'Renal impairment',
+                                 immuno_supp = 'Immunosuppressed',
+                                 newsbl = 'New Score',
+                                 creatbl = 'Creatinine (mg/dL)',
+                                 crpbl='C-reactive protein',
+                                 lymphbl = 'Lymphocytes (10^9/L)',
+                                 ordpulmbl = 'Pulm ordinal', 
+                                 vl_rslt_log10 = 'Log 10 of Viral load copies/mL')
+
+tabmatched1.1 <- CreateTableOne(vars = names(tico_7485)[2:19], strata = "corticobl",
+	data = tico_match, test = FALSE)
+t3 <- print(tabmatched1.1, smd = TRUE, showAllLevels = TRUE, 
+						varLabels = TRUE)
+```
+
+
+```{r, echo=F}
+kable(t3, caption = "Summary Statistics Stratified by the use of corticosteroids using 1:1 Matching")
+```
+
+ii. The ATT estimate using 1:1 matching are presented below. The difference is not significant since the confidence interval contains 0. 
+
+```{r, echo=F}
+# ii.Estimate the ATT using 1:1 matching
+p1 <- mean(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'])
+p0 <- mean(tico_7485$hospital_free_28[as.numeric(mod_match$match.matrix)],na.rm=TRUE)
+n1 <- table(tico_7485$corticobl)[2]
+n0 <- length(as.numeric(mod_match$match.matrix))
+
+ATT1match <- p1 -  p0
+SE1match <- sqrt(-1*(p1*(1-p1)/n1 + p0*(1-p0)/n0))
+CI1match <- p1 - p0 + c(-1, 1)*qnorm(0.975)*SE1match
+
+output5 <- data.frame(
+  Type = 'ATT',
+  Estimate = round(ATT1match, 3),
+  SE = round(unname(SE1match), 3),
+  CI_Lower = round(CI1match[1], 3),
+  CI_Upper = round(CI1match[2], 3)
+)
+
+kable(output5, caption = "ATT Estimate using 1:1 Matching")
+```
+
+
+## Question 5 (10 points)
+
+The analyses above indicate that the adjusted ATE and ATT estimates using various causal methods were not significant, while the unadjusted ATE was significant. This highlights the importance of carefully selecting causal methods in non-randomized studies (and even in randomized studies when the factor of interest is not the primary treatment).
+
+
+# Appendix - R code
+
+## Question 1 
+```{r, eval=F}
+# load and impute dataset
+tico_7485 <- read.csv(file.choose(), header=T)
+
+tico_7485$active <- factor(tico_7485$active, levels = c(0,1), labels = c('placebo', 'active'))
+tico_7485$gender <- factor(tico_7485$gender, levels = c(1,2), labels = c('male', 'female'))
+tico_7485$asthmahx <- factor(tico_7485$asthmahx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$copdhx <- factor(tico_7485$copdhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$diabeteshx <- factor(tico_7485$diabeteshx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$chfhx <- factor(tico_7485$chfhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$hypertenshx <- factor(tico_7485$hypertenshx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$malignhx <- factor(tico_7485$malignhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$renalhx <- factor(tico_7485$renalhx, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$immuno_supp <- factor(tico_7485$immuno_supp, levels = c(0,1), labels = c('no', 'yes'))
+tico_7485$ordpulmbl <- factor(tico_7485$ordpulmbl, levels = c(2,3,4), labels = c('no O2', 'low O2', 'high O2'))
+tico_7485$corticobl <- factor(tico_7485$corticobl, levels = c(0,1), labels = c('no', 'yes'))
+
+tico_7485 <- set_variable_labels(tico_7485, asthmahx = "Asthma", 
+                                 copdhx = 'COPD',
+                                 diabeteshx = 'Diabetes requiring medication' ,
+                                 chfhx = 'CHF',
+                                 hypertenshx = 'Hypertension requiring medication', 
+                                 malignhx = 'Malignancy (active or receiving treatment)',
+                                 renalhx= 'Renal impairment',
+                                 immuno_supp = 'Immunosuppressed',
+                                 newsbl = 'New Score',
+                                 creatbl = 'Creatinine (mg/dL)',
+                                 crpbl='C-reactive protein',
+                                 lymphbl = 'Lymphocytes (10^9/L)',
+                                 ordpulmbl = 'Pulm ordinal', 
+                                 vl_rslt_log10 = 'Log 10 of Viral load copies/mL')
+
+# sapply(tico_7485, function(x) sum(is.na(x)))
+
+mode_function <- function(x) {
+  x <- as.character(x)
+  tbl <- table(x, useNA = "ifany")
+  as.character(names(tbl)[which.max(tbl)])
+}
+
+for (var in names(tico_7485)) {
+  if (is.numeric(tico_7485[[var]])) {
+    tico_7485[[var]][is.na(tico_7485[[var]])] <- median(tico_7485[[var]], na.rm = TRUE)
+    print(paste("Imputed numeric variable:", var))
+    
+  } else if (is.factor(tico_7485[[var]])) {
+    tico_7485[[var]][is.na(tico_7485[[var]])] <- mode_function(tico_7485[[var]])
+    print(paste("Imputed categorical variable:", var))
+  }
+}
+
+t1 <- CreateTableOne(var = names(tico_7485)[2:19], data = tico_7485, strata = 'corticobl')
+t11 <- print(t1, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+kable(t11, caption = "Summary Statistics Stratified by the use of corticosteroids")
+```
+
+## Question 2
+
+```{r,eval=F}
+num_t1 <- table(tico_7485$corticobl)[2]
+num_c1 <- table(tico_7485$corticobl)[1]
+
+## for hospital_free_28
+hf28_t <- tico_7485$hospital_free_28[tico_7485$corticobl == 'yes']
+hf28_c <- tico_7485$hospital_free_28[tico_7485$corticobl == 'no']
+et_hf28 <- mean(hf28_t, na.rm = T)
+ec_hf28 <- mean(hf28_c, na.rm = T)
+
+# Unadjusted ATE
+ate_hf28 <- et_hf28 - ec_hf28
+# Standard Error
+se_hf28 <- sqrt(var(hf28_t, na.rm = T)/num_t1 + var(hf28_c, na.rm = T)/num_c1)
+# Confidence Interval
+conf_int_hf28 <- ate_hf28 + c(-1, 1)*qnorm(0.975)*se_hf28
+
+output1 <- data.frame(
+  Type = 'ATE', 
+  Estimate = round(ate_hf28, 3),
+  SE = round(unname(se_hf28), 3),
+  CI_Lower = round(conf_int_hf28[1], 3),
+  CI_Upper = round(conf_int_hf28[2], 3)
+)
+
+kable(output1, caption = "Unadjusted ATE for Hospital-Free Days")
+```
+
+
+## Question 3
+```{r,eval=F}
+calculate_ATE_ATT <- function(model_formula, data, num_bootstraps = 100) {
+ 
+  # Fit initial outcome model
+  hf28_model <- lm(model_formula, data = data)
+  
+  # Data for ATE (all individuals set to treated and control)
+  data_trt <- data_con <- data
+  data_trt$corticobl = 'yes'
+  data_con$corticobl = 'no'
+  
+  # Predicted outcomes for ATE
+  pred1_hf28 <- predict(hf28_model, newdata = data_trt, type = "response")
+  pred0_hf28 <- predict(hf28_model, newdata = data_con, type = "response")
+  ATE_hf28 <- mean(pred1_hf28 - pred0_hf28)
+  
+  # Data for ATT (only treated individuals set to control)
+  data_att_trt <- data[data$corticobl == 'yes', ]
+  data_att_con <- data_att_trt
+  data_att_con$corticobl = 'no'
+  
+  # Predicted outcomes for ATT
+  pred1_att_hf28 <- predict(hf28_model, newdata = data_att_trt, type = "response")
+  pred0_att_hf28 <- predict(hf28_model, newdata = data_att_con, type = "response")
+  ATT_hf28 <- mean(pred1_att_hf28 - pred0_att_hf28)
+  
+  # Bootstrap replication for SE
+  ate_hf28_boot <- c()
+  att_hf28_boot <- c()
+  
+  for (i in 1:num_bootstraps) {
+    data_boot <- data[sample(nrow(data), size = nrow(data), replace = TRUE), ]
+    hf28_model_boot <- lm(model_formula, data = data_boot)
+    
+    # Bootstrap for ATE
+    data_trt_boot <- data_con_boot <- data_boot
+    data_trt_boot$corticobl = 'yes'
+    data_con_boot$corticobl = 'no'
+    pred1_hf28_boot <- predict(hf28_model_boot, newdata = data_trt_boot, type = "response")
+    pred0_hf28_boot <- predict(hf28_model_boot, newdata = data_con_boot, type = "response")
+    ate_hf28_boot <- c(ate_hf28_boot, mean(pred1_hf28_boot - pred0_hf28_boot))
+    
+    # Bootstrap for ATT
+    data_att_boot_trt <- data_boot[data_boot$corticobl == 'yes', ]
+    data_att_boot_con <- data_att_boot_trt
+    data_att_boot_con$corticobl = 'no'
+    pred1_att_hf28_boot <- predict(hf28_model_boot, newdata = data_att_boot_trt, type = "response")
+    pred0_att_hf28_boot <- predict(hf28_model_boot, newdata = data_att_boot_con, type = "response")
+    att_hf28_boot <- c(att_hf28_boot, mean(pred1_att_hf28_boot - pred0_att_hf28_boot))
+  }
+  
+  # Calculate standard errors and confidence intervals
+  SE_ATE <- sd(ate_hf28_boot)
+  SE_ATT <- sd(att_hf28_boot)
+  CI_ATE_lower <- ATE_hf28 - qnorm(0.975) * SE_ATE
+  CI_ATE_upper <- ATE_hf28 + qnorm(0.975) * SE_ATE
+  CI_ATT_lower <- ATT_hf28 - qnorm(0.975) * SE_ATT
+  CI_ATT_upper <- ATT_hf28 + qnorm(0.975) * SE_ATT
+  
+  # Return results as separate CI bounds
+  return(list(
+    ATE = round(ATE_hf28, 3), SE_ATE = round(SE_ATE, 3), 
+    CI_ATE_lower = round(CI_ATE_lower, 3), CI_ATE_upper = round(CI_ATE_upper, 3),
+    ATT = round(ATT_hf28, 3), SE_ATT = round(SE_ATT, 3), 
+    CI_ATT_lower = round(CI_ATT_lower, 3), CI_ATT_upper = round(CI_ATT_upper, 3)
+  ))
+}
+
+
+full_model <-  paste('hospital_free_28 ~ corticobl * (', paste(names(tico_7485)[1:19], collapse = ' + '), ')')
+full_hf28 <- lm(as.formula(full_model), data=tico_7485) 
+
+# do stepwise selection
+stepwise_hf28 <- stepAIC(full_hf28, direction = "both")
+# summary(stepwise_hf28)
+
+select_hf28 <- hospital_free_28 ~ corticobl + gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10 + corticobl:bmi +
+  corticobl:lymphbl 
+result_hf28 <- calculate_ATE_ATT(model_formula = select_hf28, data = tico_7485, num_bootstraps = 100)
+# print(result_hf28)
+
+output2 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(result_hf28$ATE, result_hf28$ATT),
+  SE = c(result_hf28$SE_ATE, result_hf28$SE_ATT),
+  CI_Lower = c(result_hf28$CI_ATE_lower, result_hf28$CI_ATT_lower),
+  CI_Upper = c(result_hf28$CI_ATE_upper, result_hf28$CI_ATT_upper)
+)
+
+
+kable(output2, caption = "ATE and ATT Estimates from Regression Model")
+```
+
+## Question 4
+```{r,eval=F}
+# a) Find the IPW standardized mean difference among treatment groups
+ps_model <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10, family = binomial(), data = tico_7485)
+tico_7485$ps <- predict(ps_model, type = "response")
+tico_7485$weight <- with(tico_7485, ifelse(corticobl == "yes", 1 / ps, 1 / (1 - ps)))
+
+dataSvy <- svydesign(ids = ~ 1, data = tico_7485, weights = ~ weight)
+
+tabWeighted <- svyCreateTableOne(vars = names(tico_7485)[2:19], strata = "corticobl", data = dataSvy, test = FALSE)
+t2 <- print(tabWeighted, smd = TRUE, showAllLevels = TRUE, varLabels = TRUE)
+
+kable(t2, caption = "Summary Statistics Stratified by the use of corticosteroids using IPW")
+```
+
+
+```{r,eval=F}
+# b) ATE and ATT with PSS
+# ATE estimate
+tico_7485$corticobl_numeric <- as.numeric(tico_7485$corticobl == "yes")
+ps <- predict(ps_model, type = "response")
+
+ps_quintile_ate <- cut(ps, breaks = quantile(ps, probs = seq(0, 1, by = 0.2)), 
+                       include.lowest = TRUE, labels = FALSE)
+te_quintile <- tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'], 
+                      ps_quintile_ate[tico_7485$corticobl == 'yes'], mean) -
+               tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'no'], 
+                      ps_quintile_ate[tico_7485$corticobl == 'no'], mean)
+ATE_PSS <- sum(te_quintile * table(ps_quintile_ate) / nrow(tico_7485), na.rm = TRUE)
+
+# ATT estimate
+ps_quintile_att <- cut(ps, 
+	breaks = c(0, quantile(ps[tico_7485$corticobl == 'yes'], p = c(0.2, 0.4, 0.6, 0.8)), 1), labels = 1:5)
+nA <- nrow(tico_7485[tico_7485$corticobl == 'yes', ])
+nAj <- table(ps_quintile_att[tico_7485$corticobl == 'yes'])
+te_quintile_att <- tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'], 
+                         ps_quintile_att[tico_7485$corticobl == 'yes'], mean) -
+	tapply(tico_7485$hospital_free_28[tico_7485$corticobl == 'no'], 
+	       ps_quintile_att[tico_7485$corticobl == 'no'], mean)
+ATT_PSS <- sum(te_quintile_att * nAj / nA, na.rm = TRUE)
+
+# bootstrap to get the SE and CI
+B <- 100
+ATE_PSS.boot <- NULL
+ATT_PSS.boot <- NULL
+n <- nrow(tico_7485)
+
+for(i in 1:B) {
+
+  tico.boot <- tico_7485[sample(1:n, n, replace = TRUE), ]
+  ps_model.boot <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + 
+  bmi + newsbl + creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10,
+                 data = tico.boot, family = "binomial")
+  
+  ps.boot <- predict(ps_model.boot, type = "response")
+  
+  # ATE
+  ps_quintile.boot <- cut(ps.boot,
+                          breaks = quantile(ps.boot, probs = seq(0, 1, by = 0.2), na.rm = TRUE),
+                          include.lowest = TRUE, labels = FALSE)
+  
+  te_quintile.boot <- tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'yes'],
+                             ps_quintile.boot[tico.boot$corticobl == 'yes'], mean) -
+    tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'no'],
+           ps_quintile.boot[tico.boot$corticobl == 'no'], mean)
+  
+  nj.boot <- table(ps_quintile.boot)
+  ATE.boot <- sum(te_quintile.boot * nj.boot / n, na.rm = TRUE)
+  
+  ATE_PSS.boot <- c(ATE_PSS.boot, ATE.boot)
+  
+  # ATT
+  ps_quintile.boot_att <- cut(ps.boot,
+                              breaks = c(0, quantile(ps.boot[tico.boot$corticobl == 'yes'], 
+                                                     probs = c(0.2, 0.4, 0.6, 0.8), na.rm = TRUE), 1),
+                              include.lowest = TRUE, labels = FALSE)
+  
+  nA.boot <- sum(tico.boot$corticobl == 'yes')
+  nAj.boot <- table(ps_quintile.boot_att[tico.boot$corticobl == 'yes'])
+  
+  te_quintile_att.boot <- tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'yes'],
+                                 ps_quintile.boot_att[tico.boot$corticobl == 'yes'], mean) -
+    tapply(tico.boot$hospital_free_28[tico.boot$corticobl == 'no'],
+           ps_quintile.boot_att[tico.boot$corticobl == 'no'], mean)
+  
+  ATT.boot <- sum(te_quintile_att.boot * nAj.boot / nA.boot, na.rm = TRUE)
+  
+  ATT_PSS.boot <- c(ATT_PSS.boot, ATT.boot)
+}
+
+SE_ATE_PSS <- sd(ATE_PSS.boot)
+SE_ATT_PSS <- sd(ATT_PSS.boot)
+
+CI_ATE_PSS <- ATE_PSS + c(-1, 1) * qnorm(0.975) * SE_ATE_PSS
+CI_ATT_PSS <- ATT_PSS + c(-1, 1) * qnorm(0.975) * SE_ATT_PSS
+
+output3 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(ATE_PSS, ATT_PSS),
+  SE = c(SE_ATE_PSS, SE_ATT_PSS),
+  CI_Lower = c(CI_ATE_PSS[1], CI_ATT_PSS[1]),
+  CI_Upper = c(CI_ATE_PSS[2], CI_ATT_PSS[2])
+)
+
+kable(output3, caption = "ATE and ATT Estimates using PSS")
+```
+
+
+```{r,eval=F}
+# c) ATE and ATT estimates using IPW
+# ATE
+w1 <- as.numeric(tico_7485$corticobl_numeric)/ps
+w0 <- (1-tico_7485$corticobl_numeric)/(1-ps)
+ATE_IPW <- mean(tico_7485$hospital_free_28*w1) - mean(tico_7485$hospital_free_28*w0)
+
+# ATT
+w1 <- tico_7485$corticobl_numeric
+w0 <- (1-tico_7485$corticobl_numeric)/(1-ps)*ps
+ATT_IPW <- weighted.mean(tico_7485$hospital_free_28,w=w1) - 
+	weighted.mean(tico_7485$hospital_free_28,w=w0)
+
+# bootstrap
+B <- 100
+n <- nrow(tico_7485)
+ATE_IPW.boot <- NULL
+ATT_IPW.boot <- NULL
+
+for(i in 1:B) {
+
+  tico.boot <- tico_7485[sample(1:n, n, replace = TRUE), ]
+  
+  p1.boot <- glm(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + bmi + newsbl + 
+                   creatbl + crpbl + lymphbl + ordpulmbl + vl_rslt_log10, data = tico.boot, family = "binomial")
+  ps.boot <- predict(p1.boot, type = "response")
+  
+  w1.boot <- as.numeric(tico.boot$corticobl_numeric) / ps.boot
+  w0.boot <- (1 - tico.boot$corticobl_numeric) / (1 - ps.boot)
+  
+  ATE_IPW.boot <- c(ATE_IPW.boot, 
+                    mean(tico.boot$hospital_free_28 * w1.boot) - 
+                    mean(tico.boot$hospital_free_28 * w0.boot))
+  
+  w1_att.boot <- tico.boot$corticobl_numeric
+  w0_att.boot <- (1 - tico.boot$corticobl_numeric) / (1 - ps.boot) * ps.boot
+  
+  ATT_IPW.boot <- c(ATT_IPW.boot, 
+                    weighted.mean(tico.boot$hospital_free_28, w = w1_att.boot) - 
+                    weighted.mean(tico.boot$hospital_free_28, w = w0_att.boot))
+}
+
+SE_ATE_IPW <- sd(ATE_IPW.boot)
+CI_ATE_IPW <- ATE_IPW + c(-1, 1) * qnorm(0.975) * SE_ATE_IPW
+
+SE_ATT_IPW <- sd(ATT_IPW.boot)
+CI_ATT_IPW <- ATT_IPW + c(-1, 1) * qnorm(0.975) * SE_ATT_IPW
+
+output4 <- data.frame(
+  Type = c("ATE", "ATT"),
+  Estimate = c(ATE_IPW, ATT_IPW),
+  SE = c(SE_ATE_IPW, SE_ATT_IPW),
+  CI_Lower = c(CI_ATE_IPW[1], CI_ATT_IPW[1]),
+  CI_Upper = c(CI_ATE_IPW[2], CI_ATT_IPW[2])
+)
+
+kable(output4, caption = "ATE and ATT Estimates using IPW")
+```
+
+
+```{r,eval=F}
+# d) 1:1 matching 
+# i.Find the standardized mean difference among the matched cohort.
+rownames(tico_7485)<-1:nrow(tico_7485)
+mod_match<-matchit(corticobl ~ gender + age + copdhx + malignhx + immuno_supp + bmi + newsbl + creatbl + crpbl + lymphbl +
+                     ordpulmbl + vl_rslt_log10,distance="logit",method="nearest",data=tico_7485,ratio=1,replace=TRUE)
+#print(tail(mod_match$match.matrix))
+
+matched_pairs <- na.omit(mod_match$match.matrix)  # to check if controls re used or not
+n_matched <- nrow(matched_pairs)
+print(n_matched) 
+
+tico_match <- data.frame(rbind(tico_7485[tico_7485$corticobl == 'yes', ],
+	tico_7485[as.numeric(mod_match$match.matrix), ]))
+
+tico_match <- set_variable_labels(tico_match, asthmahx = "Asthma", 
+                                 copdhx = 'COPD',
+                                 diabeteshx = 'Diabetes requiring medication' ,
+                                 chfhx = 'CHF',
+                                 hypertenshx = 'Hypertension requiring medication', 
+                                 malignhx = 'Malignancy (active or receiving treatment)',
+                                 renalhx= 'Renal impairment',
+                                 immuno_supp = 'Immunosuppressed',
+                                 newsbl = 'New Score',
+                                 creatbl = 'Creatinine (mg/dL)',
+                                 crpbl='C-reactive protein',
+                                 lymphbl = 'Lymphocytes (10^9/L)',
+                                 ordpulmbl = 'Pulm ordinal', 
+                                 vl_rslt_log10 = 'Log 10 of Viral load copies/mL')
+
+tabmatched1.1 <- CreateTableOne(vars = names(tico_7485)[2:19], strata = "corticobl",
+	data = tico_match, test = FALSE)
+t3 <- print(tabmatched1.1, smd = TRUE, showAllLevels = TRUE, 
+						varLabels = TRUE)
+
+kable(t3, caption = "Summary Statistics Stratified by the use of corticosteroids using 1:1 Matching")
+
+# ii.Estimate the ATT using 1:1 matching
+p1 <- mean(tico_7485$hospital_free_28[tico_7485$corticobl == 'yes'])
+p0 <- mean(tico_7485$hospital_free_28[as.numeric(mod_match$match.matrix)],na.rm=TRUE)
+n1 <- table(tico_7485$corticobl)[2]
+n0 <- length(as.numeric(mod_match$match.matrix))
+
+ATT1match <- p1 -  p0
+SE1match <- sqrt(-1*(p1*(1-p1)/n1 + p0*(1-p0)/n0))
+CI1match <- p1 - p0 + c(-1, 1)*qnorm(0.975)*SE1match
+
+output5 <- data.frame(
+  Type = 'ATT',
+  Estimate = round(ATT1match, 3),
+  SE = round(unname(SE1match), 3),
+  CI_Lower = round(CI1match[1], 3),
+  CI_Upper = round(CI1match[2], 3)
+)
+
+kable(output5, caption = "ATT Estimate using 1:1 Matching")
+```
+
+
+
