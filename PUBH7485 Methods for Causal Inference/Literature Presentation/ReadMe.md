@@ -1,1 +1,1 @@
-x
+This assignment was to find a published paper in a peer reviewed and reputable journal that uses causal inference techniques, write a one page summary of the paper and how it used the techniques, and present this to the class in five minutes. The paper I chose assessed the economic effects of new extensions to high speed rail networks in Japan.
