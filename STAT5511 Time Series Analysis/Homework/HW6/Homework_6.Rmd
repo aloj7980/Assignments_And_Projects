@@ -1,0 +1,180 @@
+---
+title: "Homework 6"
+author: "Alex Ojemann"
+date: "2024-11-22"
+output: 
+  pdf_document:
+    toc: true       # Enable Table of Contents
+    toc_depth: 2    # Set depth of TOC (e.g., 2 for sections and subsections)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+\newpage
+
+\section{Problem 1}
+
+\subsection{Summary}
+
+The following model is a SARIMA(1,1,0)x(2,1,2)[10] on $X_t$.
+
+```{r}
+load('hw6dat.rsav')
+
+# Load the necessary library
+library(astsa)
+
+# Fit the SARIMA(1,1,0)(4,1,0)[10] model on dat1 without generating plots
+sarima_fit <- sarima(dat1, 
+                     p = 1, d = 1, q = 0,  # Non-seasonal components
+                     P = 2, D = 1, Q = 2, S = 10,  # Seasonal components
+                     details = FALSE, quiet = TRUE)
+
+# Extract and print the model summary
+summary(sarima_fit$fit)
+```
+
+\subsection{Explanation}
+
+Looking at the initial plot of this series, $X_t$ very clearly isn't stationary. The plot of the first difference of the series makes it clearer that there is also expanding variance as time increases, so a Box-Cox transformation was performed. Of the transformations plotted, the one in which $\lambda = 0.125$ looks the most stationary, so it was used for further analysis. However, when models were fit using this transformation, the models all showed extremely heavy tails in the normal QQ plot, so the original data without transformation was used. The ACF of $X_t$ shows clear seasonality with period 10. After taking a seasonal difference with s=10, the ACF appears to tail off both seasonally and non seasonally, and the PACF appears to cut off abruptly after non seasonal lad 1 and seasonal lag 1, so the initial model fit was a SARIMA(1,1,0)x(1,1,0)[10]. This model showed three significant lags h = 10, 20, and 30 in the ACF of the residuals and the LBP showed cumulative autocorrelation that was unaccounted for at all lags, so a different model was fit with three additional terms. None of these four models had any concerningly significant lags in the ACFs of their residuals, and their LBPs had 2-3 lags below the threshold but were much better than that of the initial SARIMA(1,1,0)x(1,1,0)[10] model. Of these four models, the SARIMA(1,1,0)x(1,1,3)[10] and the SARIMA(1,1,0)x(2,1,2)[10] had the best AIC, and the SARIMA(1,1,0)x(2,1,2)[10] had fewer insignificant parameters at the p<0.01 level so it was used as the final model.
+
+\subsection{Output}
+
+Plots of unadjusted and differenced series $X_t$.
+
+```{r}
+plot(dat1, main = "Time Series - dat1", xlab = "Time", ylab = "Value", type = "l", col = "blue")
+# Difference the dat2 series to make it stationary
+dat1_diff <- diff(dat1)
+
+# Plot the differenced dat2 time series
+plot(dat1_diff, main = "Time Series - dat1 (Differenced)", xlab = "Time", ylab = "Differenced Value", type = "l", col = "red")
+```
+Plot of Box-Cox transformations of the differenced $X_t$ with varying $\lambda$ (no transformations ended up being used due to heavy tails in Normal QQ plot of models using transformed data):
+
+```{r}
+# Load the necessary library
+library(forecast)
+
+# Define lambda values to try for Box-Cox transformation
+lambda_values <- c(-0.125, 0, 0.125,0.25, 0.375,0.5)  # 0 corresponds to log transformation
+
+# Set up the plotting area
+par(mfrow = c(2, 3))  # Arrange plots in a grid (2 rows, 3 columns)
+
+# Loop through lambda values, apply the Box-Cox transformation, and plot
+for (lambda in lambda_values) {
+  # Apply the Box-Cox transformation
+  if (lambda == 0) {
+    transformed_dat1_diff <- log(dat1_diff)  # Log transformation
+    title <- "Log Transformation"
+  } else {
+    transformed_dat1_diff <- (dat1_diff^lambda - 1) / lambda  # Box-Cox formula
+    title <- paste("Lambda =", lambda)
+  }
+  
+  # Plot the transformed series
+  plot(transformed_dat1_diff, type = "l", main = title, xlab = "Time", ylab = "Transformed Value")
+}
+
+# Reset plotting area to default
+par(mfrow = c(1, 1))
+
+```
+ACF and PACF of $X_t$
+
+```{r}
+# Load the necessary library
+library(forecast)
+
+# Define lambda for the Box-Cox transformation
+lambda <- 0.125
+
+# Shift dat1_diff to ensure all values are positive
+dat1_diff <- dat1_diff - min(dat1_diff) + 1  # Add 1 to avoid zeros
+
+# Apply the Box-Cox transformation to dat1_diff
+dat1_diff_transformed <- (dat1_diff^lambda - 1) / lambda
+
+# Plot the ACF of the transformed series
+acf(dat1_diff_transformed, main = "ACF of dat1_diff (Lambda = 0.125)")
+
+# Plot the PACF of the transformed series
+pacf(dat1_diff_transformed, main = "PACF of dat1_diff (Lambda = 0.125)")
+
+```
+
+ACF and PACF of seasonally differenced series:
+
+```{r}
+# Perform seasonal differencing with s = 10
+dat1_seasonal_diff <- diff(dat1_diff, lag = 10)
+
+# Plot the seasonally differenced series
+plot(dat1_seasonal_diff, main = "Seasonally Differenced Series (s = 10)", 
+     xlab = "Time", ylab = "Differenced Value", type = "l", col = "blue")
+
+acf(dat1_seasonal_diff, main = "ACF of Seasonally Differenced Series (s = 10)")
+
+# Plot the PACF of the seasonally differenced series
+pacf(dat1_seasonal_diff, main = "PACF of Seasonally Differenced Series (s = 10)")
+
+```
+
+First model attempt (SARIMA(1,1,0)x(1,1,0)[10])
+
+```{r}
+# Load the necessary libraries
+library(astsa)
+library(forecast)
+
+# Fit the SARIMA(1, 0, 0) x (1, 0, 0)[10] model to dat1_seasonal_diff
+sarima_fit <- sarima(dat1_seasonal_diff, p = 1, d = 0, q = 0, 
+                     P = 1, D = 0, Q = 0, S = 10)
+
+# Diagnostic plots and model summary are automatically generated
+
+```
+
+Additional models fit with three more seasonal terms than the SARIMA(1,1,0)x(1,1,0)[10]:
+
+```{r}
+# Load necessary library
+library(astsa)
+
+# Initialize a list to store AIC values
+model_aic <- list()
+
+# Loop through combinations where added seasonal terms sum to 3
+for (P_added in 0:3) {  # Added seasonal AR terms
+  Q <- 3 - P_added      # Seasonal MA terms (to make P_added + Q = 3)
+  
+  # Model parameters
+  P <- 1 + P_added  # Total seasonal AR terms
+  model_name <- paste0("SARIMA(1,0,0)(", P, ",0,", Q, ")[10]")
+  cat("\nFitting model: ", model_name, "\n")
+  
+  # Fit the SARIMA model
+  sarima_fit <- sarima(dat1_seasonal_diff, 
+                       p = 1, d = 0, q = 0, 
+                       P = P, D = 0, Q = Q, S = 10)
+  
+  # Calculate AIC manually
+  loglik <- sarima_fit$fit$loglik  # Log-likelihood from the fit
+  n_params <- length(sarima_fit$fit$coef)  # Number of estimated parameters
+  aic_value <- -2 * loglik + 2 * n_params  # AIC formula
+  
+  # Store the AIC value
+  model_aic[[model_name]] <- aic_value
+  cat("AIC for", model_name, ":", aic_value, "\n")
+}
+
+# Print the AIC values for all models
+cat("\nAIC values for all models:\n")
+print(model_aic)
+
+```
+
+
