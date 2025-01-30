@@ -1,1 +1,7 @@
-x
+This study investigates the relationship between an NBA player sitting one game of a back to back set and the frequency and severity of injuries, however, the same time frame as the study conducted by the NBA was considered and a similar selection of players were considered. Ultimately, no significant decrease in either injury frequency or severity is found for players who rest in half of back to back games more frequently, and in fact the opposite is found to be the case in many instances, with the caveat that there may be unmeasured confounding variables, with the lack thereof being an assumption of all of the models taught in this course.
+
+The project consisted of four milestones, the first of which was the proposal. The second milestone contains a table of covariates stratified by treatment with standardized mean differences and undajusted estimates of injury frequency and severity for each category of treatment. The third milestone contains a completed methods and results section, and the fourth milestone was the final paper. I highly recommend taking a look at the final report (PUBH7485_Report.pdf) as it contains comprehensive descriptions of the data sources, inclusion/exclusion criteria, treatment, covariates, outcomes, models, results, and efforts to combat data leakage and the impact of potential unmeasured confounding variables.
+
+A significant portion of the effort on this project went into cleaning and transforming the data to merge data from different sources that had various inconsistencies, comply with inclusion/exclusion criteria, and properly curate the treatment, covariates, and outcome to avoid data leakage. The code to do this can be found in Data_Extraction_1.R and Data_Extraction_2.R.
+
+
