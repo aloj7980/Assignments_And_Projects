@@ -1,0 +1,350 @@
+---
+title: "Homework 7"
+author: "Alex Ojemann"
+date: "2024-11-22"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warrning = FALSE)
+```
+
+## Problem 1
+
+```{r}
+# Load required libraries
+library(gfoRmula)
+library(dplyr)
+library(readr)
+
+# Read in the data
+data <- read_csv("hw7data_HIV_2024.csv")
+
+# Define treatment combinations
+treatment_combinations <- list(
+  a_0000 = c(0, 0, 0, 0),
+  a_0001 = c(0, 0, 0, 1),
+  a_0011 = c(0, 0, 1, 1),
+  a_0111 = c(0, 1, 1, 1),
+  a_1111 = c(1, 1, 1, 1)
+)
+
+# Define covariate models explicitly
+cov_models <- list(
+  A0 = glm(A0 ~ R0 + CD40, family = binomial(), data = data),
+  R1 = glm(R1 ~ R0 + CD40 + A0, family = binomial(), data = data),
+  CD41 = glm(CD41 ~ CD40 + A0 + R1, family = gaussian(), data = data),
+  A1 = glm(A1 ~ R1 + CD41 + A0, family = binomial(), data = data),
+  R2 = glm(R2 ~ R1 + CD41 + A1, family = binomial(), data = data),
+  CD42 = glm(CD42 ~ CD41 + A1 + R2, family = gaussian(), data = data),
+  A2 = glm(A2 ~ R2 + CD42 + A1, family = binomial(), data = data),
+  R3 = glm(R3 ~ R2 + CD42 + A2, family = binomial(), data = data),
+  CD43 = glm(CD43 ~ CD42 + A2 + R3, family = gaussian(), data = data),
+  A3 = glm(A3 ~ R3 + CD43 + A2, family = binomial(), data = data),
+  R4 = glm(R4 ~ R3 + CD43 + A3, family = binomial(), data = data)
+)
+
+# Fit the outcome model
+outcome_model <- glm(CD44 ~ CD43 + A3 + R4, family = gaussian(), data = data)
+
+# Define a function to simulate each treatment combination
+simulate_treatment <- function(treatment_comb) {
+  # Create a copy of the dataset for simulation
+  sim_data <- data
+  
+  # Simulate each time step
+  sim_data$A0 <- treatment_comb[1]
+  sim_data$R1 <- predict(cov_models$R1, newdata = sim_data, type = "response")
+  sim_data$R1 <- ifelse(runif(nrow(sim_data)) < sim_data$R1, 1, 0)  # Convert probabilities to binary
+  
+  sim_data$CD41 <- predict(cov_models$CD41, newdata = sim_data)
+  
+  sim_data$A1 <- treatment_comb[2]
+  sim_data$R2 <- predict(cov_models$R2, newdata = sim_data, type = "response")
+  sim_data$R2 <- ifelse(runif(nrow(sim_data)) < sim_data$R2, 1, 0)
+  
+  sim_data$CD42 <- predict(cov_models$CD42, newdata = sim_data)
+  
+  sim_data$A2 <- treatment_comb[3]
+  sim_data$R3 <- predict(cov_models$R3, newdata = sim_data, type = "response")
+  sim_data$R3 <- ifelse(runif(nrow(sim_data)) < sim_data$R3, 1, 0)
+  
+  sim_data$CD43 <- predict(cov_models$CD43, newdata = sim_data)
+  
+  sim_data$A3 <- treatment_comb[4]
+  sim_data$R4 <- predict(cov_models$R4, newdata = sim_data, type = "response")
+  sim_data$R4 <- ifelse(runif(nrow(sim_data)) < sim_data$R4, 1, 0)
+  
+  # Predict the outcome (CD44) based on the simulated data
+  predicted_outcomes <- predict(outcome_model, newdata = sim_data)
+  
+  # Return the mean predicted outcome and standard error
+  list(
+    mean = mean(predicted_outcomes),
+    se = sd(predicted_outcomes) / sqrt(nrow(sim_data))
+  )
+}
+
+
+# Simulate and collect results for each treatment combination
+results <- lapply(treatment_combinations, simulate_treatment)
+
+# Format and display results
+results_summary <- data.frame(
+  Treatment = names(treatment_combinations),
+  Estimate = sapply(results, `[[`, "mean"),
+  SE = sapply(results, `[[`, "se")
+)
+
+cat("Estimated Anticipated Response and Standard Errors:\n")
+print(results_summary)
+
+```
+
+## Problem 2
+
+### Part a
+
+The following logistic regression model gets propensity scores for each year for each patient. The year_round variable is included in the model along with the other covariates because the patients are more likely to have had the transplant as they get later into the study period.
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(readr)
+
+# Read in the data
+data <- read_csv("hw7data_liver_2024.csv")
+
+# Fit the logistic regression model to estimate propensity scores for transplantation
+propensity_model <- glm(
+  transplanted ~ year_round + age + sex + edema + serBilir + albumin + prothrombin,
+  family = binomial(),
+  data = data
+)
+
+# Add propensity scores to the dataset
+data <- data %>%
+  mutate(pscore = predict(propensity_model, type = "response"))
+
+summary(propensity_model)
+
+```
+
+### Part b
+
+```{r}
+# Step 1: Add a unique ID for each patient if not already present
+data <- data %>% mutate(id = as.character(id))
+
+# Step 2: Calculate propensity scores for each year
+# Pivot the data to create columns for propensity scores by year
+pscores_by_year <- data %>%
+  group_by(id) %>%
+  summarize(
+    pscore_0 = first(pscore[year_round == 0], default = NA),
+    pscore_1 = first(pscore[year_round == 1], default = NA),
+    pscore_2 = first(pscore[year_round == 2], default = NA),
+    pscore_3 = first(pscore[year_round == 3], default = NA),
+    pscore_4 = first(pscore[year_round == 4], default = NA),
+    pscore_5 = first(pscore[year_round == 5], default = NA),
+    pscore_6 = first(pscore[year_round == 6], default = NA),
+    died_anytime = as.integer(any(dead == 1))  # Indicator for death at any point
+  )
+
+# Step 3: Add compliance columns for each treatment rule
+treatment_rules <- list(
+  rule_0 = c(1, 1, 1, 1, 1, 1, 1),
+  rule_1 = c(0, 1, 1, 1, 1, 1, 1),
+  rule_2 = c(0, 0, 1, 1, 1, 1, 1),
+  rule_3 = c(0, 0, 0, 1, 1, 1, 1),
+  rule_4 = c(0, 0, 0, 0, 1, 1, 1),
+  rule_5 = c(0, 0, 0, 0, 0, 1, 1),
+  rule_6 = c(0, 0, 0, 0, 0, 0, 1),
+  rule_never = c(0, 0, 0, 0, 0, 0, 0)
+)
+
+
+# Initialize the compliance dataframe
+data_compliance <- data.frame(id = unique(data$id))
+
+# Function to evaluate compliance with a single rule
+evaluate_compliance <- function(transplanted_sequence, rule_sequence) {
+  # Truncate the treatment rule to the length of the patient's sequence
+  truncated_rule <- rule_sequence[seq_along(transplanted_sequence)]
+  # Check if the truncated rule matches the transplanted sequence
+  all(transplanted_sequence == truncated_rule)
+}
+
+# Loop through each patient and calculate compliance for each rule
+for (patient_id in unique(data$id)) {
+  # Extract the transplanted sequence for this patient
+  patient_data <- data[data$id == patient_id, ]
+  transplanted_sequence <- patient_data$transplanted
+  
+  # Initialize a vector to store compliance results
+  compliance_results <- vector("logical", length(treatment_rules))
+  
+  # Loop through each treatment rule
+  for (i in seq_along(treatment_rules)) {
+    rule_name <- names(treatment_rules)[i]
+    rule_sequence <- treatment_rules[[rule_name]]
+    compliance_results[i] <- evaluate_compliance(transplanted_sequence, rule_sequence)
+  }
+  
+  # Add compliance results to the dataframe
+  data_compliance[data_compliance$id == patient_id, names(treatment_rules)] <- compliance_results
+}
+
+
+# Step 4: Combine propensity scores and compliance data into a single data frame
+aggregated_data <- left_join(pscores_by_year, data_compliance, by = "id")
+
+```
+
+```{r}
+# Add a column to indicate whether a patient died at any time during the study
+aggregated_data <- aggregated_data %>%
+  mutate(
+    died = ifelse(id %in% (data %>% filter(dead == 1) %>% pull(id)), 1, 0)
+  )
+
+# Correctly calculate the weight denominator and add columns for each treatment rule
+for (rule_name in names(treatment_rules)) {
+  treatment_sequence <- treatment_rules[[rule_name]]  # Extract the treatment sequence for the rule
+  
+  aggregated_data <- aggregated_data %>%
+    rowwise() %>%
+    mutate(
+      # Weight denominator: Correct product of propensity scores and (1 - propensity score)
+      !!paste0("weight_denominator_", rule_name) := prod(
+        ifelse(
+          treatment_sequence == 1,
+          c_across(starts_with("pscore")),        # Use pscore when treatment rule is 1
+          1 - c_across(starts_with("pscore"))    # Use (1 - pscore) when treatment rule is 0
+        ),
+        na.rm = TRUE
+      ),
+      
+      # Weight numerator: Compliance indicator for the rule
+      !!paste0("weight_numerator_", rule_name) := ifelse(get(rule_name), 1, 0),
+      
+      # IPW Weight: Numerator divided by denominator
+      !!paste0("ipw_weight_", rule_name) := get(paste0("weight_numerator_", rule_name)) /
+        get(paste0("weight_denominator_", rule_name))
+    ) %>%
+    ungroup()
+}
+
+# Initialize a data frame to store the results
+ipw_results <- data.frame(
+  Rule = names(treatment_rules),
+  Estimate = numeric(length(treatment_rules))
+)
+
+# Loop through each treatment rule and calculate the IPW estimate
+for (rule_name in names(treatment_rules)) {
+  # Use the corresponding weight column
+  ipw_estimate <- sum(aggregated_data$died * aggregated_data[[paste0("ipw_weight_", rule_name)]], na.rm = TRUE) /
+    sum(aggregated_data[[paste0("ipw_weight_", rule_name)]], na.rm = TRUE)
+  
+  # Store the estimate in the results data frame
+  ipw_results[ipw_results$Rule == rule_name, "Estimate"] <- ipw_estimate
+}
+
+# Print the IPW results
+cat("IPW Estimates for Mean Response by Treatment Rule:\n")
+print(ipw_results)
+
+```
+
+
+
+
+```{r,results='hide'}
+# Initialize a variable to store the weighted sum
+weighted_sum <- 0
+total_compliance_count <- 0
+
+# Loop through each treatment rule
+for (rule_name in names(treatment_rules)) {
+  # Get the sum of compliance for the rule
+  rule_compliance_count <- sum(aggregated_data[[rule_name]], na.rm = TRUE)
+  print(rule_compliance_count)
+  
+  # Get the IPW estimate for the rule
+  ipw_estimate <- ipw_results$Estimate[ipw_results$Rule == rule_name]
+  
+  # Add the weighted contribution to the total
+  weighted_sum <- weighted_sum + (rule_compliance_count * ipw_estimate)
+  total_compliance_count <- total_compliance_count + rule_compliance_count
+}
+
+# Calculate the overall mean by dividing by the total number of patients
+overall_mean_from_rules <- weighted_sum / total_compliance_count
+
+# Calculate the actual overall mean
+actual_overall_mean <- mean(aggregated_data$died, na.rm = TRUE)
+
+# Print the results
+cat("Validation Check:\n")
+cat("Overall Mean from Rules:", overall_mean_from_rules, "\n")
+cat("Actual Overall Mean:", actual_overall_mean, "\n")
+
+if (abs(overall_mean_from_rules - actual_overall_mean) < 1e-6) {
+  cat("The IPW calculations are consistent with the overall mean.\n")
+} else {
+  cat("There is a discrepancy in the IPW calculations. Please review the code.\n")
+}
+
+```
+
+### Part c
+
+```{r}
+set.seed(123) # For reproducibility
+
+# Number of bootstrap samples
+num_bootstrap <- 1000
+
+# Initialize a matrix to store bootstrap estimates
+bootstrap_estimates <- matrix(NA, nrow = num_bootstrap, ncol = length(treatment_rules))
+colnames(bootstrap_estimates) <- names(treatment_rules)
+
+# Bootstrap procedure
+for (b in 1:num_bootstrap) {
+  # Resample the data with replacement
+  bootstrap_data <- aggregated_data[sample(nrow(aggregated_data), replace = TRUE), ]
+  
+  # Recalculate IPW estimates for each treatment rule
+  for (rule_name in names(treatment_rules)) {
+    # Recalculate weights
+    bootstrap_data <- bootstrap_data %>%
+      mutate(!!paste0("weight_numerator_", rule_name) := ifelse(get(rule_name), 1, 0),
+             !!paste0("ipw_weight_", rule_name) := get(paste0("weight_numerator_", rule_name)) /
+                                                   get(paste0("weight_denominator_", rule_name)))
+    
+    # Calculate the IPW estimate
+    ipw_estimate <- sum(bootstrap_data$died * bootstrap_data[[paste0("ipw_weight_", rule_name)]], na.rm = TRUE) /
+      sum(bootstrap_data[[paste0("ipw_weight_", rule_name)]], na.rm = TRUE)
+    
+    # Store the estimate in the bootstrap matrix
+    bootstrap_estimates[b, rule_name] <- ipw_estimate
+  }
+}
+
+# Calculate standard errors from bootstrap estimates
+bootstrap_se <- apply(bootstrap_estimates, 2, sd)
+
+# Add standard errors to the IPW results
+ipw_results$Standard_Error <- bootstrap_se
+
+# Print the results
+cat("IPW Estimates with Standard Errors from Bootstrap:\n")
+print(ipw_results)
+
+# Optional: Save bootstrap results for further analysis
+write.csv(ipw_results, "ipw_results_with_bootstrap_se.csv", row.names = FALSE)
+
+```
+
+
