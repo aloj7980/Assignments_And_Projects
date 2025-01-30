@@ -1,0 +1,220 @@
+---
+title: "Homework 3"
+author: "Alex Ojemann"
+date: "2024-10-21"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE)
+```
+
+## Problem 1
+
+### Part a
+
+Roots of $\phi(x)$: $x=10i/9,x=-10i/9$
+
+Roots of $\theta(x)$: $x=-3$
+
+No redundancy, this is ARMA(2,1)
+
+This is causal and invertible because all roots of $\phi(x)$ and $\theta(x)$ are greater than one in magnitude.
+
+### Part b
+
+Roots of $\phi(x)$: $x=1$
+
+Roots of $\theta(x)$: $x=1,x=-2$
+
+The root x=1 is redundant so the final model is MA(1) (X_t = W_t + W_{t-1}/2)
+
+This is causal because all MA processes are causal. This invertible because all roots of $\theta(x)$ are greater than one in magnitude.
+
+### Part c
+
+Roots of $\phi(x)$: $x=1/3$
+
+Roots of $\theta(x)$: $x=1/2,-1/4$
+
+No redundancy, this is ARMA(1,2)
+
+This is not causal nor invertible because some roots of $\phi(x)$ and $\theta(x)$ are less than or equal to than one in magnitude.
+
+### Part d
+
+Roots of $\phi(x)$: $x=1/2+sqrt(3)i/2,1/2-sqrt(3)i/2$
+
+Roots of $\theta(x)$: $x=9/8$
+
+No redundancy, this is ARMA(2,1)
+
+This invertible but not causal because all roots of $\theta(x)$ but not $\phi(x)$ are greater than one in magnitude.
+
+### Part e
+
+Roots of $\phi(x)$: $x=1/2,x=-1/2$
+
+Roots of $\theta(x)$: $x=1+i,1-i$
+
+No redundancy, this is ARMA(2,2)
+
+This invertible but not causal because all roots of $\theta(x)$ but not $\phi(x)$ are greater than one in magnitude.
+
+### Part f
+
+Roots of $\phi(x)$: $x=4/3,x=-1/3$
+
+Roots of $\theta(x)$: N/A
+
+No redundancy, this is AR(2)
+
+This invertible because all AR processes are invertible. This is not causal because not all roots of $\phi(x)$ are greater than one in magnitude.
+
+## Problem 2
+
+Only the models from part a and b are causal.
+
+### Model from part a
+
+$\psi_0 = 1$
+
+$\psi_1 = 1/3$
+
+$\psi_2 = -0.81\psi_0 = 0.81$
+
+$\psi_3 = -0.81\psi_1 = -0.27$
+
+$\psi_4 = -0.81\psi_2 = 0.6561$
+
+### Model from part b
+
+$\psi_0 = 1$
+
+$\psi_1 = 1/2$
+
+$\psi_2 = \psi_3 = \psi_4 = 0$ because this is an MA(1) model.
+
+## Problem 3
+
+```{r}
+# Load necessary library
+library(stats)
+
+# Set adjusted margins for R Markdown output (bottom, left, top, right)
+par(mar = c(3, 2, 3, 2)) 
+
+# Part (a): ARMA(2,1)
+set.seed(0)
+
+# AR(2) and MA(1) coefficients for part (a)
+ar_a <- c(0, 0.81)  # AR part, note the lag-2 term
+ma_a <- c(1/3)      # MA part
+
+# Simulate 100 observations from the ARMA(2,1) model
+simulated_a <- arima.sim(model = list(ar = ar_a, ma = ma_a), n = 100)
+
+# Compute theoretical ACF using ARMAacf
+theoretical_acf_a <- ARMAacf(ar = ar_a, ma = ma_a, lag.max = 20, pacf = FALSE)
+
+# Part (b): MA(1) corresponds to X_t = W_t + 1/2 W_(t-1)
+set.seed(1)
+
+# MA(1) part: X_t = W_t + 1/2 W_{t-1}
+ma_b <- c(1/2)  # MA(1) term
+
+# Simulate 100 observations from the MA(1) model
+simulated_b <- arima.sim(model = list(ma = ma_b), n = 100)
+
+# Compute theoretical ACF for the MA(1) model
+theoretical_acf_b <- ARMAacf(ma = ma_b, lag.max = 20, pacf = FALSE)
+
+# Plot sample and theoretical ACF for Part (a)
+par(mfrow = c(2, 1))
+acf(simulated_a, main = "Sample ACF for ARMA(2,1) (Part a)")
+plot(theoretical_acf_a, type = "h", main = "Theoretical ACF for ARMA(2,1) (Part a)", 
+     xlab = "Lag", ylab = "ACF")
+abline(h = 0, col = "red")
+
+# Plot sample ACF for Part (b) and theoretical ACF
+par(mfrow = c(2, 1))
+acf(simulated_b, main = "Sample ACF for MA(1) (Part b)")
+plot(theoretical_acf_b, type = "h", main = "Theoretical ACF for MA(1) (Part b)", 
+     xlab = "Lag", ylab = "ACF")
+abline(h = 0, col = "red")
+
+```
+
+## Problem 4
+
+### Part a
+
+We know that $1-\phi_1z-\phi_2z^2 = (1-(1/z_1)z)(1-(1/z_2)z)$
+
+Based on this, $\phi_1 = 2\cos(\theta_z)/|z_1|,\phi_2 = 1/|z_1|^2$
+
+$|z_1|$ determines the rate of decay of the ACF. We will set that to 4 to ensure that the ACF decays quickly enough for the series to be stationary. When smaller values of $|z_1|$ were chosen, the arima.sim method in the next part throws an error because the series is not stationary.
+
+$\theta_z = 2\pi/P = 2\pi/9$ (P is the period).
+
+$\phi_1 = 2\cos(2\pi/9)/|4| = 0.383$
+
+$\phi_2 = 1/|4|^2 = 0.0625$
+
+### Parts b and c
+
+```{r}
+# Load necessary library
+library(stats)
+
+# Set AR(2) coefficients based on the previous calculations
+phi1 <- 0.383
+phi2 <- 0.0625
+
+# Part 1: Simulate AR(2) process
+set.seed(123)
+
+# Simulate 1000 observations from the AR(2) model
+simulated_ar2 <- arima.sim(model = list(ar = c(phi1, phi2)), n = 1000)
+
+# Compute theoretical ACF using ARMAacf
+theoretical_acf_ar2 <- ARMAacf(ar = c(phi1, phi2), lag.max = 20, pacf = FALSE)
+
+# Plot the simulated time series and the theoretical ACF
+par(mfrow = c(1, 2))  # Two plots in one figure
+
+# Plot the simulated time series
+plot(simulated_ar2, type = "l", main = "Simulated AR(2) Time Series", xlab = "Time", ylab = "Value")
+
+# Plot the theoretical ACF (not the sample ACF)
+plot(theoretical_acf_ar2, type = "h", main = "Theoretical ACF for AR(2)", xlab = "Lag", ylab = "ACF")
+abline(h = 0, col = "red")
+
+# Part 2: Simulate signal-in-noise time series Y_t = μ_t + W_t
+
+# Set the standard deviation for W_t
+sigma <- 0.1
+
+# Generate the signal μ_t based on the true ACF (μ_t = ρ(t))
+mu_t <- rep(theoretical_acf_ar2[1:9], length.out = 1000)  # Repeat ACF for 1000 points to form μ_t
+
+# Generate the noise W_t ~ N(0, σ^2)
+noise <- rnorm(1000, mean = 0, sd = sigma)
+
+# Generate the signal-in-noise time series Y_t = μ_t + W_t
+Y_t <- mu_t + noise
+
+# Plot the signal-in-noise time series and the true signal μ_t
+par(mfrow = c(1, 1))  # Single plot
+plot(Y_t, type = "l", main = "Signal-in-Noise Time Series", xlab = "Time", ylab = "Value", col = "blue")
+lines(mu_t, col = "red", lty = 2)  # Overlay the true signal μ_t
+
+# Add a legend to the plot
+legend("topright", legend = c("Signal-in-Noise (Y_t)", "True Signal (μ_t)"), col = c("blue", "red"), lty = c(1, 2))
+```
+
+### Part d
+
+It is extremely difficult to tell where the peaks and valleys are in the ACF after the first one because the rate of decay is relatively large. As mentioned previously, this large decay rate was chosen because the arima.sim method throws an error because the series is not stationary for smaller decay rates.
+
+However, we can see the period much more clearly in the signal-in-noise plot, where there appears to be a maximum every nine iterations as expected.
