@@ -1,0 +1,269 @@
+---
+title: "Homework 4"
+author: "Alex Ojemann"
+date: "2024-10-18"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE)
+```
+
+## Problem 1
+
+```{r}
+library(dplyr)
+library(MatchIt)   # For propensity score matching
+library(survey)    # For IPW and survey-weighted analysis
+library(broom)     # For tidy model output
+library(causaldata) # For the NHEFS dataset
+
+# Load the NHEFS dataset
+data("nhefs", package = "causaldata")
+
+# Covariates to adjust for
+covariates <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs", 
+                "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model to calculate propensity scores
+ps_model <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                exercise + active + wt71 + hbp, family = binomial(), data = nhefs)
+
+# Generate propensity scores
+nhefs$pscore <- predict(ps_model, type = "response")
+
+# Outcomes to consider
+outcome_vars <- c("wt82_71", "sbp", "dbp")
+outcome_desc <- c("Weight change (1971-1982)", "Systolic Blood Pressure", "Diastolic Blood Pressure")
+
+
+### (a) Correct Regression Adjustment with Covariates
+
+calculate_att_covariates <- function(outcome_var) {
+  # Fit regression model on the full dataset with treatment and covariates
+  model <- lm(as.formula(paste(outcome_var, "~ qsmk +", paste(covariates, collapse = " + "))), data = nhefs)
+  
+  # Extract the treatment effect (ATT) from the regression model
+  result <- tidy(model) %>% filter(term == "qsmk")
+  return(list(estimate = result$estimate, std_error = result$std.error))
+}
+
+# Apply regression adjustment with covariates to all outcomes
+att_covariates <- lapply(outcome_vars, calculate_att_covariates)
+
+### (b) Correct Regression Adjustment with Propensity Score
+
+calculate_att_pscore <- function(outcome_var) {
+  # Fit regression model with propensity score as an additional covariate
+  model <- lm(as.formula(paste(outcome_var, "~ qsmk + pscore")), data = nhefs)
+  
+  # Extract the treatment effect (ATT) from the regression model
+  result <- tidy(model) %>% filter(term == "qsmk")
+  return(list(estimate = result$estimate, std_error = result$std.error))
+}
+
+# Apply regression adjustment with propensity score to all outcomes
+att_pscore <- lapply(outcome_vars, calculate_att_pscore)
+
+### (c) Correct Propensity Score Stratification
+
+calculate_att_stratification <- function(outcome_var) {
+  # Stratify based on the propensity score into quintiles
+  nhefs$strata <- cut(nhefs$pscore, breaks = quantile(nhefs$pscore, probs = seq(0, 1, 0.2)), 
+                      include.lowest = TRUE, labels = FALSE)
+  
+  strat_results <- list()
+  for (stratum in unique(nhefs$strata)) {
+    stratum_data <- nhefs %>% filter(strata == stratum)
+    
+    # Fit a regression model within each stratum
+    model <- lm(as.formula(paste(outcome_var, "~ qsmk")), data = stratum_data)
+    result <- tidy(model) %>% filter(term == "qsmk")
+    strat_results[[stratum]] <- result$estimate
+  }
+  
+  # Aggregate results across strata to get the overall ATT
+  overall_att <- mean(unlist(strat_results))
+  return(list(estimate = overall_att))
+}
+
+# Apply propensity score stratification to all outcomes
+att_stratification <- lapply(outcome_vars, calculate_att_stratification)
+
+### (d) Inverse Probability Weighting (IPW)
+
+calculate_att_ipw <- function(outcome_var) {
+  # Calculate ATT weights
+  nhefs$weights <- ifelse(nhefs$qsmk == 1, 1, nhefs$pscore / (1 - nhefs$pscore))
+  
+  # Survey design object
+  design <- svydesign(ids = ~1, weights = ~weights, data = nhefs)
+  
+  # Fit weighted regression
+  model <- svyglm(as.formula(paste(outcome_var, "~ qsmk")), design = design)
+  result <- tidy(model) %>% filter(term == "qsmk")
+  return(list(estimate = result$estimate, std_error = result$std.error))
+}
+
+# Apply inverse probability weighting to all outcomes
+att_ipw <- lapply(outcome_vars, calculate_att_ipw)
+
+### (e) Propensity Score Matching (1:1 and 2:1)
+
+calculate_att_matching <- function(outcome_var, ratio = 1) {
+  # Propensity score matching
+  match_model <- matchit(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                         exercise + active + wt71 + hbp, data = nhefs, method = "nearest", ratio = ratio)
+  
+  matched_data <- match.data(match_model)
+  
+  # Fit regression on matched data
+  model <- lm(as.formula(paste(outcome_var, "~ qsmk")), data = matched_data)
+  result <- tidy(model) %>% filter(term == "qsmk")
+  return(list(estimate = result$estimate, std_error = result$std.error))
+}
+
+# 1:1 matching
+att_matching_1to1 <- lapply(outcome_vars, calculate_att_matching, ratio = 1)
+
+# 2:1 matching
+att_matching_2to1 <- lapply(outcome_vars, calculate_att_matching, ratio = 2)
+
+
+### Print Results for Each Method and Outcome
+
+print_results <- function(att, method_name) {
+  for (i in seq_along(outcome_vars)) {
+    cat(paste0(method_name, " ATT for ", outcome_desc[i], ":\n"))
+    cat("- Estimate: ", att[[i]]$estimate, "\n")
+    if (!is.null(att[[i]]$std_error)) {
+      cat("- Standard Error: ", att[[i]]$std_error, "\n")
+    }
+    cat("\n")
+  }
+}
+
+cat("\n(a) Regression Adjustment with Covariates:\n")
+print_results(att_covariates, "(a)")
+
+cat("\n(b) Regression Adjustment with Propensity Score:\n")
+print_results(att_pscore, "(b)")
+
+cat("\n(c) Propensity Score Stratification:\n")
+print_results(att_stratification, "(c)")
+
+cat("\n(d) Inverse Probability Weighting (IPW):\n")
+print_results(att_ipw, "(d)")
+
+cat("\n(e) Propensity Score Matching (1:1):\n")
+print_results(att_matching_1to1, "(e) 1:1 Matching")
+
+cat("\n(e) Propensity Score Matching (2:1):\n")
+print_results(att_matching_2to1, "(e) 2:1 Matching")
+
+
+```
+## Problem 2
+
+```{r}
+# Load necessary libraries
+library(MatchIt)   # For propensity score matching
+library(cobalt)    # For balance diagnostics
+library(survey)    # For inverse probability weighting
+library(dplyr)     # For data manipulation
+library(ggplot2)   # For plotting
+library(tidyr)     # For pivot_longer()
+
+# Load the NHEFS dataset
+library(causaldata)
+data("nhefs", package = "causaldata")
+
+# Define covariates
+covariates <- c("sex", "race", "age", "education", "smokeintensity", "smokeyrs", 
+                "exercise", "active", "wt71", "hbp")
+
+# Step 1: Fit a logistic regression model to calculate propensity scores
+ps_model <- glm(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                exercise + active + wt71 + hbp, family = binomial(), data = nhefs)
+
+# Add propensity scores to the dataset
+nhefs$pscore <- predict(ps_model, type = "response")
+
+### (A) Propensity Score Matching (1:1 matching)
+
+# Perform 1:1 nearest-neighbor propensity score matching, keeping unmatched individuals
+match_model <- matchit(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                       exercise + active + wt71 + hbp, data = nhefs, method = "nearest", ratio = 1, 
+                       discard = "none")  # Don't discard unmatched individuals
+
+# Extract matched data, including unmatched individuals
+nhefs$weights_matched <- match_model$weights  # Matched individuals will have weight > 0, unmatched will have 0
+
+### (B) Inverse Probability Weighting (IPW)
+
+# Calculate IPW weights for the entire dataset
+nhefs$ipw_weights <- ifelse(nhefs$qsmk == 1, 1 / nhefs$pscore, 1 / (1 - nhefs$pscore))
+
+# Survey design object for weighted analysis
+design_ipw <- svydesign(ids = ~1, weights = ~ipw_weights, data = nhefs)
+
+### (C) Calculate Standardized Mean Differences (SMDs)
+
+# 1. Unmatched SMD (for the full cohort, no weights)
+balance_unmatched <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                             exercise + active + wt71 + hbp, data = nhefs, estimand = "ATT", 
+                             method = NULL)
+smd_unmatched <- as.data.frame(balance_unmatched$Balance)
+
+# 2. Matched SMD (including unmatched individuals with zero weights)
+balance_matched <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                           exercise + active + wt71 + hbp, weights = nhefs$weights_matched, data = nhefs, 
+                           estimand = "ATT", method = "weighting")
+smd_matched <- as.data.frame(balance_matched$Balance)
+
+# 3. IPW SMD (IPW using the entire cohort)
+balance_ipw <- bal.tab(qsmk ~ sex + race + age + education + smokeintensity + smokeyrs +
+                       exercise + active + wt71 + hbp, weights = nhefs$ipw_weights, data = nhefs, 
+                       estimand = "ATT", method = "weighting")
+smd_ipw <- as.data.frame(balance_ipw$Balance)
+
+
+# Ensure that all balance tables have the same covariates by selecting common rows
+common_covariates <- intersect(intersect(rownames(smd_unmatched), rownames(smd_matched)), rownames(smd_ipw))
+
+# Subset the balance tables to include only the common covariates
+smd_unmatched <- smd_unmatched[common_covariates, ]
+smd_matched <- smd_matched[common_covariates, ]
+smd_ipw <- smd_ipw[common_covariates, ]
+
+### (D) Prepare Data for Plotting
+
+# Extract SMDs from the balance tables
+smd_data <- data.frame(
+  Covariate = common_covariates,
+  Unweighted_SMD = smd_unmatched$Diff.Un,
+  Matched_SMD = smd_matched$Diff.Adj,
+  Weighted_SMD = smd_ipw$Diff.Adj
+)
+
+# Reshape data to long format using pivot_longer from tidyr
+smd_data_long <- smd_data %>%
+  pivot_longer(cols = c("Unweighted_SMD", "Matched_SMD", "Weighted_SMD"), 
+               names_to = "SMD_Type", values_to = "SMD_Value")
+
+### (E) Plot the SMDs using ggplot2
+
+ggplot(smd_data_long, aes(x = Covariate, y = SMD_Value, group = SMD_Type)) +
+  geom_line(aes(color = SMD_Type), size = 1) +
+  geom_point(aes(color = SMD_Type), size = 3) +
+  scale_color_manual(values = c("Unweighted_SMD" = "red", "Matched_SMD" = "blue", "Weighted_SMD" = "green")) +
+  labs(title = "Standardized Mean Differences Before and After Matching/Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+```
+
