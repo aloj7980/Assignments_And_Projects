@@ -1,0 +1,310 @@
+---
+title: "Homework 2"
+author: "Alex Ojemann"
+date: "2024-10-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+### Part a
+
+\[
+  E(Y_t) = E(a X_{t-\ell} + W_t) = a E(X_{t-\ell}) + E(W_t) = a \cdot 0 + 0 = 0.
+  \]
+  
+  \[
+  \text{Var}(Y_t) = \text{Var}(a X_{t-\ell} + W_t) = a^2 \text{Var}(X_{t-\ell}) + \text{Var}(W_t) = a^2 \sigma_X^2 + \sigma_W^2,
+  \]
+  
+  Since $X_t$ is stationary, $\gamma_x$ only depends on the lag and not time, so the ACF of $Y_t$ also will only depend on the lag and not time because $W_t$ is also stationary.
+  
+### Part b
+
+\[
+\text{Cov}(Y_t, X_s) = E[Y_t X_s] - E(Y_t)E(X_s).
+\]
+
+\[
+\text{Cov}(Y_t, X_s) = E[(a X_{t-\ell} + W_t) X_s] = a E[X_{t-\ell} X_s] + E[W_t X_s].
+\]
+
+\[
+\text{Cov}(Y_t, X_s) = a E[X_{t-\ell} X_s] = a \gamma_X(t - \ell - s),
+\]
+
+### Part c
+
+\[
+\rho_{Y_t, X_s} = \frac{\text{Cov}(Y_t, X_s)}{\sqrt{\text{Var}(Y_t)} \cdot \sqrt{\text{Var}(X_s)}}.
+\]
+
+\[
+\text{Cov}(Y_t, X_s) = a \gamma_X(t - \ell - s),
+\]
+
+\[
+\text{Var}(Y_t) = a^2 \sigma_X^2 + \sigma_W^2 \quad \text{and} \quad \text{Var}(X_s) = \sigma_X^2.
+\]
+
+\[
+\rho_{Y_t, X_s} = \frac{a \gamma_X(t - \ell - s)}{\sqrt{a^2 \sigma_X^2 + \sigma_W^2} \cdot \sigma_X}.
+\]
+
+
+## Problem 2
+
+### Part a
+
+Random Walks with drift:
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Setting up the plotting area
+par(mfrow = c(2, 2), mar = c(2.5, 2.5, 0, 0) + 0.5, mgp = c(1.6, .6, 0)) 
+
+# Loop to generate and plot four random walk series with drift
+for (i in 1:4) {
+  # Generate the random walk with drift, length n = 100, δ = 0.01, σw = 1
+  x = ts(cumsum(rnorm(100, 0.01, 1)))  # Random walk with drift
+  
+  # Fit the regression xt = βt + wt using least squares
+  regx = lm(x ~ 0 + time(x), na.action = NULL)  # No intercept
+
+  # Plot the data
+  plot(x, ylab = "Random Walk w Drift", xlab = "Time")
+
+  # Add the true mean function (μt = 0.01 * t) in red, dashed line
+  abline(a = 0, b = 0.01, col = 2, lty = 2)
+
+  # Add the fitted regression line in blue, solid line
+  abline(regx, col = 4)
+}
+```
+
+
+### Part b
+
+Linear Trend Series with Noise:
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Reset the plotting area for the next set of time series plots
+par(mfrow = c(2, 2), mar = c(2.5, 2.5, 0, 0) + 0.5, mgp = c(1.6, .6, 0)) 
+
+# Loop to generate and plot four linear trend plus noise series as time series
+for (i in 1:4) {
+  # Generate the trend stationary process: yt = 0.01 * t + wt
+  t = 1:100
+  w = rnorm(100, 0, 1)
+  y = 0.01 * t + w  # Linear trend plus noise
+  
+  # Fit the regression yt = βt + wt using least squares
+  regy = lm(y ~ 0 + t, na.action = NULL)
+
+  # Plot the data as a time series
+  plot.ts(y, ylab = "Linear Trend w Noise", xlab = "Time")
+
+  # Add the true mean function (μt = 0.01 * t) in red, dashed line
+  abline(a = 0, b = 0.01, col = 2, lty = 2)
+
+  # Add the fitted regression line in blue, solid line
+  abline(regy, col = 4)
+}
+
+```
+
+###  Part c
+
+Despite these series having the same expected value and varaince in generating each data point, the variance of the random walk as a whole is much larger than that of the linear trend with noise because each observation of the random walk is dependent on the previous observation. Neither of these series are stationary because the mean increases with time but the random walk wouldn't be stationary even if detrended because the variance also increases with time whereas the linear trend series with noise would be.
+
+## Problem 3
+
+### Part a
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+library(astsa)
+
+# Load the oil and gas data
+data("oil")  # Crude oil prices in dollars per barrel
+data("gas")  # Gasoline prices in cents per gallon
+
+plot.ts(cbind(oil, gas), main = "Oil and Gas Prices", ylab = "Price", col = c("blue", "red"))
+legend("topright", legend = c("Oil (Dollars per Barrel)", "Gas (Cents per Gallon)"), 
+       col = c("blue", "red"), lty = 1)
+
+```
+
+These series best resemble a random walk with drift. This leads me to believe they are not stationary because both the mean and the variance appear to increase with time.
+
+### Parts b and c
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Transformation yt = ∇ log xt = diff(log(xt))
+poil <- diff(log(oil))  # Oil percentage growth rate
+pgas <- diff(log(gas))  # Gas percentage growth rate
+
+# Plot the transformed data
+plot.ts(cbind(poil, pgas), main = "Transformed Oil and Gas Growth Rates", ylab = "Growth Rate", col = c("blue", "red"))
+legend("topright", legend = c("Oil Growth Rate", "Gas Growth Rate"), col = c("blue", "red"), lty = 1)
+
+```
+
+This plot is useful because it makes it easier to see the growth of the prices of oil and gas than the plots from part a. In the plots from part a, changes towards the beginning of the series are harder to see because they are much smaller in scale than those of the later portion of the series. This also provides a stationary representation of the changes in oil and gas prices whereas the plots from part a were not stationary.
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Plot ACFs for both transformed series
+par(mfrow = c(1, 2))
+acf(poil, main = "ACF of Oil Growth Rate")
+acf(pgas, main = "ACF of Gas Growth Rate")
+par(mfrow = c(1, 1))
+```
+
+The ACFs look pretty much as one would want them to for a stationary time series because the values after h=0 are comparatively very small, with none exceeding 0.15.
+
+### Part d
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Plot the cross-correlation function (CCF) of the transformed data
+ccf(poil, pgas, main = "CCF of Oil and Gas Growth Rates", ylab = "Cross-Correlation")
+```
+
+The most significant cross correlation by far is at h=0, which one might expect knowing that gasoline is made from crude oil. As mentioned in the problem we see a slight correlation in first the few observations when oil leads gas because the gas is produced from the oil. The observation right before h=0 appears barely significant likely just because the price growth has some very small dependence on time but this is acceptable for real data given that none of the other observations appear to have significant cross correlation.
+
+### Part e
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Scatterplots of gas growth rate vs oil growth rate for different leads of oil
+library(ggplot2)
+library(dplyr)
+
+# Convert the time series data to numeric vectors before using dplyr::lag
+poil_numeric <- as.numeric(poil)  # Convert time series to numeric
+pgas_numeric <- as.numeric(pgas)
+
+# Use dplyr::lag for the numeric vector
+poil_lag1 <- dplyr::lag(poil_numeric, 1)
+poil_lag2 <- dplyr::lag(poil_numeric, 2)
+poil_lag3 <- dplyr::lag(poil_numeric, 3)
+
+# Plot scatterplots with nonparametric smoother (loess)
+ggplot(data = data.frame(poil_lag1, pgas), aes(x = poil_lag1, y = pgas)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  ggtitle("Gas Growth Rate vs Oil Growth Rate (Lead 1)")
+
+ggplot(data = data.frame(poil_lag2, pgas), aes(x = poil_lag2, y = pgas)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  ggtitle("Gas Growth Rate vs Oil Growth Rate (Lead 2)")
+
+ggplot(data = data.frame(poil_lag3, pgas), aes(x = poil_lag3, y = pgas)) +
+  geom_point() +
+  geom_smooth(method = "loess") +
+  ggtitle("Gas Growth Rate vs Oil Growth Rate (Lead 3)")
+
+```
+
+In each of these plots, there is one outlier on the x axis (lag 1, 2, and 3 of oil price growth rate) and one on the y axis (gasoline price growth rate). The y axis outlier has some influence on the correlation, though not a ton because the x axis values are pretty close to zero for that outlier in all 3 plots. The x axis outlier seems to have an outsized influence on the nonparametric smoother in the lag 1 plot. There is not a very clear linear relationship for any of them as the nonparametric smoothers are fairly flat apart from the part due to the influence of the x axis outlier in the lag 1 plot.
+
+### Part f
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Create the indicator variable It = 1 if Ot >= 0, otherwise 0
+indi <- ifelse(poil >= 0, 1, 0)
+
+# Create the dataset with gas growth, oil growth, lagged oil growth, and indicator
+mess <- ts.intersect(pgas, poil, poilL = stats::lag(poil, -1), indi)
+
+# Fit the regression model
+fit <- lm(pgas ~ poil + poilL + indi, data = mess)
+summary(fit)
+
+# (fii) Analyze the fitted model for negative and positive growth in oil prices
+# When Ot < 0, indi = 0, and the model is Gt = α1 + β1Ot + β2Ot-1 + wt
+# When Ot >= 0, indi = 1, and the model is Gt = (α1 + α2) + β1Ot + β2Ot-1 + wt
+
+# (fiii) Residual analysis
+par(mfrow = c(1, 3))
+
+# 1. Plot residuals from the model
+plot(residuals(fit), main = "Residuals from the Model", ylab = "Residuals", xlab = "Index")
+
+# 2. Plot ACF of residuals to check for autocorrelation
+acf(residuals(fit), main = "ACF of Residuals")
+
+# 3. Q-Q plot for normality check
+qqnorm(residuals(fit), main = "Normal Q-Q Plot")
+qqline(residuals(fit), col = "red")
+
+par(mfrow = c(1, 1))  # Reset plotting layout
+```
+
+i. The oil price growth, the lag 1 of oil price growth, and the binary indicator of positive oil price growth all have positive betas and are all significant at the p<0.05 level.
+
+ii. When the growth of the price of oil is negative, $G_t = -0.006445 + 0.683127O_t + 0.111927O_{t-1}$. When the growth of the price of oil is positive, $G_t = -0.006445 + 0.012368 + 0.683127O_t + 0.111927O_{t-1}$. This suggests that the price of gas responds more quickly to rising oil prices than falling oil prices.
+
+iii. The residuals appear to be close to normally distributed with equal variance, the ACF looks as it should for a stationary series with no values other than at h=0 with an absolute value above 0.1, and the normal QQ plot shows that the distribution is slightly wider than normal but nothing extreme.
+
+## Problem 4
+
+### Part a
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# Assuming 'oil' is already loaded
+# Fit the linear regression model: Xt = δ0 + δ1 * t + Wt
+time <- 1:length(oil)
+fit <- lm(oil ~ time)
+
+# Print summary of the results
+summary(fit)
+
+# Plot the data with the regression line
+plot(time, oil, type = "l", main = "Oil Prices with Linear Regression Line", xlab = "Time", ylab = "Price")
+abline(fit, col = "blue", lwd = 2)
+
+```
+
+The coefficients of time and intercept are both statistically significant at the p<0.001 level.
+
+### Part b
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+# F-statistic and p-value are included in the summary(fit) output
+f_statistic <- summary(fit)$fstatistic[1]
+p_value <- summary(fit)$coefficients[2, 4]  # p-value for delta_1 (time)
+
+cat("F-statistic:", f_statistic, "\n")
+cat("p-value for delta_1:", p_value, "\n")
+
+```
+
+### Part c
+
+```{r,echo=FALSE,message=FALSE,warning=FALSE}
+set.seed(123)  # For reproducibility
+M <- 1000  # Number of simulations
+n <- length(oil)  # Length of the series (same as oil)
+p_values <- numeric(M)
+
+for (i in 1:M) {
+  # Simulate a random walk with no drift: Xt = X0 + sum(Ws), Ws ~ N(0, 1)
+  Wt <- rnorm(n, mean = 0, sd = 1)
+  Xt <- cumsum(Wt)  # Random walk
+
+  # Regress Xt on time
+  fit_sim <- lm(Xt ~ time)
+
+  # Get p-value for delta_1 (time)
+  p_values[i] <- summary(fit_sim)$coefficients[2, 4]
+}
+
+# Proportion of p-values < 0.05
+proportion_significant <- mean(p_values < 0.05)
+cat("Proportion of p-values < 0.05:", proportion_significant, "\n")
+```
+
+While the proportion of p values below 0.05 is very high (0.956), it not being closer to 1 suggests that the extremely small p value from part b (8.670476e-117) does not always translate when the random walk is used instead of just a linear model.
+
