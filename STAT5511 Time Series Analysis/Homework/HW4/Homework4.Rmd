@@ -1,0 +1,326 @@
+---
+title: "Homework 4"
+author: "Alex Ojemann"
+date: "2024-11-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning=FALSE)
+```
+
+## Problem 1
+
+```{r}
+# Load the dataset
+load("hw4dat.rsav")
+
+
+# Parameters for Model 1 (AR(2) model)
+phi1 <- 1.34
+phi2 <- -0.48
+sigma_w <- 1  # Standard deviation of W_t (assumed to be 1 in Model 1)
+
+# Set up forecast and backcast length
+forecast_length <- 25
+backcast_length <- 25
+
+# Initialize vectors for forecasts and backcasts
+n <- length(xx)
+forecast <- rep(NA, forecast_length)
+backcast <- rep(NA, backcast_length)
+
+# Compute forecasts
+for (h in 1:forecast_length) {
+  if (h == 1) {
+    forecast[h] <- phi1 * xx[n] + phi2 * xx[n - 1]
+  } else if (h == 2) {
+    forecast[h] <- phi1 * forecast[h - 1] + phi2 * xx[n]
+  } else {
+    forecast[h] <- phi1 * forecast[h - 1] + phi2 * forecast[h - 2]
+  }
+}
+
+# Compute backcasts
+for (h in 1:backcast_length) {
+  if (h == 1) {
+    backcast[h] <- phi1 * xx[1] + phi2 * xx[2]
+  } else if (h == 2) {
+    backcast[h] <- phi1 * backcast[h - 1] + phi2 * xx[1]
+  } else {
+    backcast[h] <- phi1 * backcast[h - 1] + phi2 * backcast[h - 2]
+  }
+}
+
+# Calculate 95% prediction intervals assuming Gaussianity
+forecast_upper <- forecast + 1.96 * sigma_w
+forecast_lower <- forecast - 1.96 * sigma_w
+backcast_upper <- backcast + 1.96 * sigma_w
+backcast_lower <- backcast - 1.96 * sigma_w
+
+# Prepare the time indices for the plots
+forecast_time <- (n):(n + forecast_length - 1)
+backcast_time <- -(1:backcast_length)
+
+# Plot data, forecast, and backcast with prediction intervals
+plot(0:(n-1), xx, type = "l",
+     col = "black", main = "Data, Forecasts, and Backcasts with Prediction Intervals",
+     xlab = "Time", ylab = "Value", xlim = c(-backcast_length, n + forecast_length))
+lines(forecast_time, forecast, col = "blue")
+lines(backcast_time, backcast, col = "blue")
+lines(forecast_time, forecast_upper, col = "red", lty = 2)
+lines(forecast_time, forecast_lower, col = "red", lty = 2)
+lines(backcast_time, backcast_upper, col = "red", lty = 2)
+lines(backcast_time, backcast_lower, col = "red", lty = 2)
+
+# Add a smaller legend with reduced text and line size
+legend("topright", legend = c("Data", "Forecast", "Backcast", "95% CI"),
+       col = c("black", "blue", "blue", "red"), lty = c(1, 1, 1, 2), 
+       cex = 0.6, # Adjust text size to make legend smaller
+       lwd = 1) # Adjust line width to make legend lines thinner
+
+```
+
+### Part b
+
+The 100 steps ahead forecast will be approximately equal to 0 because this is the mean of a demeaned series and the prediction approaches the mean over a very long time horizon like this.
+
+### Part c
+
+With no data to base the prediction on, the predicted value would be 0, the mean of a demeaned series, and the Mean Squared prediction error ($E$) would be 1, the variance of the white noise. $E$ is greater than $P_{97}^{96}$ because $P_{97}^{96}$ is based on data and is not far in the future from the data so it's more accurate.
+
+### Part d
+
+```{r}
+# Define the true mean of the revenue series
+true_mean <- 0.3
+
+# (i) Compute the original (not-demeaned) revenue series Y_t
+Y_t <- xx + true_mean
+
+# Plot the original revenue series
+plot(1:length(Y_t), Y_t, type = "l", col = "blue",
+     main = "Original (Not-Demeaned) Revenue Series (Y_t)",
+     xlab = "Time", ylab = "Revenue (in million dollars)")
+abline(h = true_mean, col = "red", lty = 2)  # Add mean line for reference
+legend("topright", legend = c("Revenue Series", "Mean = 0.3"),
+       col = c("blue", "red"), lty = c(1, 2), cex = 0.6)
+
+# (ii) Prediction equation for Y at time n+1
+# Given AR(2) model parameters
+phi1 <- 1.34
+phi2 <- -0.48
+
+# Prediction for Y at time n+1 using the AR(2) model
+# The equation for Y_{n+1} includes the mean, past data, and AR coefficients:
+# Y_{n+1} = mu + phi1 * (Y_n - mu) + phi2 * (Y_{n-1} - mu)
+# Since Y_t is demeaned in the AR model, we account for the mean separately
+
+n <- length(Y_t)  # Last time point of observed data
+
+# Define the prediction equation for Y_{n+1}
+Y_pred <- true_mean + phi1 * (Y_t[n] - true_mean) + phi2 * (Y_t[n - 1] - true_mean)
+
+# Print the prediction equation result
+cat("Prediction for Y at time n+1:", Y_pred, "\n")
+
+```
+
+Prediction equation: $Y_{n+1}^n = \mu + \phi_1(Y_n - \mu) + \phi_2(Y_{n-1}-\mu)$
+
+### Part e
+
+They should make the investment because the estimate of their revenue is \$4.378 million and even if the standard error of this estimate was the variance of the white noise (in this case 1), which in reality it must be less than because it's based on data as mentioned in part c, the lower bound of the 95% confidence interval would be 4.378 - 1.96 = \$2.418 which is much larger than \$1.1 million so the company executives can be confident that they will not go bankrupt.
+
+### Part f
+
+```{r}
+# Estimate an MA(2) model on the demeaned series Xt
+# Set include.mean = FALSE to prevent adding a mean term
+ma_model <- arima(xx, order = c(0, 0, 2), include.mean = FALSE)
+
+# Forecast 25 steps ahead
+forecast_length <- 25
+ma_forecast <- predict(ma_model, n.ahead = forecast_length)
+
+# Calculate 95% prediction intervals for the forecast
+forecast_upper <- ma_forecast$pred + 1.96 * ma_forecast$se
+forecast_lower <- ma_forecast$pred - 1.96 * ma_forecast$se
+
+# Plot the original data, forecasts, and prediction intervals
+n <- length(xx)
+plot(1:n, xx, type = "l", col = "black", main = "MA(2) Model Forecast with 95% Prediction Intervals",
+     xlab = "Time", ylab = "Xt", xlim = c(1, n + forecast_length))
+lines((n+1):(n+forecast_length), ma_forecast$pred, col = "blue")
+lines((n+1):(n+forecast_length), forecast_upper, col = "red", lty = 2)
+lines((n+1):(n+forecast_length), forecast_lower, col = "red", lty = 2)
+
+# Add legend to the plot
+legend("topright", legend = c("Data", "Forecast", "95% CI"),
+       col = c("black", "blue", "red"), lty = c(1, 1, 2), cex = 0.8, lwd = 1)
+
+```
+
+## Part g
+
+The moving average forecast drops to 0 much quicker, specifically within only two months. This occurs because a moving average model directly depends on the q prior terms with no effect from any of the terms before that, whereas an autoregressive forecast indirectly depends on all of the terms before it because each of the p lagged Xs depend on p lagged Xs before them which depend on each of the p lagged Xs before them and so on.
+
+### Part h
+
+The new model would be $Z_t = \phi_1^3 Z_{t-1} + W_t'$ where $W_t' = N(0,\sigma^2 + \sigma^2 \phi_1^2 + \sigma^2 \phi_1^4)$.
+
+
+## Problem 2
+
+```{r}
+# Set parameters for the models
+phi <- 0.6
+theta <- 0.9
+n <- 100  # Number of observations
+
+# Seed for reproducibility
+set.seed(123)
+
+# Generate data for each model
+arma11_series <- arima.sim(model = list(ar = phi, ma = theta), n = n)
+ar1_series <- arima.sim(model = list(ar = phi), n = n)
+ma1_series <- arima.sim(model = list(ma = theta), n = n)
+
+# Plot the sample ACFs and PACFs for each model
+par(mfrow = c(3, 2), mar = c(3, 3, 3, 1))  # Set up a 3x2 plot layout
+
+# ARMA(1,1) model
+acf(arma11_series, main = "Sample ACF - ARMA(1,1)", lag.max = 20)
+pacf(arma11_series, main = "Sample PACF - ARMA(1,1)", lag.max = 20)
+
+# AR(1) model (ARMA(1,0))
+acf(ar1_series, main = "Sample ACF - AR(1)", lag.max = 20)
+pacf(ar1_series, main = "Sample PACF - AR(1)", lag.max = 20)
+
+# MA(1) model (ARMA(0,1))
+acf(ma1_series, main = "Sample ACF - MA(1)", lag.max = 20)
+pacf(ma1_series, main = "Sample PACF - MA(1)", lag.max = 20)
+
+# Calculate theoretical ACF and PACF for each model
+lag_max <- 20
+
+# ARMA(1,1)
+theoretical_acf_arma11 <- ARMAacf(ar = phi, ma = theta, lag.max = lag_max, pacf = FALSE)
+theoretical_pacf_arma11 <- ARMAacf(ar = phi, ma = theta, lag.max = lag_max, pacf = TRUE)
+
+# AR(1) (equivalent to ARMA(1,0))
+theoretical_acf_ar1 <- ARMAacf(ar = phi, lag.max = lag_max, pacf = FALSE)
+theoretical_pacf_ar1 <- ARMAacf(ar = phi, lag.max = lag_max, pacf = TRUE)
+
+# MA(1) (equivalent to ARMA(0,1))
+theoretical_acf_ma1 <- ARMAacf(ma = theta, lag.max = lag_max, pacf = FALSE)
+theoretical_pacf_ma1 <- ARMAacf(ma = theta, lag.max = lag_max, pacf = TRUE)
+
+# Plot theoretical ACFs and PACFs in a 3x2 layout
+par(mfrow = c(3, 2), mar = c(3, 3, 3, 1))  # Set up a 3x2 plot layout
+
+# ARMA(1,1) model
+plot(theoretical_acf_arma11, type = "h", col = "blue", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical ACF - ARMA(1,1)", xlab = "Lag", ylab = "ACF")
+plot(theoretical_pacf_arma11, type = "h", col = "blue", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical PACF - ARMA(1,1)", xlab = "Lag", ylab = "PACF")
+
+# AR(1) model (ARMA(1,0))
+plot(theoretical_acf_ar1, type = "h", col = "red", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical ACF - AR(1)", xlab = "Lag", ylab = "ACF")
+plot(theoretical_pacf_ar1, type = "h", col = "red", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical PACF - AR(1)", xlab = "Lag", ylab = "PACF")
+
+# MA(1) model (ARMA(0,1))
+plot(theoretical_acf_ma1, type = "h", col = "green", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical ACF - MA(1)", xlab = "Lag", ylab = "ACF")
+plot(theoretical_pacf_ma1, type = "h", col = "green", lwd = 2, ylim = c(-1, 1),
+     main = "Theoretical PACF - MA(1)", xlab = "Lag", ylab = "PACF")
+
+# Reset plot layout
+par(mfrow = c(1, 1))
+
+```
+
+We can see that  sample ACFs roughly align with what is expected: The ACF and PACF of the ARMA(1,1) both tail off, the ACF of the AR(1) tails off but the PACF collapses after lag 1, and the ACF of the MA(1) collapses after lag 1 but the PACF tails off.
+
+## Problem 3
+
+The general form of the m step ahead forecast is $x_{t+m}^t = \phi^m x_t$.
+
+\[
+     x_{t+m} = \phi^m x_t + \sum_{i=0}^{m-1} \phi^i w_{t+m-i}.
+     \]
+     
+\[
+     e_{t+m}^t = x_{t+m} - x_{t+m}^t = \sum_{i=0}^{m-1} \phi^i w_{t+m-i}.
+     \]
+     
+\[
+     E[(x_{t+m} - x_{t+m}^t)^2] = E\left[\left(\sum_{i=0}^{m-1} \phi^i w_{t+m-i}\right)^2\right].
+     \]
+     
+\[
+     E[(x_{t+m} - x_{t+m}^t)^2] = \sum_{i=0}^{m-1} (\phi^i)^2 \sigma_w^2 = \sigma_w^2 \sum_{i=0}^{m-1} \phi^{2i}.
+     \]
+     
+\[
+     \sum_{i=0}^{m-1} \phi^{2i} = \frac{1 - \phi^{2m}}{1 - \phi^2}.
+     \]
+     
+\[
+     E[(x_{t+m} - x_{t+m}^t)^2] = \sigma_w^2 \frac{1 - \phi^{2m}}{1 - \phi^2}.
+     \]
+
+## Problem 4
+
+```{r}
+# Load necessary libraries
+library(forecast)  # For ARIMA modeling and diagnostics
+library(stats)
+
+# Set parameters
+phi <- 0.9
+theta <- -0.9
+n <- 500
+set.seed(1234)  # Set seed for reproducibility
+
+# Repeat the exercise three times
+for (i in 1:3) {
+  
+  # Generate data from the ARMA(1,1) model
+  arma_data <- arima.sim(n = n, model = list(ar = phi, ma = theta), sd = 1)
+  
+  # Plot the simulated data
+  plot(arma_data, type = "l", main = paste("Simulated Data - ARMA(1,1) Run", i),
+       xlab = "Time", ylab = "x_t")
+  
+  # Compute and plot the sample ACF and PACF
+  par(mfrow = c(1, 2))  # Arrange ACF and PACF plots side by side
+  acf(arma_data, main = paste("Sample ACF - Run", i))
+  pacf(arma_data, main = paste("Sample PACF - Run", i))
+  par(mfrow = c(1, 1))  # Reset plotting layout
+  
+  # Fit an ARMA(1,1) model to the data
+  arma_fit <- arima(arma_data, order = c(1, 0, 1))
+  
+  # Print model summary
+  cat("\nResults for Run", i, ":\n")
+  print(arma_fit)
+}
+
+```
+
+This ARMA model has a redundant root (.9), so it is actually an ARMA(0,0) instead of an ARMA(1,1), meaning it's just white noise. Thus, the estimates for $\phi$ and $\theta$ are very different for each run, as they are not based on data from and ARMA(1,1) process but rather white noise.
+
+## Problem 5
+
+### Part a
+
+These results indicate that the time series likely isn't stationary because one would not expect such large changes in parameters from removing the last 100 observations if the mean and variance were not changing with time.
+
+### Part b
+
+A diagnostic tool to assess the stationarity of the series is the ACF. The analyst could plot the ACF and observe whether the values decay quickly to zero. If the decay is very slow the series is likely not stationary.
+
+
