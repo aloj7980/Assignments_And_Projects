@@ -1,0 +1,357 @@
+---
+title: "Homework 6"
+author: "Alex Ojemann"
+date: "2024-11-08"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE,warning = FALSE)
+```
+
+## Problem 1
+
+```{r}
+load('OPT_Study_PUBH7485_8485_2023_mediation.RData')
+```
+
+### Part a
+
+```{r}
+# Load necessary packages
+library(dplyr)
+library(labelled)
+library(tableone)
+
+# Apply meaningful labels to variables for clarity
+data <- data %>%
+  set_variable_labels(
+    Age = "Age (years)",
+    Black = "Race: Black",
+    White = "Race: White",
+    Nat.Am = "Race: Native American",
+    Asian = "Race: Asian",
+    Hisp = "Ethnicity: Hispanic",
+    Education = "Years of Education",
+    Public.Asstce = "Received Public Assistance",
+    Hypertension = "History of Hypertension",
+    Diabetes = "History of Diabetes",
+    BL.Diab.Type = "Baseline Diabetes Type",
+    BMI = "Body Mass Index (BMI)",
+    Use.Tob = "Uses Tobacco",
+    BL.Cig.Day = "Baseline Cigarettes per Day",
+    Use.Alc = "Uses Alcohol",
+    BL.Drks.Day = "Baseline Drinks per Day",
+    Drug.Add = "Drug Addiction History",
+    Prev.preg = "Previous Pregnancies",
+    N.prev.preg = "Number of Previous Pregnancies",
+    Live.PTB = "Live Preterm Birth",
+    Any.stillbirth = "Any Stillbirth",
+    Spont.ab = "Spontaneous Abortion",
+    Induced.ab = "Induced Abortion",
+    Any.live.ptb.sb.sp.ab.in.ab = "Any Live Preterm Birth or Stillbirth",
+    N.living.kids = "Number of Living Children",
+    N.qualifying.teeth = "Number of Qualifying Teeth",
+    BL.GE = "Baseline Gingival Index",
+    BL..BOP = "Baseline Bleeding on Probing",
+    BL.PD.avg = "Baseline Pocket Depth (Avg)",
+    BL..PD.4 = "Baseline Sites with Pocket Depth >4mm",
+    BL..PD.5 = "Baseline Sites with Pocket Depth >5mm",
+    BL.CAL.avg = "Baseline Clinical Attachment Level (Avg)",
+    BL..CAL.2 = "Baseline Sites with CAL >2mm",
+    BL..CAL.3 = "Baseline Sites with CAL >3mm",
+    BL.Calc.I = "Baseline Calculus Index",
+    BL.Pl.I = "Baseline Plaque Index",
+    Preg.ended...37.wk = "Pregnancy Ended Before 37 Weeks",
+    GA.at.outcome = "Gestational Age at Outcome",
+    Birthweight = "Birthweight (g)",
+    Preg.ended = "Pregnancy Outcome",
+    Race_ethnicity = "Race/Ethnicity",
+    V5..BOP = "Bleeding on Probing at Visit 5"
+  )
+
+# Specify the treatment variable and covariates to include in the table
+treatment_var <- "Group"
+covariates <- c("Age", "Black", "White", "Nat.Am", "Asian", "Hisp", "Education",
+                "Public.Asstce", "Hypertension", "Diabetes", "BL.Diab.Type", "BMI",
+                "Use.Tob", "BL.Cig.Day", "Use.Alc", "BL.Drks.Day", "Drug.Add",
+                "Prev.preg", "N.prev.preg", "Live.PTB", "Any.stillbirth", "Spont.ab",
+                "Induced.ab", "Any.live.ptb.sb.sp.ab.in.ab", "N.living.kids",
+                "N.qualifying.teeth", "BL.GE", "BL..BOP", "BL.PD.avg", "BL..PD.4",
+                "BL..PD.5", "BL.CAL.avg", "BL..CAL.2", "BL..CAL.3", "BL.Calc.I",
+                "BL.Pl.I", "GA.at.outcome", "Birthweight", "Race_ethnicity", "V5..BOP")
+
+# Create a table summarizing the covariates between treatment and control groups
+table1 <- CreateTableOne(vars = covariates, strata = treatment_var, data = data, test = FALSE)
+
+# Print table with variable labels and standardized mean differences
+print(table1, varLabels = TRUE, quote = FALSE, noSpaces = TRUE, smd = TRUE)
+
+```
+
+### Part b
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(tidyr)
+library(broom)
+library(mediation)
+
+# Impute missing values
+impute_data <- function(df) {
+  df %>%
+    mutate(across(where(is.numeric), ~ ifelse(is.na(.), median(., na.rm = TRUE), .))) %>%
+    mutate(across(where(is.character), ~ ifelse(is.na(.), names(sort(table(.), decreasing = TRUE))[1], .)))
+}
+
+data_imputed <- impute_data(data)
+
+# Variables to adjust for in the regression models
+covariates <- c("Race_ethnicity", "Public.Asstce", "Use.Tob", "N.prev.preg", "Live.PTB", 
+                "BL.GE", "BL..BOP", "BL..PD.4", "BL..CAL.3")
+
+# Outcome variables
+outcome_birthweight <- "Birthweight"
+outcome_pregnancy_end <- "Preg.ended...37.wk"
+
+# (b) Regression Adjustment for Causal Treatment Effect
+
+# Regression model for Birthweight (with interactions)
+birthweight_model <- lm(as.formula(paste(outcome_birthweight, "~ Group * (", 
+                                         paste(covariates, collapse = " + "), ")")), data = data_imputed)
+birthweight_summary <- tidy(birthweight_model) %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error
+  )
+ate_birthweight <- birthweight_summary %>% filter(term == "GroupT") %>% 
+  dplyr::select(estimate, std.error, conf.low, conf.high)
+
+# Regression model for Pregnancy Ended Before 37 Weeks (main effects only)
+pregnancy_end_model <- glm(as.formula(paste(outcome_pregnancy_end, "~ Group + ", 
+                                            paste(covariates, collapse = " + "))), 
+                           data = data_imputed, family = binomial)
+pregnancy_end_summary <- tidy(pregnancy_end_model) %>%
+  mutate(
+    conf.low = estimate - 1.96 * std.error,
+    conf.high = estimate + 1.96 * std.error
+  )
+ate_pregnancy_end <- pregnancy_end_summary %>% filter(term == "GroupT") %>% 
+  dplyr::select(estimate, std.error, conf.low, conf.high)
+
+# Print the ATE for Birthweight with formatted text output
+cat("Estimated ATE for Birthweight:\n")
+cat(" - Estimate:", ate_birthweight$estimate, "\n")
+cat(" - Standard Error:", ate_birthweight$std.error, "\n")
+cat(" - 95% Confidence Interval: (", ate_birthweight$conf.low, ", ", ate_birthweight$conf.high, ")\n\n")
+
+# Print the ATE for Proportion of Pregnancies Ending Before 37 Weeks with formatted text output
+cat("Estimated ATE for Proportion of Pregnancies Before 37 Weeks:\n")
+cat(" - Estimate:", ate_pregnancy_end$estimate, "\n")
+cat(" - Standard Error:", ate_pregnancy_end$std.error, "\n")
+cat(" - 95% Confidence Interval: (", ate_pregnancy_end$conf.low, ", ", ate_pregnancy_end$conf.high, ")\n")
+
+
+```
+
+### Part c
+
+```{r}
+# (c) Fit Mediation Model (Mediator as the Outcome)
+mediator <- "Change_in_BOP" # Define this variable as BL..BOP - V5..BOP
+data_imputed <- data_imputed %>%
+  mutate(Change_in_BOP = BL..BOP - V5..BOP)
+
+# Specify only the desired variables for the mediator model
+mediator_vars <- c("Group", "Change_in_BOP", covariates)
+
+# Subset data to include only the mediator and specified covariates
+mediator_data <- data_imputed %>%
+  dplyr::select(all_of(mediator_vars))
+
+# Fit the mediator model using the subset data
+mediator_model <- lm(Change_in_BOP ~ Group + ., data = mediator_data)
+
+# Display a summary of the model to ensure it ran without errors
+summary(mediator_model)
+
+```
+
+### Part d
+
+```{r}
+# (d) Outcome Model with Mediator as Covariate (including interaction with Treatment)
+# Use mediator_covariates to ensure only the specified variables are included
+
+# Construct the formula using the mediator_covariates list
+mediation_formula <- as.formula(paste("Birthweight ~ Group * Change_in_BOP +", 
+                                    paste(mediator_vars, collapse = " + ")))
+
+# Fit the mediation model using the specified covariates
+birthweight_mediation_model <- lm(mediation_formula, data = data_imputed)
+birthweight_mediation_summary <- tidy(birthweight_mediation_model)
+
+# Display the summary to check the results
+summary(birthweight_mediation_model)
+
+```
+
+### Part e
+
+```{r}
+# (e) Estimate Controlled Direct Effect (CDE) and Natural Indirect Effect (NIE)
+med <- mediate(mediator_model, birthweight_mediation_model, treat = "Group", mediator = "Change_in_BOP", boot = TRUE)
+
+# Report CDE and NIE estimates and confidence intervals
+
+# Extract CDE estimate and confidence interval
+cde_estimate <- summary(med)$d.avg
+cde_ci <- summary(med)$d.avg.ci
+
+# Extract NIE estimate and confidence interval
+nie_estimate <- summary(med)$z.avg
+nie_ci <- summary(med)$z.avg.ci
+
+# Print results with interpretations
+cat("Controlled Direct Effect (CDE):\n")
+cat("Estimate:", cde_estimate, "\n")
+cat("95% Confidence Interval: (", cde_ci[1], ",", cde_ci[2], ")\n\n")
+
+cat("Natural Indirect Effect (NIE):\n")
+cat("Estimate:", nie_estimate, "\n")
+cat("95% Confidence Interval: (", nie_ci[1], ",", nie_ci[2], ")\n")
+
+```
+
+## Problem 2
+
+### Part a
+
+```{r}
+# Load necessary libraries
+library(randomForest)
+library(dplyr)
+
+# Read in the data
+tico_data <- read.csv("tico_data.csv")
+
+# Define the outcome variable and treatment indicator
+outcome_var <- "hospital_free_28" # Number of hospital-free days over the first 28 days
+treatment_var <- "corticobl" # Treatment indicator (corticosteroids)
+
+# Ensure the treatment variable is a factor and remove missing values
+tico_data <- tico_data %>%
+  mutate(!!sym(treatment_var) := as.factor(!!sym(treatment_var))) %>%
+  na.omit()
+
+# Fit the Random Forest model with treatment interactions
+model_rf <- randomForest(as.formula(paste(outcome_var, "~", treatment_var, "+ .")),
+                         data = tico_data, ntree = 500)
+
+# Create modified data frames for treated and control scenarios
+tico_data_treated <- tico_data %>%
+  mutate(!!sym(treatment_var) := factor("1", levels = levels(tico_data[[treatment_var]])))
+
+tico_data_control <- tico_data %>%
+  mutate(!!sym(treatment_var) := factor("0", levels = levels(tico_data[[treatment_var]])))
+
+# Predict outcomes under both treatment and control scenarios
+predicted_treated <- predict(model_rf, newdata = tico_data_treated)
+predicted_control <- predict(model_rf, newdata = tico_data_control)
+
+# Determine the optimal treatment rule
+optimal_treatment <- ifelse(predicted_treated > predicted_control, "1", "0")
+
+# Add the optimal treatment rule to the original data
+tico_data <- tico_data %>%
+  mutate(optimal_treatment = optimal_treatment)
+
+# Summarize the proportion who would benefit from treatment
+treatment_benefit_proportion <- mean(optimal_treatment == "1")
+
+cat("Proportion of patients who would benefit from treatment:", treatment_benefit_proportion, "\n")
+
+
+```
+
+The following function will output the optimal treatment decision for new data using the random forest model (model_rf) that was trained.
+
+```{r,echo=TRUE}
+optimal_treatment_rule <- function(new_patient_data) {
+  # Predict outcome if treated
+  treated_pred <- predict(model_rf, newdata = new_patient_data %>% 
+                          mutate(!!sym(treatment_var) := factor("1", levels = levels(tico_data[[treatment_var]]))))
+  
+  # Predict outcome if not treated
+  control_pred <- predict(model_rf, newdata = new_patient_data %>% 
+                          mutate(!!sym(treatment_var) := factor("0", levels = levels(tico_data[[treatment_var]]))))
+  
+  # Return "1" if treatment prediction is greater, otherwise "0"
+  return(ifelse(treated_pred > control_pred, "1", "0"))
+}
+```
+
+### Part b
+
+```{r}
+# Load necessary libraries
+library(dplyr)
+library(randomForest)
+
+# Read in the TICO data
+tico_data <- read.csv("tico_data.csv")
+
+# Ensure 'corticobl' is a factor for treatment assignment
+tico_data <- tico_data %>%
+  mutate(corticobl = factor(corticobl))
+
+# Subset data to focus only on 'ordpulmbl' (baseline oxygen support) and other necessary variables
+data_subset <- tico_data %>%
+  dplyr::select(hospital_free_28, corticobl, ordpulmbl)
+
+# Step 1: Create virtual twins - predictions of outcomes if treated and if untreated
+# Fit separate random forest models for treated and untreated groups
+
+# Model for treated group
+treated_model <- randomForest(hospital_free_28 ~ ordpulmbl, data = data_subset %>% filter(corticobl == 1))
+
+# Model for untreated group
+untreated_model <- randomForest(hospital_free_28 ~ ordpulmbl, data = data_subset %>% filter(corticobl == 0))
+
+# Step 2: Generate predictions for both scenarios for all patients
+# Predict outcomes if treated for all individuals
+data_subset$pred_treated <- predict(treated_model, newdata = data_subset)
+
+# Predict outcomes if untreated for all individuals
+data_subset$pred_untreated <- predict(untreated_model, newdata = data_subset)
+
+# Step 3: Calculate the treatment effect for each individual (predicted difference in outcomes)
+data_subset <- data_subset %>%
+  mutate(treatment_effect = pred_treated - pred_untreated)
+
+# Step 4: Define the optimal treatment rule based on the sign of the treatment effect
+# If the treatment effect is positive, treatment is beneficial; otherwise, it is not
+optimal_treatment_rule <- function(baseline_oxygen_support) {
+  prediction <- predict(treated_model, newdata = data.frame(ordpulmbl = baseline_oxygen_support)) -
+    predict(untreated_model, newdata = data.frame(ordpulmbl = baseline_oxygen_support))
+  ifelse(prediction > 0, "Treat with Corticosteroids", "Do Not Treat with Corticosteroids")
+}
+
+# Print summary of the proportion who would benefit from treatment
+prop_benefit <- mean(data_subset$treatment_effect > 0)
+cat("Proportion of patients who would benefit from treatment:", prop_benefit, "\n")
+
+# Determine the threshold value for 'ordpulmbl' where treatment becomes beneficial
+threshold_ordpulmbl <- data_subset %>%
+  filter(treatment_effect > 0) %>%
+  summarize(min_ordpulmbl = min(ordpulmbl)) %>%
+  pull(min_ordpulmbl)
+
+cat("Threshold value for baseline oxygen support (ordpulmbl) for beneficial treatment:", threshold_ordpulmbl, "\n")
+
+```
+
+
+
+
