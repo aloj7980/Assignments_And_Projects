@@ -1,0 +1,318 @@
+---
+title: "Homework 7"
+author: "Alex Ojemann"
+date: "2024-12-11"
+output: 
+  pdf_document:
+    toc: true       # Enable Table of Contents
+    toc_depth: 2    # Set depth of TOC (e.g., 2 for sections and subsections)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+### Summary
+
+For the series $Y_t$ I chose a MA(2) model with exogenous regressor $X_{t+3}$.
+
+Coefficients: 
+
+        Estimate SE t.value p.value
+          
+ma1         0.1878 0.0347  5.4136  0.0000
+
+ma2         0.5652 0.0329 17.1608  0.0000
+
+intercept  -6.5233 5.9041 -1.1049  0.2697
+
+xreg        1.2813 0.0293 43.6641  0.0000
+
+### Explanation
+
+Both $X_t$ and $Y_t$ are stationary and do not have changing variance over time or seasonality. The ACF and PACF show 3 significant lags in the ACF and 2 significant lags in the PACF, so models with a maximum p of 2 and a maximum q of 3 were considered. The AR(2) model had the best AICc and BIC of these models and good diagnostics apart from some of the later values of the LBP. The intercept was included because it was significant at all levels.
+
+After prewhiteneing both $X_t$ and $Y_t$ with this model, the ccf shows a significant correlation at -3, indicating that $X_t$ leads $Y_t$ by 3. Thus $X_{t+3}$ was used in the design matrix with $Y_t$.
+
+For the model of $Y_t$ including the exogenous regressor $X_{t+3}$, the ACF and PACF show 3 significant lags in the ACF and 4 significant lags in the PACF, so models with a maximum p of 4 and a maximum q of 3 were considered. Of these, the MA(2) had the best AICc and BIC and strong diagnostic plots, so it was the chosen model.
+
+
+### Output
+
+```{r}
+library(astsa)
+load("hw7.rsav")
+# Access the 'xx' column
+xx <- dat1[, "xx"]
+```
+
+```{r}
+plot(dat1)
+
+# Compute and plot the ACF and PACF of 'xx'
+acf2(xx, main = "ACF and PACF of xx")
+```
+```{r}
+maxAR<-2+1
+maxMA<-3+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(xx,p=ii-1,d=0,q=jj-1,no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+
+```{r}
+sarima(xx,p=2,d=0,q=0,no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+library(stats)
+# Fit an AR(2) model to xx using sarima
+sarima_fit <- sarima(xx, p = 2, d = 0, q = 0, details = FALSE)
+
+# Pre-whiten xx: Extract residuals from the sarima fit
+xx_prewhitened <- sarima_fit$fit$residuals
+
+# Get AR(2) coefficients and intercept
+ar_coeffs <- coef(sarima_fit$fit)[1:2]  # AR(2) coefficients
+intercept <- coef(sarima_fit$fit)["intercept"]
+
+# Pre-whiten yy using the AR(2) filter derived from xx
+yy <- dat1[, "yy"]
+yy_prewhitened <- stats::filter(yy, filter = c(1, -ar_coeffs), method = "convolution", sides = 1)
+
+# Plot the cross-correlation function (CCF) of the pre-whitened series
+ccf(xx_prewhitened, yy_prewhitened, main = "CCF of Pre-whitened xx and yy", ylab = "CCF", na.action = na.omit)
+
+```
+
+Design matrixcreated using the lag -3 of x based on CCF
+```{r}
+# Create lagged values for xx at lag 3
+xx_lag3 <- stats::lag(dat1[, "xx"], -3)
+
+# Combine yy and the lagged xx values into a time-series object
+design_matrix <- ts.intersect(yy = dat1[, "yy"], xx_lag3 = xx_lag3)
+# Remove rows with NA values caused by lagging
+design_matrix <- na.omit(design_matrix)
+```
+
+```{r}
+acf2(yy)
+```
+
+
+```{r}
+maxAR<-4+1
+maxMA<-3+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(design_matrix[, 1],p=ii-1,d=0,q=jj-1,xreg = design_matrix[, 2],no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+
+
+```{r}
+sarima(design_matrix[, 1],p=0,d=0,q=2,xreg = design_matrix[, 2],no.constant=FALSE, details=TRUE)
+```
+
+## Problem 2
+
+### Summary
+
+The one dimensional DLM is of the form $Y_t = X_t + V_t$, $X_t = X_{t-1} + W_t$. The estimates generated for $log(V_t)$ and $log(W_t)$ are 2.285171 and 2.870191 respectively.
+
+The two dimensional DLM is of the form $(Y_{t1},Y_{t2}) = (1,1)X_t + (V_{t1},V_{t2})$, $X_t = X_{t-1} + W_t$. The estimates generated for $log(V_{t1})$, ($log(V_{t2})$, and $log(W_t)$ are 5.544694, 1.463094, and 1.617746 respectively.
+
+### Explanation
+
+a. The estimates for $log(V_t)$ and $log(W_t)$ were generated using the dlmMLE() function for a one dimensional observation equation.
+
+b. The filter does not use future values of the series to predict current values, while the smoother does so. This means that the filter will fit the data more closely and will be more jagged than the smoother.
+
+c. The estimates for $log(V_{t1})$, ($log(V_{t2})$, and $log(W_t)$ were generated using the dlmMLE() function for a two dimensional observation equation.
+
+d. The filter and smoother for both data series track of both of the original series to some degree, while the filter and smoother for only the first series only tracks that series. In the two dimensional case, it it still the case that the smoother tracks the original series less strictly than the filter and is less jagged.
+
+### Output
+
+```{r}
+# Convert third and fourth columns to time series objects
+series1_ts <- ts(dat2[, 3])
+series2_ts <- ts(dat2[, 4])
+
+# Plot the time series
+plot(series1_ts)
+plot(series2_ts)
+```
+
+DLM parameters for one dimension (third column of original data) ($log(V_t)$ and $log(W_t)$ respectively):
+
+```{r}
+library(dlm)
+library(data.table)
+library(ggplot2)
+mym0 <- series1_ts[1]
+locallevel_1_1 <- function(x, m0){
+  Sigma.R <- matrix(exp(x[1])) ## obs
+  ## Sigma.Q <- diag(c(exp(x[3]), exp(x[4]))) ## state
+  Sigma.Q <- matrix(exp(x[2]))
+  m0 <- m0
+  ## C0 <- diag(c(0,0))
+  C0 <- matrix(.2^2)
+  ##  GG <- diag(c(1, 1)) ## state
+  GG <- matrix(1) ## diag(1);
+  FF <- matrix(1) ## diag(c(1))
+  return(list(
+    m0=m0,
+    C0=C0,
+    FF=FF,
+    GG=GG,
+    V=Sigma.R,
+    W=Sigma.Q))}
+dlmres <- dlmMLE(y = series1_ts,
+                 parm = c(0,0),
+                 m0 = mym0,
+                 control = list(maxit=300),
+                 build = locallevel_1_1)
+
+print(dlmres$par)
+```
+
+Filter and smoother for one dimensional DLM:
+
+Black = original series
+Blue = filter
+Red = smoother
+
+```{r}
+mod <- locallevel_1_1(x=dlmres$par, m0=mym0)
+res_filter <- dlmFilter( y = series1_ts, mod = mod)
+
+res_smoother <- dlmSmooth(res_filter)
+
+# Convert filtered and smoothed results into time series
+filter <- res_filter$m[-1]
+filter_ts <- ts(data = filter)
+smoother <- res_smoother$s[-1]
+smoother_ts <- ts(data = smoother)
+
+
+plot(series1_ts,
+     type="o")
+lines(filter_ts, type="o", col="blue")
+lines(smoother_ts, type="o", col="red")
+```
+
+DLM parameters for two dimensions (third and fourth columns of original data) ($log(V_{t1})$, ($log(V_{t2})$, and $log(W_t)$ respectively):
+
+```{r}
+both_ts <- rbind(series1_ts, series2_ts)
+mym02 <- matrix(mean(series1_ts))
+
+locallevel_2_1 <- function(x, m0){
+  Sigma.R <- diag(c(exp(x[1]), exp(x[2]))) ## obs
+  ## Sigma.Q <- diag(c(exp(x[3]), exp(x[4]))) ## state
+  Sigma.Q <- matrix(exp(x[3]))
+  m0 <- as.matrix(m0)
+  ## C0 <- diag(c(0,0))
+  C0 <- matrix(data=.1^2)
+  ##  GG <- diag(c(1, 1)) ## state
+  GG <- matrix(data=1)
+  FF <- matrix(c(1,1), ncol=1)
+  return(list(
+    m0=m0,
+    C0=C0,
+    FF=FF,
+    GG=GG,
+    V=Sigma.R,
+    W=Sigma.Q))}
+
+dlmres_2 <- dlmMLE(y = (both_ts),
+                   parm = c(0,0,0),
+                   m0 = mym02,
+                   control = list(maxit=300),
+                   build = locallevel_2_1)
+print(dlmres_2$par)
+
+```
+
+
+Filter and smoother for two dimensional DLM:
+
+Black = first series
+Gray = second series
+Blue = filter
+Red = smoother
+
+```{r}
+(mod2 <- locallevel_2_1(x = dlmres_2$par, m0=(mym02)))
+res_filter2 <- dlmFilter(y = t(both_ts), mod = mod2)
+
+res_smoother2 <- dlmSmooth(res_filter2)
+
+## output filter values ; first one has to be dropped
+f2 <- ts(res_filter2$m[-1])
+s2 <- ts(res_smoother2$s[-1])
+
+## Plots
+plot(series1_ts,
+     type="o")
+lines(series2_ts, type="o", col="gray" )
+lines(f2, type="o", col="blue")
+lines(s2, type="o", col="red")
+```
+
+
+
+
