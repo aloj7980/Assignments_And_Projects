@@ -1,0 +1,206 @@
+---
+title: "Homework 5"
+author: "Alex Ojemann"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    toc: true       # Enable Table of Contents
+    toc_depth: 2    # Set depth of TOC (e.g., 2 for sections and subsections)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE,warning=FALSE)
+```
+
+\newpage
+
+## Problem 1
+
+### Part a
+
+The MMSE one-step-ahead forecast is:
+\[
+\hat{x}_{t+1|t} = E[x_{t+1} \mid w_t, w_{t-1}, \dots].
+\]
+
+\[
+x_{t+1} = w_{t+1} + \theta w_t.
+\]
+
+Using conditional expectation:
+\[
+\hat{x}_{t+1|t} = E[w_{t+1} \mid w_t, w_{t-1}, \dots] + \theta E[w_t \mid w_t, w_{t-1}, \dots] = \theta w_t.
+\]
+
+The forecast error is:
+\[
+e_{t+1} = x_{t+1} - \hat{x}_{t+1|t} = w_{t+1}.
+\]
+
+The MSE is:
+\[
+E[e_{t+1}^2] = E[w_{t+1}^2] = \sigma_w^2.
+\]
+
+### Part b
+
+The truncated forecast is given by:
+\[
+\tilde{x}_{n+1|n} = w_n + \theta w_{n-1}.
+\]
+
+\[
+x_{n+1} = w_{n+1} + \theta w_n.
+\]
+
+The forecast error is:
+\[
+e_{n+1} = x_{n+1} - \tilde{x}_{n+1|n} = (w_{n+1} + \theta w_n) - (w_n + \theta w_{n-1}).
+\]
+
+\[
+e_{n+1} = w_{n+1} - w_n - \theta w_{n-1}.
+\]
+
+The MSE is:
+\[
+E[e_{n+1}^2] = E[w_{n+1}^2] + E[w_n^2] + \theta^2 E[w_{n-1}^2] = \sigma_w^2 + \sigma_w^2 + \theta^2 \sigma_w^2 = \sigma_w^2 (1 + \theta^2 + 2n).
+\]
+
+### Comparison
+
+As \( n \to \infty \), the truncated forecast error variance grows linearly, indicating poor performance for large \( n \).
+
+\newpage
+
+## Problem 2
+
+### Summary
+
+The model summarized below is ARIMA(4,0,0).
+
+```{r}
+# Load necessary library for .rsav file
+library(foreign)  # Alternatively, if this is a RData file, use base functions
+
+# Load the .rsav file
+load("HW5dat.rsav")
+
+# Load the necessary package
+library(astsa)
+
+# Fit the AR(4) model using sarima
+sarima_fit <- sarima(dat1, p = 4, d = 0, q = 0,details=FALSE)
+
+summary(sarima_fit)
+```
+
+
+### Explanation 
+
+Looking at the plot of $X_t$ against time for the first series, it does not appear that the mean and variance change with time, so no transformations or differencing are needed. Looking at the ACF and PACF, my initial guess for the model is an AR(4) because the PACF has 4 terms that appear significant then it drops almost all the way to zero while the ACF tails off. Based on the diagnostic plots for the AR(4) that was fit, it seems to be satifactory because the standardized residuals appear to be stationary, the ACF of the residuals shows no significant lags, the normal QQ plot of the residuals shows that they do not have abnormally light or heavy tails, and the LBP shows that there are no lags that demonstrate significant cumulative acutocorrelation of residuals at any lag up to 20, so the final model is ARIMA(4,0,0). The xmean term in the model summary is the only one that is not significant at the p<0.01 level, which is because the data is already very close to mean 0.
+
+### Output
+
+Initial series plot:
+
+```{r}
+
+# Display the dat1 time series
+plot(dat1, main = "Time Series - dat1", xlab = "Time", ylab = "Value", type = "l", col = "blue")
+```
+
+ACF and PACF:
+
+```{r}
+# Check if dat1 is a time series object
+if (!is.ts(dat1)) {
+  dat1 <- ts(dat1)  # Convert to a time series object if necessary
+}
+
+# Plot the ACF of dat1
+acf(dat1, main = "ACF of dat1", lag.max = 20)  # Adjust lag.max as needed
+
+# Plot the PACF of dat1
+pacf(dat1, main = "PACF of dat1", lag.max = 20)  # Adjust lag.max as needed
+
+```
+
+Diagnostic plots for AR(4) fit:
+
+```{r}
+# Load the necessary package
+library(astsa)
+
+# Fit the AR(4) model using sarima
+sarima_fit <- sarima(dat1, p = 4, d = 0, q = 0,quiet=TRUE)
+
+
+```
+
+\newpage
+
+## Problem 3
+
+### Summary
+
+The model summarized below is ARIMA(3,1,0).
+
+```{r}
+# Fit the ARIMA(3,1,0) model using sarima
+sarima_fit <- sarima(dat1, p = 3, d = 1, q = 0,details=FALSE)
+
+summary(sarima_fit)
+```
+
+
+### Explanation
+
+Looking at the plot of $X_t$ against time for the second series, it looks similar to a random walk which is not stationary so we have to take the difference to make it stationary. After taking the first difference it does look stationary so no more differencing is needed. Looking at the ACF and PACF after differencing once, my initial guess for the model is an AR(3) because the PACF has 3 terms that appear significant then it drops almost all the way to zero while the ACF tails off. Based on the diagnostic plots for the AR(3) that was fit on the differenced series, it seems to be satifactory because the standardized residuals appear to be stationary, the ACF of the residuals shows no significant lags, the normal QQ plot of the residuals shows a slightly heavier left tail and a slightly lighter right tail han expected but nothing out of the ordinary, and the LBP shows that there are no lags that demonstrate significant cumulative acutocorrelation of residuals at any lag up to 20, so the final model is ARIMA(3,1,0). The xmean term in the model summary is the only one that is not significant at the p<0.01 level, which is because the data is already very close to mean 0.
+
+### Output
+
+Initial series plots with and without differencing:
+
+```{r}
+# Plot the original dat2 time series
+plot(dat2, main = "Time Series - dat2 (Original)", xlab = "Time", ylab = "Value", type = "l", col = "blue")
+
+# Difference the dat2 series to make it stationary
+dat2_diff <- diff(dat2)
+
+# Plot the differenced dat2 time series
+plot(dat2_diff, main = "Time Series - dat2 (Differenced)", xlab = "Time", ylab = "Differenced Value", type = "l", col = "red")
+
+```
+
+ACF and PACF:
+
+```{r}
+# Check if dat1 is a time series object
+if (!is.ts(dat2_diff)) {
+  dat2_diff <- ts(dat2_diff)  # Convert to a time series object if necessary
+}
+
+# Plot the ACF of dat2
+acf(dat2_diff, main = "ACF of dat2 after differencing", lag.max = 20)  # Adjust lag.max as needed
+
+# Plot the PACF of dat2
+pacf(dat2_diff, main = "PACF of dat2 after differencing", lag.max = 20)  # Adjust lag.max as needed
+
+```
+
+Diagnostic plots for AR(3) fit of the differenced series:
+
+```{r}
+# Load the necessary package
+library(astsa)
+
+# Fit the AR(4) model using sarima
+sarima_fit <- sarima(dat2_diff, p = 3, d = 0, q = 0,quiet=TRUE)
+
+
+```
+
+
+
