@@ -1,0 +1,495 @@
+---
+title: "Homework 5"
+author: "Alex Ojemann"
+date: "2024-11-01"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+```
+
+## Problem 1
+
+```{r}
+# Load required libraries
+library(dplyr)
+library(tableone)
+library(labelled)
+
+# Read the data
+tico_data <- read.csv("tico_data.csv")
+
+tico_data$gender <- factor(tico_data$gender, levels = c(1, 2), labels = c("Male", "Female"))
+
+# Convert "history of" and other binary categorical variables to factors with "No" and "Yes" labels
+binary_vars <- c("asthmahx", "copdhx", "diabeteshx", "chfhx", "hypertenshx", 
+                 "malignhx", "renalhx", "immuno_supp", "active")  # add other binary variables as needed
+tico_data[binary_vars] <- lapply(tico_data[binary_vars], factor, levels = c(0, 1), labels = c("No", "Yes"))
+
+# Assign descriptive variable labels using the labelled package
+tico_data <- tico_data %>%
+  set_variable_labels(
+    trial = "Trial Arm",
+    active = "Randomized Group (Active = 1, Placebo = 0)",
+    gender = "Gender",
+    age = "Age (years)",
+    asthmahx = "History of Asthma",
+    copdhx = "History of COPD",
+    diabeteshx = "History of Diabetes",
+    chfhx = "History of CHF",
+    hypertenshx = "History of Hypertension",
+    malignhx = "History of Malignancy",
+    renalhx = "History of Renal Impairment",
+    immuno_supp = "Immunosuppressed Status",
+    bmi = "Body Mass Index (BMI)",
+    newsbl = "NEWS Score at Baseline",
+    creatbl = "Baseline Creatinine (mg/dL)",
+    crpbl = "Baseline C-Reactive Protein (CRP)",
+    lymphbl = "Baseline Lymphocyte Count",
+    ordpulmbl = "Pulmonary Ordinal Scale",
+    vl_rslt_log10 = "Viral Load Result (Log10)"
+  )
+
+# Set levels for categorical variables in the same way as gender for binary representation
+tico_data$trial <- factor(tico_data$trial, 
+                          levels = c("A", "B", "C", "D", "E"),
+                          labels = c("Trial A", "Trial B", "Trial C", "Trial D", "Trial E"))
+
+
+# Specify the variables to include in the table
+baseline_vars <- c("trial", "active", "gender", "age", "asthmahx", "copdhx", "diabeteshx",
+                   "chfhx", "hypertenshx", "malignhx", "renalhx", "immuno_supp", "bmi",
+                   "newsbl", "creatbl", "crpbl", "lymphbl", "ordpulmbl", "vl_rslt_log10")
+
+# Create the summary table stratified by treatment
+table1 <- CreateTableOne(vars = baseline_vars, strata = "corticobl", data = tico_data, test = FALSE)
+
+# Print the table with variable labels included
+print(table1, varLabels = TRUE, quote = FALSE, noSpaces = FALSE)
+
+```
+
+## Problem 2
+
+```{r}
+# Part 2: Manual Calculation of Mean Difference, Confidence Interval, and p-value
+outcome <- "hospital_free_28"
+treatment <- "corticobl"
+
+# Calculate means for each treatment group
+mean_treated <- mean(tico_data$hospital_free_28[tico_data$corticobl == 1])
+mean_control <- mean(tico_data$hospital_free_28[tico_data$corticobl == 0])
+
+# Calculate the mean difference
+mean_diff <- mean_treated - mean_control
+
+# Calculate standard errors for each group
+sd_treated <- sd(tico_data$hospital_free_28[tico_data$corticobl == 1])
+sd_control <- sd(tico_data$hospital_free_28[tico_data$corticobl == 0])
+n_treated <- sum(tico_data$corticobl == 1)
+n_control <- sum(tico_data$corticobl == 0)
+
+# Standard error of the mean difference
+se_diff <- sqrt((sd_treated^2 / n_treated) + (sd_control^2 / n_control))
+
+# 95% confidence interval for the mean difference
+ci_lower <- mean_diff - 1.96 * se_diff
+ci_upper <- mean_diff + 1.96 * se_diff
+
+# Calculate the z-score
+z_score <- mean_diff / se_diff
+
+# Calculate the p-value for the two-tailed test
+p_value <- 2 * (1 - pnorm(abs(z_score)))
+
+# Output the results
+cat("Mean Difference in Hospital-Free Days:\n")
+cat("Treated Group Mean:", mean_treated, "\n")
+cat("Control Group Mean:", mean_control, "\n")
+cat("Mean Difference (Treated - Control):", mean_diff, "\n")
+cat("95% Confidence Interval: (", ci_lower, ",", ci_upper, ")\n")
+cat("z-score:", z_score, "\n")
+cat("p-value:", p_value, "\n\n")
+
+```
+## Problem 3
+
+This regression model is fit with the existing covariates. In this case, the ATT is the same as the ATE because there are no interaction terms so the predicted response has the same difference between treatment and control for all values.
+
+```{r}
+# Required Libraries
+library(dplyr)
+library(broom)
+
+# Define covariates to include all relevant baseline characteristics
+covariates <- c("age", "gender", "bmi", "asthmahx", "copdhx", "diabeteshx", 
+                "chfhx", "hypertenshx", "malignhx", "renalhx", "immuno_supp", 
+                "newsbl", "creatbl", "crpbl", "lymphbl", "ordpulmbl", "vl_rslt_log10")
+
+# Outcome Variable
+outcome_var <- "hospital_free_28"
+
+# Step 1: Fit the Outcome Model on the Full Dataset for ATE
+
+# Define the variables to keep (outcome variable, treatment, and covariates)
+variables_to_keep <- c(outcome_var, "corticobl", covariates)
+
+# Remove rows with any missing values in the specified columns using base R subsetting
+data_clean <- tico_data[complete.cases(tico_data[, variables_to_keep]), variables_to_keep]
+
+# We use a linear regression model to estimate ATE
+outcome_model <- lm(as.formula(paste(outcome_var, "~ corticobl +", paste(covariates, collapse = " + "))), data = data_clean)
+
+
+ate <- coef(summary(outcome_model))["corticobl", "Estimate"]
+ate_se <- coef(summary(outcome_model))["corticobl", "Std. Error"]
+ate_ci_lower <- ate - 1.96 * ate_se
+ate_ci_upper <- ate + 1.96 * ate_se
+
+ate_p_value <- coef(summary(outcome_model))["corticobl", "Pr(>|t|)"]
+
+# Print the ATE results
+cat("Average Treatment Effect (ATE):\n")
+cat("- Estimate:", ate, "\n")
+cat("- Standard Error:", ate_se, "\n")
+cat("- 95% Confidence Interval: (", ate_ci_lower, ",", ate_ci_upper, ")\n")
+cat("- p-value:", ate_p_value, "\n\n")
+
+# Step 3: Calculate ATT using Counterfactual Predictions with Interaction Model for Treated Group
+# Filter data to include only the treated group
+treated_data <- data_clean %>% filter(corticobl == 1)
+
+# Create two copies of the treated dataset for prediction under both treatment and control conditions
+treated_data_treated <- treated_data %>% mutate(corticobl = 1)  # Predict as treated
+treated_data_control <- treated_data %>% mutate(corticobl = 0)  # Predict as if untreated
+
+# Predict outcomes for the treated group under both scenarios
+predicted_as_treated <- predict(outcome_model, newdata = treated_data_treated)
+predicted_as_control <- predict(outcome_model, newdata = treated_data_control)
+
+# Calculate ATT as the mean difference between predicted treated and control outcomes for treated individuals
+diffs <- na.omit(unname(predicted_as_treated - predicted_as_control))
+att <- mean(diffs)
+
+# Estimate standard error and confidence interval for the ATT
+att_se <- ate_se * nrow(data_clean) / nrow(treated_data)
+att_ci_lower <- att - 1.96 * att_se
+att_ci_upper <- att + 1.96 * att_se
+
+# Print ATT Results
+cat("Average Treatment Effect among the Treated (ATT):\n")
+cat("- Estimate:", att, "\n")
+cat("- Standard Error:", att_se, "\n")
+cat("- 95% Confidence Interval: (", att_ci_lower, ",", att_ci_upper, ")\n")
+```
+
+This regression model includes interaction terms. This was added in order to be able to show a meaningful ATT (not the same as the ATE). Forward stepwise variable selection was used to avoid too many insignificant covariates. Different choices of the penalty for additional covariates in stepwise variable selection were experimented with and these resulted in significantly different models and treatment effects. The model shown uses the standard AIC penalty. The estimate and standard error from the model can't be used as the ATE and standard error of the ATE due to the presence of interaction terms so they are calculated manually.
+
+```{r}
+# Required Libraries
+library(dplyr)
+library(broom)
+
+# Define covariates to include all relevant baseline characteristics
+covariates <- c("age", "gender", "bmi", "asthmahx", "copdhx", "diabeteshx", 
+                "chfhx", "hypertenshx", "malignhx", "renalhx", "immuno_supp", 
+                "newsbl", "creatbl", "crpbl", "lymphbl", "ordpulmbl", "vl_rslt_log10")
+
+
+# Outcome Variable
+outcome_var <- "hospital_free_28"
+
+
+# Define the variables to keep (outcome variable, treatment, and covariates)
+variables_to_keep <- c(outcome_var, "corticobl", covariates)
+
+# Remove rows with any missing values in the specified columns using base R subsetting
+data_clean <- tico_data[complete.cases(tico_data[, variables_to_keep]), variables_to_keep]
+
+
+
+# Step 1: Fit the Outcome Model with Treatment-Covariate Interactions and Forward Stepwise Selection using Custom Penalty
+
+# Define the base model (forces corticobl to be a part of it)
+base_model <- lm(as.formula(paste(outcome_var, "~ corticobl")), data = data_clean)
+
+# Define the full model with interactions for forward selection
+full_formula <- as.formula(paste(outcome_var, "~ corticobl * (", paste(covariates, collapse = " + "), ")"))
+
+# Set a custom `k` value 
+custom_k <- 2
+
+# Perform forward stepwise selection based on the custom penalty
+# Perform forward stepwise selection based on the custom penalty without printing each step
+outcome_model <- step(base_model, 
+                      scope = list(lower = ~ corticobl, upper = full_formula), 
+                      direction = "forward", 
+                      k = custom_k, 
+                      trace = 0)
+
+
+# Step 2: Calculate the ATE from the selected model
+# Create two copies of the full dataset for predictions under treatment and control conditions
+data_treated <- data_clean %>% mutate(corticobl = 1)  # Set treatment to 1
+data_control <- data_clean %>% mutate(corticobl = 0)  # Set treatment to 0
+
+# Predict outcomes for each individual under both treatment conditions
+predicted_treated <- predict(outcome_model, newdata = data_treated)
+predicted_control <- predict(outcome_model, newdata = data_control)
+
+# Calculate ATE as the mean difference between predicted treated and control outcomes
+ate <- mean(predicted_treated - predicted_control)
+
+# Estimate standard error and confidence interval for the ATT
+ate_se <- sd(predicted_treated - predicted_control) / sqrt(nrow(data_clean))
+ate_ci_lower <- ate - 1.96 * ate_se
+ate_ci_upper <- ate + 1.96 * ate_se
+
+ate_p_value <- coef(summary(outcome_model))["corticobl", "Pr(>|t|)"]
+
+# Print the ATE results
+cat("Average Treatment Effect (ATE):\n")
+cat("- Estimate:", ate, "\n")
+cat("- Standard Error:", ate_se, "\n")
+cat("- 95% Confidence Interval: (", ate_ci_lower, ",", ate_ci_upper, ")\n")
+cat("- p-value:", ate_p_value, "\n\n")
+
+# Step 3: Calculate ATT using Counterfactual Predictions with Interaction Model for Treated Group
+# Filter data to include only the treated group
+treated_data <- data_clean %>% filter(corticobl == 1)
+
+# Create two copies of the treated dataset for prediction under both treatment and control conditions
+treated_data_treated <- treated_data %>% mutate(corticobl = 1)  # Predict as treated
+treated_data_control <- treated_data %>% mutate(corticobl = 0)  # Predict as if untreated
+
+# Predict outcomes for the treated group under both scenarios
+predicted_as_treated <- predict(outcome_model, newdata = treated_data_treated)
+predicted_as_control <- predict(outcome_model, newdata = treated_data_control)
+
+# Calculate ATT as the mean difference between predicted treated and control outcomes for treated individuals
+diffs <- na.omit(unname(predicted_as_treated - predicted_as_control))
+att <- mean(diffs)
+
+# Estimate standard error and confidence interval for the ATT
+att_se <- sd(diffs) / sqrt(nrow(treated_data))
+att_ci_lower <- att - 1.96 * att_se
+att_ci_upper <- att + 1.96 * att_se
+
+# Print ATT Results
+cat("Average Treatment Effect among the Treated (ATT):\n")
+cat("- Estimate:", att, "\n")
+cat("- Standard Error:", att_se, "\n")
+cat("- 95% Confidence Interval: (", att_ci_lower, ",", att_ci_upper, ")\n")
+```
+## Problem 4
+
+### Part a
+
+```{r}
+# First fit propensity score model
+
+# List of categorical covariates (binary or multi-level)
+categorical_covariates <- c("gender", "asthmahx", "copdhx", "diabeteshx", 
+                            "chfhx", "hypertenshx", "malignhx", "renalhx", 
+                            "immuno_supp")
+
+# List of numeric covariates
+continuous_covariates <- c("age", "bmi", "newsbl", "creatbl", "crpbl", 
+                        "lymphbl", "ordpulmbl", "vl_rslt_log10")
+
+
+# List of covariates (both categorical and continuous)
+covariates <- c(categorical_covariates, continuous_covariates)
+
+# Create a new data frame with the necessary variables for the propensity model
+propensity_data <- data_clean[, c(covariates, "corticobl")]
+
+# Fit a logistic regression model to estimate propensity scores
+propensity_model <- glm(corticobl ~ ., 
+                        data = propensity_data, 
+                        family = binomial())
+
+# Add propensity scores to the data
+data_clean$pscore <- predict(propensity_model, type = "response")
+
+# Calculate inverse probability weights
+data_clean <- data_clean %>%
+  mutate(weights = ifelse(corticobl == 1, 1 / pscore, 1 / (1 - pscore)))
+
+
+# Ensure categorical variables are numeric (0 and 1) for calculation
+data_clean <- data_clean %>%
+  mutate(across(all_of(categorical_covariates), as.numeric))
+
+# Calculate SMDs using the same process for both continuous and binary categorical variables
+calculate_smd_ipw <- function(var) {
+  treated_mean <- weighted.mean(data_clean %>% filter(corticobl == 1) %>% pull(var), 
+                                w = data_clean %>% filter(corticobl == 1) %>% pull(weights))
+  control_mean <- weighted.mean(data_clean %>% filter(corticobl == 0) %>% pull(var), 
+                                w = data_clean %>% filter(corticobl == 0) %>% pull(weights))
+  pooled_sd <- sd(data_clean[[var]], na.rm = TRUE)
+  (treated_mean - control_mean) / pooled_sd
+}
+
+# Apply SMD calculation across all covariates (continuous and categorical)
+cat("Weighted Standardized Mean Differences of all Covariates:\n")
+smd_ipw <- sapply(c(categorical_covariates, continuous_covariates), calculate_smd_ipw)
+print(smd_ipw)
+
+```
+### Part b
+
+```{r}
+# Assuming your code includes propensity scores and propensity score stratification as follows
+
+# Divide data into quintiles based on propensity scores (for example, 5 quintiles)
+data_clean <- data_clean %>%
+  mutate(stratum = ntile(pscore, 5))
+
+# Calculate stratum-specific effects
+stratum_effects <- data_clean %>%
+  group_by(stratum) %>%
+  summarize(
+    n_stratum = n(),
+    n_treated = sum(corticobl == 1),
+    n_control = sum(corticobl == 0),
+    treated_mean = mean(hospital_free_28[corticobl == 1], na.rm = TRUE),
+    control_mean = mean(hospital_free_28[corticobl == 0], na.rm = TRUE),
+    effect = treated_mean - control_mean,
+    var_effect = (var(hospital_free_28[corticobl == 1], na.rm = TRUE) / n_treated) + 
+                 (var(hospital_free_28[corticobl == 0], na.rm = TRUE) / n_control)
+  )
+
+# Total sample sizes
+N <- nrow(data_clean)
+N_treated <- sum(data_clean$corticobl == 1)
+
+# 1. Calculate ATE
+ate <- sum(stratum_effects$effect * (stratum_effects$n_stratum / N))
+
+# 2. Calculate ATT
+att <- sum(stratum_effects$effect * (stratum_effects$n_treated / N_treated))
+
+# 3. Calculate standard errors for ATE and ATT
+# Variance of ATE
+ate_var <- sum((stratum_effects$n_stratum / N)^2 * stratum_effects$var_effect / stratum_effects$n_stratum)
+ate_se <- sqrt(ate_var)
+
+# Variance of ATT
+att_var <- sum((stratum_effects$n_treated / N_treated)^2 * stratum_effects$var_effect / stratum_effects$n_treated)
+att_se <- sqrt(att_var)
+
+# 4. Confidence intervals for ATE and ATT
+ate_ci <- c(ate - 1.96 * ate_se, ate + 1.96 * ate_se)
+att_ci <- c(att - 1.96 * att_se, att + 1.96 * att_se)
+
+# Print results
+cat("ATE using Propensity Score Stratification:\n")
+cat("- Estimate:", ate, "\n")
+cat("- Standard Error:", ate_se, "\n")
+cat("- 95% CI:", ate_ci, "\n\n")
+
+cat("ATT using Propensity Score Stratification:\n")
+cat("- Estimate:", att, "\n")
+cat("- Standard Error:", att_se, "\n")
+cat("- 95% CI:", att_ci, "\n")
+
+```
+
+
+### Part c
+
+```{r}
+# Required libraries
+library(survey)
+library(dplyr)
+
+# Required libraries
+library(survey)
+library(dplyr)
+
+# Step 1: Calculate ATE using the IPW weights and the survey design
+# Use the existing weights in a survey design to estimate the ATE
+design <- svydesign(ids = ~1, weights = ~weights, data = data_clean)
+ate_model <- svyglm(hospital_free_28 ~ corticobl, design = design)
+ate <- coef(summary(ate_model))["corticobl", "Estimate"]
+ate_se <- coef(summary(ate_model))["corticobl", "Std. Error"]
+ate_ci <- confint(ate_model)["corticobl", ]
+
+# Step 2: Calculate ATT using IPW2 weights to reweight control outcomes
+# Calculate the mean outcome for the treated group (observed treated)
+treated_mean <- mean(data_clean$hospital_free_28[data_clean$corticobl == 1])
+
+# Calculate the weighted mean outcome for the control group (reweighted to match treated distribution)
+weighted_control_mean <- with(data_clean[data_clean$corticobl == 0, ], 
+                              sum(weights * hospital_free_28) / sum(weights))
+
+# ATT is the difference between the treated mean and the weighted control mean
+att <- treated_mean - weighted_control_mean
+
+# Calculate standard error for ATT (assuming normal approximation for simplicity)
+att_se <- sd(data_clean$hospital_free_28[data_clean$corticobl == 1] - weighted_control_mean) / sqrt(nrow(data_clean[data_clean$corticobl == 1, ]))
+att_ci_lower <- att - 1.96 * att_se
+att_ci_upper <- att + 1.96 * att_se
+
+# Print results
+cat("ATE using IPW:\n")
+cat("- Estimate:", ate, "\n")
+cat("- 95% CI:", ate_ci, "\n\n")
+
+cat("ATT using IPW:\n")
+cat("- Estimate:", att, "\n")
+cat("- Standard Error:", att_se, "\n")
+cat("- 95% CI: (", att_ci_lower, ",", att_ci_upper, ")\n")
+
+```
+
+### Part d
+
+```{r}
+library(purrr)
+
+# Add a unique identifier if it doesn’t already exist
+data_clean$id <- seq_len(nrow(data_clean))
+
+# Ensure treated and control datasets are set up correctly
+treated_data <- data_clean %>% filter(corticobl == 1)
+control_data <- data_clean %>% filter(corticobl == 0)
+
+# Create the matched_pairs data frame by iterating over each treated row and finding the closest control match
+matched_pairs <- treated_data %>%
+  mutate(
+    control_match_id = map_dbl(pscore, ~ {
+      control_data %>%
+        mutate(distance = abs(pscore - .x)) %>%
+        arrange(distance) %>%
+        slice(1) %>%
+        pull(id)
+    })
+  )
+
+# Retrieve outcomes for the matched pairs directly without joining
+treated_outcomes <- matched_pairs$hospital_free_28
+control_outcomes <- data_clean$hospital_free_28[match(matched_pairs$control_match_id, data_clean$id)]
+
+# Calculate the ATT for the matched pairs
+att <- mean(treated_outcomes - control_outcomes, na.rm = TRUE)
+
+# Calculate the standard error and 95% confidence interval
+att_se <- sd(treated_outcomes - control_outcomes, na.rm = TRUE) / sqrt(nrow(matched_pairs))
+att_ci_lower <- att - 1.96 * att_se
+att_ci_upper <- att + 1.96 * att_se
+
+# Print the ATT results
+cat("ATT using Propensity Score Matching:\n")
+cat("- Estimate:", att, "\n")
+cat("- Standard Error:", att_se, "\n")
+cat("- 95% Confidence Interval: (", att_ci_lower, ",", att_ci_upper, ")\n")
+
+```
+
+## Problem 5
+
+Looking at each of these estimates, we can see that the unadjusted mean difference reflects a significant negative average treatment effect, but the ATE and ATT estimates when using both outcome regression models, propensity score stratification, inverse probability weighting, and propensity score matching are all much closer to zero with zero being included in most of the 95% confidence intervals for these estimates, indicating that we can not draw much of a conclusion either way regarding the effectiveness of this treatment.
+
