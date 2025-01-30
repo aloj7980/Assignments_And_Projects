@@ -1,0 +1,642 @@
+---
+title: "Final"
+author: "Alex Ojemann"
+date: "2024-12-17"
+output: 
+  pdf_document:
+    toc: true       # Enable Table of Contents
+    toc_depth: 2    # Set depth of TOC (e.g., 2 for sections and subsections)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+\newpage
+
+## Problem 1
+
+### Summary
+
+For the series $Y_t = X_t$ I chose a SARIMA(4,0,1)x(0,1,2)[12] model excluding the intercept term. The coefficients shown below are from a model fit on $X_t$ after having been non seasonally differenced and seasonally differenced with lag 12.
+
+Coefficients: 
+
+     Estimate     SE  t.value p.value
+     
+ar1    0.2667 0.1446   1.8447  0.0656
+
+ar2    0.6089 0.0459  13.2693  0.0000
+
+ar3   -0.1343 0.0811  -1.6558  0.0983
+
+ar4   -0.2486 0.0442  -5.6252  0.0000
+
+ma1   -0.1801 0.1487  -1.2109  0.2264
+
+sma1  -0.5948 0.0435 -13.6705  0.0000
+
+sma2  -0.2039 0.0469  -4.3443  0.0000
+
+### Explanation
+
+The initial plot and ACF and PACF of $X_t$ suggest that the series is stationary so we don't need to take a non-seasonal difference but there is a seasonality of 12 so we should take a seasonal difference at lag 12. After the seasonal difference, the significant non seasonal lags of the ACF cut off for the most part after lag 2 and those of the PACF cut off after lag 4, while the significant seasonal lags of the ACF cut off for the most part after lag 2 and those of the PACF cut off after lag 2, so we fit different models on the first seasonally differenced data with a maximum p of 4, a maximum q of 2, a maximum P of 2 and a maximum Q of 2. Only the seven models with an AICc multiplied by the length of the series within 5 of the minimum and a BIC multiplied by the length of the series within 7 of the minimum were considered. Of these, the SARMA(4,1)x(0,2) was chosen because it's very close to the best AICc and it has the highest LBP values. So the final model on the original series $X_t$ is SARIMA(4,0,1)x(0,1,2)[12]. The intercept was not included because it was not significant at any level. It's worth noting that there are some notably heavy tails in the Normal QQ plots of the residuals for all models.
+
+### Output
+
+```{r}
+load("final-data.rsav")
+xx <- dat1
+plot(xx)
+```
+```{r}
+library(astsa)
+invisible(acf2(xx))
+```
+```{r}
+Dxx <- diff(xx,lag=12)
+plot(Dxx)
+```
+
+```{r}
+invisible(acf2(Dxx))
+```
+
+
+
+```{r}
+maxAR <- 4+1
+maxMA <- 2+1
+maxSAR <- 2+1
+maxSMA <- 2+1
+fits_all <- array(list(), dim = c(maxAR, maxMA, maxSAR, maxSMA))
+AICmin <- BICmin <- Inf
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+#if(!(ii==3 && jj == 3 && kk == 3 && ll == 2)){ #Condition because these models caused an error
+print(ii)
+print(jj)
+print(kk)
+print(ll)
+fits_all[[ii, jj, kk, ll]] <- astsa::sarima(Dxx, p = ii - 1, d = 0,
+q = jj - 1, P = kk - 1, D = 0, Q = ll - 1, S = 12, no.constant = F,
+details = F)
+if (fits_all[[ii, jj, kk, ll]]$ICs["AICc"] < AICmin)
+AICmin <- fits_all[[ii, jj, kk, ll]]$ICs["AICc"]
+if (fits_all[[ii, jj, kk, ll]]$ICs["BIC"] < BICmin)
+BICmin <- fits_all[[ii, jj, kk, ll]]$ICs["BIC"]
+}
+}
+}
+}
+#}
+```
+
+```{r}
+nn <- length(Dxx)
+print("AICcs")
+## [1] "AICcs"
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+#if(!(ii==4 && jj == 5 && kk == 2 && ll == 3)){ #Condition because (3,4)x(1,2) caused an error
+AICdelta <- ((fits_all[[ii, jj, kk, ll]])$ICs["AICc"] - AICmin) * nn
+if (AICdelta < 5) {
+print(paste0("(", ii - 1, ", ", jj - 1, ") x (", kk - 1, ", ",
+ll - 1, ")"))
+print(AICdelta)
+}
+}
+}
+}
+}
+#}
+```
+
+```{r}
+print("BICs")
+## [1] "BICs"
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+BICdelta <- ((fits_all[[ii, jj, kk, ll]])$ICs["BIC"] - BICmin) * nn
+if (BICdelta < 7) {
+print(paste0("(", ii - 1, ", ", jj - 1, ") x (", kk - 1, ", ",
+ll - 1, ")"))
+print(BICdelta)
+}
+}
+}
+}
+}
+```
+
+```{r}
+sarima(Dxx, p = 1, d = 0, q = 2, P = 0, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 2, d = 0, q = 2, P = 0, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 2, d = 0, q = 2, P = 1, D = 0,
+Q = 1, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 4, d = 0, q = 0, P = 0, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+```{r}
+sarima(Dxx, p = 4, d = 0, q = 0, P = 1, D = 0,
+Q = 1, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 0, d = 0, q = 2, P = 0, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 0, d = 0, q = 2, P = 1, D = 0,
+Q = 1, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 4, d = 0, q = 1, P = 0, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+
+```{r}
+sarima(Dxx, p = 4, d = 0, q = 0, P = 1, D = 0,
+Q = 2, S = 12,no.constant=F,details=T)
+```
+
+Final model:
+```{r}
+sarima(Dxx, p = 4, d = 0, q = 1, P = 0, D = 0,
+Q = 2, S = 12,no.constant=T,details=T)
+```
+
+## Problem 2
+
+### Summary
+
+a. 
+
+Frequency 0.027: AR(1) Spectral Density = 8.58566 | CI = [3.51401, 13.45976] | In CI: YES
+Frequency 0.049: AR(1) Spectral Density = 5.49633 | CI = [6.53474, 25.03013] | In CI: NO
+Frequency 0.250: AR(1) Spectral Density = 0.52240 | CI = [0.92678, 3.54986] | In CI: NO
+
+b. 
+
+Frequency 0.027: AR(1) Spectral Density = 8.46003 | CI = [3.75334, 14.37649] | In CI: YES
+
+### Explanation
+
+For dat2a, of the smooth periodograms tested, the modified Daniell kernel (4,4) was chosen because it was not as jagged as some of the others but still maintained the steepness of the steep portions of the original periodogram as well as any of the others.
+
+The same kernel was selected for dat2b because the plot of different smoothed periodograms is extremely similar.
+
+The added value in part b results in a slightly different confidence interval than that of part a for $\omega = 0.027$ but the true value of the baseline AR(1) is still in this interval. This true AR(1) value for dat2b is slightly different from that of dat2a because the closest index to 0.027 from the smooth periodogram is slightly different for dat2b.
+
+
+### Output
+
+Baseline AR(1):
+
+```{r}
+library(TSA) ## ARMAspec
+
+phi <- .7
+trueARMAspec <- TSA::ARMAspec(model = list(ar=phi),
+                              lty=2) ## function for plotting true
+ 
+```
+
+Dat2a:
+
+```{r}
+xx <- dat2a
+
+# Reset plot parameters and set smaller margins
+par(mfrow = c(1, 1))              # Single plot layout
+par(mai = c(1, 1, 1, 1))          # Margins: B, L, T, R (reasonable size)
+
+# Start the plot
+plot.new()
+
+# Plot the spectral density with multiple spans
+spg <- spec.pgram(x = xx, taper = 0, log = "no", detrend = FALSE,
+                  add = FALSE, lwd = 0.5, col = "gray")  # First plot (not add=TRUE)
+
+# Overlay additional spectral densities with smoothing
+spec.pgram(x = xx, spans = 15, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "red")
+
+spec.pgram(x = xx, spans = 33, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "red")
+
+spec.pgram(x = xx, spans = 71, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "blue")
+
+spec.pgram(x = xx, spans = 171, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "orange")
+
+(myk <- kernel("modified.daniell", m=c(30,30)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="green")
+
+(myk <- kernel("modified.daniell", m=c(4,4)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="purple")
+
+(myk <- kernel("modified.daniell", m=c(10, 10)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="darkgreen") 
+
+
+# Add a title and axis labels
+title("Spectral Density Estimates with Varying Smoothing Spans")
+mtext("Frequency", side = 1, line = 2.5)
+mtext("Spectral Density", side = 2, line = 2.5)
+
+```
+Modified Daniell Kernel (4,4)
+
+```{r}
+myk <- kernel("modified.daniell", m=c(4, 4))
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="yes", detrend=FALSE,
+           lwd=.5, col="gray")
+
+```
+
+Confidence intervals and tests:
+
+```{r}
+# Frequencies of interest
+omega <- c(0.027, 0.049, 0.25)
+
+# Spectral density estimate using modified Daniell kernel (m = 4, 4 --> LL = 9)
+myk <- kernel("modified.daniell", m = c(4, 4))
+spec_est <- spec.pgram(x = xx, kernel = myk, taper = 0, log = "no", detrend = FALSE, plot = FALSE)
+
+# Extract the spectral density estimates at the closest frequencies
+closest_indices <- sapply(omega, function(w) which.min(abs(spec_est$freq - w)))
+f_hat <- spec_est$spec[closest_indices]  
+
+LL <- 9  
+df <- 2 * LL  
+
+# Chi-squared quantiles for 95% CI
+q_lower <- qchisq(0.025, df)
+q_upper <- qchisq(0.975, df)
+
+# Construct confidence intervals
+ci_lower <- f_hat * (df / q_upper)
+ci_upper <- f_hat * (df / q_lower)
+
+# Extract true spectral density at the chosen frequencies
+true_spectrum <- trueARMAspec$spec[closest_indices]
+
+# Combine results into a data frame
+results <- data.frame(
+  Frequency = omega,
+  Empirical_Spec = f_hat,
+  CI_Lower = ci_lower,
+  CI_Upper = ci_upper,
+  True_Spec = true_spectrum,
+  In_CI = true_spectrum >= ci_lower & true_spectrum <= ci_upper
+)
+
+# Print results
+print(results)
+
+# Display whether the true spectrum falls within the confidence intervals
+cat("\nResults:\n")
+for (i in 1:nrow(results)) {
+  cat(sprintf("Frequency %.3f: AR(1) Spectral Density = %.5f | CI = [%.5f, %.5f] | In CI: %s\n",
+              results$Frequency[i], results$True_Spec[i],
+              results$CI_Lower[i], results$CI_Upper[i],
+              ifelse(results$In_CI[i], "YES", "NO")))
+}
+
+
+```
+
+dat2b:
+
+```{r}
+xx <- dat2b
+
+# Reset plot parameters and set smaller margins
+par(mfrow = c(1, 1))              # Single plot layout
+par(mai = c(1, 1, 1, 1))          # Margins: B, L, T, R (reasonable size)
+
+# Start the plot
+plot.new()
+
+# Plot the spectral density with multiple spans
+spg <- spec.pgram(x = xx, taper = 0, log = "no", detrend = FALSE,
+                  add = FALSE, lwd = 0.5, col = "gray")  # First plot (not add=TRUE)
+
+# Overlay additional spectral densities with smoothing
+spec.pgram(x = xx, spans = 15, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "red")
+
+spec.pgram(x = xx, spans = 33, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "red")
+
+spec.pgram(x = xx, spans = 71, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "blue")
+
+spec.pgram(x = xx, spans = 171, taper = 0, log = "no", detrend = FALSE,
+           add = TRUE, col = "orange")
+
+(myk <- kernel("modified.daniell", m=c(30,30)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="green")
+
+(myk <- kernel("modified.daniell", m=c(4,4)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="purple")
+
+(myk <- kernel("modified.daniell", m=c(10, 10)))
+## plot(myk)
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="no", detrend=FALSE,
+           add=TRUE, col="darkgreen") 
+
+
+# Add a title and axis labels
+title("Spectral Density Estimates with Varying Smoothing Spans")
+mtext("Frequency", side = 1, line = 2.5)
+mtext("Spectral Density", side = 2, line = 2.5)
+
+```
+
+Modified Daniell Kernel (4,4)
+
+```{r}
+myk <- kernel("modified.daniell", m=c(4, 4))
+spec.pgram(x=xx, kernel=myk,
+           taper=0, log="yes", detrend=FALSE,
+           lwd=.5, col="gray")
+```
+
+Confidence intervals and tests:
+
+```{r}
+# Frequencies of interest
+omega <- c(0.027)
+
+# Spectral density estimate using modified Daniell kernel (m = 4, 4 --> LL = 9)
+myk <- kernel("modified.daniell", m = c(4, 4))
+spec_est <- spec.pgram(x = xx, kernel = myk, taper = 0, log = "no", detrend = FALSE, plot = FALSE)
+
+# Extract the spectral density estimates at the closest frequencies
+closest_indices <- sapply(omega, function(w) which.min(abs(spec_est$freq - w)))
+f_hat <- spec_est$spec[closest_indices]  
+
+LL <- 9  
+df <- 2 * LL  
+
+# Chi-squared quantiles for 95% CI
+q_lower <- qchisq(0.025, df)
+q_upper <- qchisq(0.975, df)
+
+# Construct confidence intervals
+ci_lower <- f_hat * (df / q_upper)
+ci_upper <- f_hat * (df / q_lower)
+
+# Extract true spectral density at the chosen frequencies
+true_spectrum <- trueARMAspec$spec[closest_indices]
+
+# Combine results into a data frame
+results <- data.frame(
+  Frequency = omega,
+  Empirical_Spec = f_hat,
+  CI_Lower = ci_lower,
+  CI_Upper = ci_upper,
+  True_Spec = true_spectrum,
+  In_CI = true_spectrum >= ci_lower & true_spectrum <= ci_upper
+)
+
+# Print results
+print(results)
+
+# Display whether the true spectrum falls within the confidence intervals
+cat("\nResults:\n")
+for (i in 1:nrow(results)) {
+  cat(sprintf("Frequency %.3f: AR(1) Spectral Density = %.5f | CI = [%.5f, %.5f] | In CI: %s\n",
+              results$Frequency[i], results$True_Spec[i],
+              results$CI_Lower[i], results$CI_Upper[i],
+              ifelse(results$In_CI[i], "YES", "NO")))
+}
+
+
+```
+
+
+
+## Problem 3
+
+### Summary
+
+For the series $Y_t$ I chose an ARMA(1,1) model including the intercept with exogenous regressors $X_{t+8}$ and X_{t+11}.
+
+Coefficients: 
+
+          Estimate     SE t.value p.value
+          
+ar1         0.6878 0.0308 22.3412  0.0000
+
+ma1         0.7379 0.0298 24.7469  0.0000
+
+intercept  94.3697 2.5859 36.4939  0.0000
+
+XL8        -0.2148 0.0990 -2.1701  0.0304
+
+XL11        0.2368 0.0958  2.4711  0.0137
+
+
+### Explanation
+
+Both $X_t$ and $Y_t$ are stationary and do not have changing variance over time or seasonality. The ACF and PACF of $X_t$ show 1 significant lag in the ACF and 5 significant lags in the PACF, so models with a maximum p of 1 and a maximum q of 5 were considered. The ARMA(2,1) model had an AICc and BIC very close to the best and had by far the best LBP values so it was chosen for prewhitening. The intercept was included because it was significant at all levels.
+
+After prewhiteneing both $X_t$ and $Y_t$ with this model, the ccf shows significant correlations at -8, -11, -14, -17, -20, and -23. When testing combinations of these lags, it was found that only -8 and -11 were significant in a regression model. Thus $X_{t+8}$ and $X_{t+11}$ were used in the design matrix with $Y_t$.
+
+For the model of $Y_t$ including the exogenous regressors $X_{t+8}$ and $X_{t+11}$, the ACF and PACF show 3 significant lags in the ACF and 7 significant lags in the PACF, so models with a maximum p of 7 and a maximum q of 3 were considered. Of the ones with an AICc and BIC within 10 of the minimum, the ARMA(1,1) had the best BIC and strong diagnostic plots, so it was the chosen model. The intercept was included because it was significant at all levels.
+
+### Output
+
+```{r}
+# Access the 'xx' column
+xx <- dat3[, "xx"]
+```
+
+```{r}
+plot(dat3)
+
+# Compute and plot the ACF and PACF of 'xx'
+invisible(acf2(xx, main = "ACF and PACF of xx"))
+```
+
+```{r}
+maxAR<-5+1
+maxMA<-1+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(xx,p=ii-1,d=0,q=jj-1,no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+
+```{r}
+sarima(xx,p=0,d=0,q=1,no.constant=FALSE, details=TRUE)
+```
+```{r}
+sarima(xx,p=1,d=0,q=1,no.constant=FALSE, details=TRUE)
+```
+```{r}
+sarima(xx,p=2,d=0,q=1,no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+sarima(xx,p=3,d=0,q=1,no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+library(astsa)  # For sarima
+library(stats)  # For filtering
+
+# Fit an ARMA(2,1) model to xx using sarima
+sarima_fit <- sarima(xx, p = 2, d = 0, q = 1, details = FALSE)
+
+# Pre-whiten xx: Extract residuals from the SARIMA fit
+xx_prewhitened <- ts(sarima_fit$fit$residuals)
+
+# Get AR(2) coefficients and MA(1) coefficient
+ar_coeffs <- coef(sarima_fit$fit)[c("ar1", "ar2")]  # AR(2) coefficients
+ma_coeff  <- coef(sarima_fit$fit)["ma1"]            # MA(1) coefficient
+
+# Step 1: Pre-whiten yy with the AR(2) part
+yy <- dat3[, "yy"]
+
+# Apply AR(2) filter: Use (1 - ar1*B - ar2*B^2)
+yy_ar_filtered <- stats::filter(yy, filter = c(1, -ar_coeffs), method = "convolution", sides = 1)
+
+# Step 2: Remove NAs caused by AR filtering
+yy_ar_filtered <- na.omit(yy_ar_filtered)
+xx_prewhitened <- xx_prewhitened[-c(1, 2)]
+
+# Step 3: Apply MA(1) filter to the AR-filtered series
+# Use (1 + ma1*B) where B is the lag operator
+yy_prewhitened <- stats::filter(yy_ar_filtered, filter = c(1, -ma_coeff), method = "recursive", sides = 1)
+
+# Plot the cross-correlation function (CCF) of the pre-whitened series
+ccf(xx_prewhitened, yy_prewhitened, main = "CCF of Pre-whitened xx and yy",
+    ylab = "CCF", na.action = na.omit)
+
+```
+
+```{r}
+XL8 <- lag(xx, -8)
+XL11 <- lag(xx, -11)
+design_matrix <- ts.intersect(yy, XL8,XL11)
+
+fit1 <- lm(yy ~ XL8+XL11, data = design_matrix)
+summary(fit1)
+invisible(acf2(resid(fit1)))
+```
+
+```{r}
+maxAR<-7+1
+maxMA<-3+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(design_matrix[, 1],p=ii-1,d=0,q=jj-1,xreg = design_matrix[, 2:3],no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+
+```{r}
+sarima(design_matrix[, 1],p=1,d=0,q=1,xreg = design_matrix[, 2:3],no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+sarima(design_matrix[, 1],p=2,d=0,q=1,xreg = design_matrix[, 2:3],no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+sarima(design_matrix[, 1],p=1,d=0,q=2,xreg = design_matrix[, 2:3],no.constant=FALSE, details=TRUE)
+```
+
+```{r}
+sarima(design_matrix[, 1],p=5,d=0,q=3,xreg = design_matrix[, 2:3],no.constant=FALSE, details=TRUE)
+```
+
