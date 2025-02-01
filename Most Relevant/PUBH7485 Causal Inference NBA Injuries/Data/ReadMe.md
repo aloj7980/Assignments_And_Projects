@@ -1,1 +1,1 @@
-x
+Data files generated from running Data_Extraction_1.R, Data_Extraction_2.R, and Data_Extraction_3.R. In order to run Data_Extraction_2.R and any of the R markdown files, you will need to have these files in the same directory and unzip travel_data.zip.
