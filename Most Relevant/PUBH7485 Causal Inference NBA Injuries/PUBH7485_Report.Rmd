@@ -1,0 +1,559 @@
+---
+title: "Estimating the Effect of Load Management on Injuries for NBA Players using a Marginal Structural Model"
+author: "Alex Ojemann"
+date: "2024-12-09"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message=FALSE,warning=FALSE)
+```
+
+## Introduction and Motivation
+
+As the NBA has grown in popularity, protecting the health of its greatest players has become an extremely pressing concern for their teams. One method teams have increasingly turned to over the past decade is load management, particularly for back to back games. Many teams believe that this will benefit their players' health in both the short and long term. However, this is not without consequences, as fans can be extremely disappointed if a certain player is resting to preserve their health. This is particularly disappointing if the player only visits a fan's hometown once or twice a year, as is often the case in the NBA. Last year, the league distributed a report to teams and select media members that investigated the relationships between frequency of game participation and injury, schedule density and injury, and cumulative NBA participation and injury. The results did not show that any of these relationships were significant, possibly suggesting that teams should be less inclined to rest their players. The NBA also recently added a requirement that players must play in at least 65 of the 82 games in the season to qualify for awards in order to incentivize players to miss games for rest less frequently.
+
+This study is more specifically investigating the relationship between sitting one game of a back to back set and the frequency and severity of injuries, however, the same time frame as the study conducted by the NBA was considered and a similar selection of players were considered. Ultimately, no significant decrease in either injury frequency or severity is found for players who rest in half of back to back games more frequently, and in fact the opposite is found to be the case in many instances.
+
+## Methodology and Results
+
+### Data Sources
+
+The data used in this project are from the NBA Stats website, Basketball Reference, RealGM, and Pro Sports Transactions. Specifically, the player travel data used to calculate the average flight distance was scraped from the NBA stats website using the Airball GitHub package$^2$, the data used to calculate the games played, minutes per game, rolling average minutes, age, schedule density indicators, and pandemic-influenced season indicators was scraped from Basketball Reference, the depth charts that were used to determine which players were included and the positional indicators was from RealGM, and the injury transaction data that was used to calculate the injury metrics that are the outcomes of this study were scraped from Pro Sports Transactions using the Airball GitHub package.
+
+### Inclusion/Exclusion Criteria
+
+The inclusion and exclusion criteria that were used for the players in this study were designed to be similar to the study conducted by the NBA mentioned in the introduction that was distributed to teams that investigated the relationships between frequency of game participation and injury, schedule density and injury, and cumulative NBA participation and injury. This study more specifically aims to investigate the relationship between game participation in back to back sets and injury, but similar inclusion and exclusion criteria were used to allow for loose comparison. The NBA study included 150 starting level players from each season starting in the 2012-14 season and ending in the 2022-23 season$^1$, and this study follows the same approach. However, the starting-level players considered here differ slightly. This study considers players that were listed as starters on depth charts from RealGM, with slight modifications in rare cases where the depth charts were not correct due to trades.
+
+It is also important to note that the games studied only include regular season games and do not include the bubble seeding games in July and August of 2020. These games were excluded because there was no travel for these games and there was a rest period of multiple months leading up to them due to the COVID-19 pandemic.
+
+### Treatment and Covariates
+
+Below are the TableOne results with standardized mean differences for each row in the data set, which corresponds to one pair of back to back games. The treatment group includes only pairs of back to backs in which one of the games was missed due to load management, and the control group includes only pairs of back to backs in which both games were played. A game missed due to load management is defined as a game in which the player did not play but played in the games both before and after. This is the criteria that was chosen because teams give a variety of injury designations in these cases such as tightness or soreness rather than outright saying that it's exclusively due to rest even when it is the case that the player would have been able to play if not for the decision to manage their workload, so defining games missed due to load management this way was deemed a superior option to defining them in terms of the team's injury designation.
+
+The covariates shown here are those used to fit the propensity score model. These include:
+
+distance_average: The average flight distance per game played in the back to back pair. Research suggests that air travel has a negative influence on player health$^4$.
+
+Rolling_Average_MP: The five-game rolling average of minutes played prior to the back-to-back set. Research shows that increases in minutes per game in the preceding window of games have a significant effect on injuries, with that of a five game window being the most significant$^3$.
+
+Age: The player's age as of February 1st in the given season.
+
+MPG: The player's minutes per game in a given season.
+
+Games_Missed_Frequency_Career: The player's frequency of games missed throughout their career before the season in question. This is included to help address the confounding nature of more injury prone players being rested in back to backs.
+
+Positional Indicators (PG, SG, SF, PF, C): Indicators for which position the player played. This is based on the season long depth charts not individual games.
+
+Pandemic-Influenced Season Indicators (Is_2019_20, Is_2020_21, Is_2021_22): Indicators for whether the game was in the 2019-20, 2020-21, or 2021-22 seasons. These indicators are included because each of these seasons and/or the length of the offseason leading up to them were influenced by the COVID-19 pandemic.
+
+Schedule Density Indicators (Is_3rd_Game_In_4_Days, Is_4th_Game_In_5_Days, Is_5th_Game_In_7_Days): Indicators for the frequency of games as of the second game of the back to back.
+
+```{r}
+library(dplyr)
+# Read the CSV files into data frames
+treatment_categories <- read.csv("treatment_categories.csv", stringsAsFactors = FALSE)
+b2b_of_interest <- read.csv("b2b_of_interest.csv", stringsAsFactors = FALSE)
+all_game_logs <- read.csv("all_game_logs_2.csv", stringsAsFactors = FALSE)
+```
+
+```{r}
+# Read in the career_injury_metrics.csv file
+career_injury_metrics <- read.csv("career_injury_metrics.csv")
+
+# Merge the Games_Missed_Frequency_Career column into b2b_of_interest
+b2b_of_interest <- b2b_of_interest %>%
+  left_join(career_injury_metrics %>% select(Player, Season, Games_Missed_Frequency_Career),
+            by = c("Player", "Season"))
+
+# Replace NA values in Games_Missed_Frequency_Career with 0 for rookies
+b2b_of_interest$Games_Missed_Frequency_Career[is.na(b2b_of_interest$Games_Missed_Frequency_Career)] <- 0
+```
+
+
+```{r}
+# Load the tableone package
+library(tableone)
+
+# Specify the covariates
+covariates <- c(
+  "distance_average",
+  "Rolling_Avg_MP",
+  "Age",
+  "MPG",
+  "Games_Missed_Frequency_Career",
+  "PG",
+  "SG",
+  "SF",
+  "PF",
+  "C",
+  "Is_2019_20",
+  "Is_2020_21",
+  "Is_2021_22",
+  "Is_3rd_Game_in_4_Days",
+  "Is_4th_Game_in_5_Days",
+  "Is_5th_Game_in_7_Days"
+)
+
+# Create the tableone object
+table_one <- CreateTableOne(
+  vars = covariates,
+  strata = "treatment",
+  data = b2b_of_interest,
+  test = FALSE  # Set to FALSE to suppress statistical tests
+)
+
+# Print the table
+print(table_one, smd = TRUE)  # Include standardized mean differences (SMDs)
+
+```
+
+Initial investigation of covariates showed a couple of concerns regarding data leakage if they were used to fit a propensity score model and a few changes were made. The travel data was almost always empty for cases when a player didn't play a game, suggesting either that the player did not travel with the team or that the data was incorrect. In either case, this would be data leakage because any of the variables related to travel being 0 often indicated when a player sat a game, which is the outcome. Originally the intent was to include whether the player travelled to each game of the back to back and the sum of the flight distances, but now the indicators were removed and the average flight distance per game played was used instead of the sum of distances. This average should be more informative because if a player had to endure a long flight before one game of a back to back their team may have been more likely to rest them in the other game and also possibly more likely to get injured, and as expected the mean in the treatment group is slightly larger. A similar problem arose with the five game rolling average minutes played because this average includes a 0 for games not played, so it was significantly lower for the back to back pairs as a result when it was initially created including the games in the back to back set in the rolling average calculation. This was revised to avoid data leakage by using the five-game rolling average of minutes played prior to the back to back set, so that it would not be systematically lower for cases when a player was rested in half of the back to back. In addition, when the schedule density indicators (Is_3rd_Game_In_4_Days, Is_4th_Game_In_5_Days, Is_5th_Game_In_7_Days) were originally calculated, they were almost always 0 for cases when the player didn't play half of the back to back because it will never be, for example, the third game played in four nights if a player sits one of them. So these were recalculated to represent, for example, whether it would've been the third game in four nights had the player played in both games of the back to back, which is a much more meaningful covariate in the context of this study and has a much more reasonable standardized mean difference. Finally, the total games played in the season was also removed from the propensity score covariates because players who miss back to backs are playing fewer games as a result so it would be data leakage to include this in the propensity score model. However, total games played, as well as the other season-level covariates (Age, MPG, career games missed frequency, pandemic-influenced season indicators) will also be included in the marginal structural model that uses the propensity scores to predict the season-level injury outcomes.
+
+The table contains the covariates after these changes were made, and we no longer see any unreasonably large standardized mean differences as a result.
+
+### Outcomes
+
+The outcomes are injury frequency, which is the number of games in which an injury occurred divided by the number of games played for a player in a given season, and games missed frequency, which is the number of games that a player missed due to injury divided by the number of games played by their team in the given season. Importantly, games missed due to injury exclude those missed for load management. This was enforced in order to avoid data leakage in the sense that a back to back game missed, which is the treatment, would directly contribute to the games missed frequency.
+
+These two outcomes were examined for four different season phases. These are early-season, mid-season, late-season, and the entire season. The first third of a team's games is the early-season phase, the next third is the mid-season phase, and the final third is the late-season phase. These season phases are used to determine if there is significantly different outcomes based on when treatment occurs throughout the season and preserving the time-varying nature of treatment without analyzing very large numbers of possible treatment sequences. The entire season phase is included along with the early, mid, and late season phases to allow for more general analysis. For each of the two outcomes within each of the four season phases, there are three strata of treatment. The first is the case where there was no treatment in the given phase. The second and third represent a low nonzero treatment frequency in a given phase and a high nonzero treatment frequency in a given phase respectively. These were determined by splitting the frequencies to treatment at a given phase at the median amongst frequencies that are nonzero. This procedure for determining the stratification of treatment was performed in order to have meaningful distinctions between frequencies of treatment given the distribution of treatment frequency is heavily skewed right for all four season phases as shown in the histograms below. The benefit of the way the treatment frequencies were stratified is that the frequency of zero represents its own category since it is by far the largest and there is still a distinction between a low nonzero frequency of treatment and a high nonzero frequency of treatment.
+
+```{r}
+par(mfrow=c(2,2))
+par(mai=c(0.65,0.65,0.63,0.63))
+hist(treatment_categories$Frequency_Early,main = "Histogram of Treatment Frequency in Early Season Phase",xlab="Treatment Frequency in Early Season Phase",cex.main=0.6, cex.lab=0.6)
+hist(treatment_categories$Frequency_Mid,main="Histogram of Treatment Frequency in Mid Season Phase",xlab="Treatment Frequency in Mid Season Phase",cex.main=0.6, cex.lab=0.6)
+hist(treatment_categories$Frequency_Late,main="Histogram of Treatment Frequency in Late Season Phase",xlab="Treatment Frequency in Late Season Phase",cex.main=0.6, cex.lab=0.6)
+hist(treatment_categories$Total_Treatment_Frequency,main="Histogram of Treatment Frequency for Entire Season",xlab="Treatment Frequency for Entire Season",cex.main=0.6, cex.lab=0.6)
+```
+
+## Unadjusted Mean Outcomes
+
+Below are the mean, standard error and 95% confidence interval for each of the three strata (Q1 = no treatment, Q2 = low treatment frequency, Q3 = high treatment frequency) in each of the four categories for each of the two outcome variables. Standard errors are calculated using bootstrap resampling.
+
+```{r}
+library(dplyr)
+library(boot)
+
+# Function to calculate the mean for a specific quantile group
+calculate_mean <- function(data, outcome_var, quantile_group) {
+  mean(data[[outcome_var]], na.rm = TRUE)
+}
+
+# Function to bootstrap standard error for the mean
+bootstrap_mean_se <- function(data, outcome_var, R = 1000) {
+  boot_fn <- function(data, indices) {
+    sampled_data <- data[indices, ]
+    mean(sampled_data[[outcome_var]], na.rm = TRUE)
+  }
+  
+  boot_result <- boot(data, statistic = boot_fn, R = R)
+  se <- sd(boot_result$t, na.rm = TRUE)
+  
+  list(se = se, ci = quantile(boot_result$t, c(0.025, 0.975), na.rm = TRUE))
+}
+
+# Main function to calculate mean, SE, and CI for each quantile group
+calculate_metrics <- function(data, outcome_var, quantile_column, quantile_value, R = 1000) {
+  # Filter data for the specific quantile
+  filtered_data <- data %>% filter(!!sym(quantile_column) == quantile_value)
+  # Calculate mean
+  mean_value <- calculate_mean(filtered_data, outcome_var, quantile_column)
+  
+  # Bootstrap SE and CI
+  bootstrap_result <- bootstrap_mean_se(filtered_data, outcome_var, R)
+  
+  tibble(
+    Outcome = outcome_var,
+    Stratum = quantile_value,
+    Phase = sub("_Quantile", "", quantile_column),
+    Mean = mean_value,
+    SE = bootstrap_result$se,
+    CI_Lower = bootstrap_result$ci[1],
+    CI_Upper = bootstrap_result$ci[2]
+  )
+}
+
+# Columns for quantiles and outcomes
+quantile_columns <- c("Early_Quantile", "Mid_Quantile", "Late_Quantile", "Total_Quantile")
+outcome_vars <- c("Injury_Frequency", "Games_Missed_Frequency")
+quantile_values <- c("Q1", "Q2", "Q3")  # Quantiles Q1, Q2, Q3
+
+# Calculate metrics for each combination of quantile group, phase, and outcome
+results <- lapply(outcome_vars, function(outcome_var) {
+  lapply(quantile_columns, function(quantile_column) {
+    lapply(quantile_values, function(quantile_value) {
+      calculate_metrics(treatment_categories, outcome_var, quantile_column, quantile_value)
+    }) %>%
+      bind_rows()
+  }) %>%
+    bind_rows()
+}) %>%
+  bind_rows()
+
+# View the results
+print(results,n=nrow(results))
+
+```
+
+
+
+### Models
+
+The models that were fit for this project are a propensity score model using all of the covariates in the table in the Treatment and Covariates section and a marginal structural model (MSM) that estimates the mean of one of the outcomes in a given season phase using the treatment along with the season-level covariates and weighted using the inverse probability weights. Since the propensity scores are calculated for each game and the outcomes of the MSM are over the course of the entire season, the weights of the MSM are calculated using the sum of propensity scores for a given player within the given season phase. The propensity score model will only be fit once because it is only used to predict the binary treatment of being held out of one game of a back to back. The MSM was fit for eight different combinations of outcome and season phase. The two outcomes are injury frequency and games missed frequency within each of the season phases as described in the Outcomes section. The model estimates the mean for each stratum for each of these outcomes and season phases.
+
+Missing covariate values are not prevalent because the data sources are very reliable and any inconsistencies have been eliminated in the process of transforming the data. However, there are cases in which a player did not play in any back to backs in a given season phase (early mid, or late) in a given season. In this case the player in the given season is not considered in the model for that season phase. No variable selection methods were used to fit either the propensity score model or the MSM.
+
+### Results
+
+Below is the summary of the propensity score model:
+
+```{r}
+# Define the formula for the logistic regression model
+propensity_formula <- treatment ~ distance_average + 
+  Rolling_Avg_MP + 
+  Age + 
+  MPG + 
+  Games_Missed_Frequency_Career +
+  PG + 
+  SG + 
+  SF + 
+  PF + 
+  C + 
+  Is_2019_20 + 
+  Is_2020_21 + 
+  Is_2021_22 + 
+  Is_3rd_Game_in_4_Days + 
+  Is_4th_Game_in_5_Days + 
+  Is_5th_Game_in_7_Days
+
+# Fit the logistic regression model
+propensity_model <- glm(
+  formula = propensity_formula,
+  data = b2b_of_interest,
+  family = binomial(link = "logit")
+)
+
+# Summarize the model
+summary(propensity_model)
+
+# Predicted propensity scores
+b2b_of_interest$propensity_score <- predict(propensity_model, type = "response")
+```
+
+Below is a plot of the weighted vs unweighted standardized mean differences (SMDs). As anticipated, none of the weighted SMDs are significantly greater than 0.1 in magnitude. Note that these weights are not the same weights as the ones used in the MSM. These are traditional inverse probability weights to align with the game-level covariates, while those used in the MSM are the sum of these weights in a given season phase for a given player to align with the season-level covaroiates and outcomes of the MSM.
+
+```{r}
+library(cobalt)
+library(ggplot2)
+
+# Step 1: Calculate weights based on propensity scores in `b2b_of_interest`
+b2b_of_interest$weights <- ifelse(b2b_of_interest$treatment == 1, 
+                                  1 / b2b_of_interest$propensity_score, 
+                                  1 / (1 - b2b_of_interest$propensity_score))
+
+# Step 2: Use the `bal.tab` function from the cobalt package to calculate SMDs
+balance_results <- bal.tab(treatment ~ distance_average + Rolling_Avg_MP + Age + MPG + Games_Missed_Frequency_Career +
+                           PG + SG + SF + PF + C + Is_2019_20 + Is_2020_21 + Is_2021_22 +
+                           Is_3rd_Game_in_4_Days + Is_4th_Game_in_5_Days + Is_5th_Game_in_7_Days, 
+                           data = b2b_of_interest, 
+                           weights = b2b_of_interest$weights, 
+                           method = "weighting", 
+                           estimand = "ATE", # Change to "ATT" if appropriate
+                           un = TRUE)  # Calculate both unweighted and weighted SMDs
+
+# Step 3: Extract the standardized mean differences for plotting
+smd_data <- data.frame(
+  Covariate = rownames(balance_results$Balance),
+  Unweighted_SMD = balance_results$Balance$Diff.Un,
+  Weighted_SMD = balance_results$Balance$Diff.Adj
+)
+
+# Step 4: Create the line plot of both unweighted and weighted SMDs using ggplot2
+ggplot(smd_data, aes(x = Covariate)) +
+  geom_line(aes(y = Unweighted_SMD, color = "Unweighted"), group = 1, size = 1) +
+  geom_line(aes(y = Weighted_SMD, color = "Weighted"), group = 1, size = 1) +
+  geom_point(aes(y = Unweighted_SMD, color = "Unweighted"), size = 3) +
+  geom_point(aes(y = Weighted_SMD, color = "Weighted"), size = 3) +
+  scale_color_manual(values = c("Unweighted" = "red", "Weighted" = "blue")) +
+  labs(title = "Standardized Mean Differences Before and After Weighting",
+       x = "Covariates",
+       y = "Standardized Mean Difference (SMD)",
+       color = "SMD Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+# Ensure the necessary libraries are loaded
+library(tidyr)
+
+# Step 2: Calculate aggregated weights for each phase
+aggregated_weights <- b2b_of_interest %>%
+  group_by(Player, Season, Season_Phase) %>%
+  summarise(Aggregated_Weights = sum(weights, na.rm = TRUE), .groups = "drop")
+
+# Step 3: Pivot the data to get separate columns for each phase
+aggregated_weights <- aggregated_weights %>%
+  pivot_wider(names_from = Season_Phase, values_from = Aggregated_Weights, names_prefix = "Weight_")
+
+# Step 4: Calculate the total aggregated weights for the entire season
+aggregated_weights <- aggregated_weights %>%
+  rowwise() %>%
+  mutate(Weight_Total = sum(c_across(starts_with("Weight_")), na.rm = TRUE)) %>%
+  ungroup()
+
+# Step 5: Merge aggregated weights into the treatment_categories data frame
+treatment_categories <- treatment_categories %>%
+  left_join(aggregated_weights, by = c("Player", "Season"))
+```
+
+```{r}
+# Step 1: Add season-level covariates to treatment_categories
+season_covariates <- b2b_of_interest %>%
+  group_by(Player, Season) %>%
+  summarise(
+    Age = first(Age),
+    MPG = first(MPG),
+    Games_Missed_Frequency_Career = first(Games_Missed_Frequency_Career),
+    PG = first(PG),
+    SG = first(SG),
+    SF = first(SF),
+    PF = first(PF),
+    C = first(C),
+    Is_2019_20 = first(Is_2019_20),
+    Is_2020_21 = first(Is_2020_21),
+    Is_2021_22 = first(Is_2021_22),
+    .groups = "drop"
+  )
+
+treatment_categories <- treatment_categories %>%
+  left_join(season_covariates, by = c("Player", "Season"))
+
+# Remove ".y" suffix from column names and keep original columns
+treatment_categories <- treatment_categories %>%
+  rename_with(~ gsub("\\.y$", "", .), ends_with(".y"))
+
+# Step 2: Normalize weights
+treatment_categories <- treatment_categories %>%
+  mutate(
+    Normalized_Weight_Early = Weight_Early / mean(Weight_Early, na.rm = TRUE),
+    Normalized_Weight_Mid = Weight_Mid / mean(Weight_Mid, na.rm = TRUE),
+    Normalized_Weight_Late = Weight_Late / mean(Weight_Late, na.rm = TRUE),
+    Normalized_Weight_Total = Weight_Total / mean(Weight_Total, na.rm = TRUE)
+  )
+```
+
+Below are the estimated mean, standard error and 95% confidence interval for each of the three strata (Q1 = no treatment, Q2 = low treatment frequency, Q3 = high treatment frequency) in each of the four categories for each of the two outcome variables using the MSM. Standard errors are calculated using bootstrap resampling.
+
+```{r}
+# Function to fit MSM with treatment group
+fit_msm <- function(data, outcome_var, weight_var, covariates, treatment_column) {
+  # Define the formula
+  formula <- as.formula(paste(outcome_var, "~", paste(c(covariates, treatment_column), collapse = " + ")))
+  
+  # Fit weighted regression model (MSM)
+  msm_model <- lm(formula, data = data, weights = data[[weight_var]])
+  
+  # Predict means for each treatment group
+  predict_mean <- function(treatment_value) {
+    dummy_data <- data %>%
+      mutate(!!sym(treatment_column) := treatment_value)
+    mean(predict(msm_model, newdata = dummy_data), na.rm = TRUE)
+  }
+  
+  means <- sapply(c("Q1", "Q2", "Q3"), predict_mean)
+  
+  # Manual bootstrap for SE and CI
+  R <- 1000  # Number of bootstrap iterations
+  bootstrap_estimates <- matrix(NA, nrow = R, ncol = 3, dimnames = list(NULL, c("Q1", "Q2", "Q3")))
+  
+  for (r in seq_len(R)) {
+    # Sample with replacement
+    sampled_indices <- sample(seq_len(nrow(data)), replace = TRUE)
+    sampled_data <- data[sampled_indices, ]
+    
+    # Fit the model on the bootstrap sample
+    msm_model_boot <- lm(formula, data = sampled_data, weights = sampled_data[[weight_var]])
+    
+    # Predict means for each treatment group in bootstrap
+    bootstrap_estimates[r, ] <- sapply(c("Q1", "Q2", "Q3"), function(treatment_value) {
+      dummy_data <- sampled_data %>%
+        mutate(!!sym(treatment_column) := treatment_value)
+      mean(predict(msm_model_boot, newdata = dummy_data), na.rm = TRUE)
+    })
+  }
+  
+  # Calculate SE and CI
+  results <- lapply(seq_along(means), function(i) {
+    se <- sd(bootstrap_estimates[, i], na.rm = TRUE)
+    ci <- quantile(bootstrap_estimates[, i], c(0.025, 0.975), na.rm = TRUE)
+    list(Mean = means[i], SE = se, CI = ci)
+  })
+  
+  # Return a tidy data frame
+  tibble(
+    Quantile = c("Q1", "Q2", "Q3"),
+    Mean = sapply(results, `[[`, "Mean"),
+    SE = sapply(results, `[[`, "SE"),
+    CI_Lower = sapply(results, function(x) x$CI[1]),
+    CI_Upper = sapply(results, function(x) x$CI[2])
+  )
+}
+
+# Variables for MSM
+covariates <- c(
+  "Age", "MPG", "Games_Missed_Frequency_Career",
+  "Is_2019_20", "Is_2020_21", "Is_2021_22"
+)
+quantile_columns <- c("Early_Quantile", "Mid_Quantile", "Late_Quantile", "Total_Quantile")
+weight_vars <- c("Normalized_Weight_Early", "Normalized_Weight_Mid", "Normalized_Weight_Late", "Normalized_Weight_Total")
+outcome_vars <- c("Injury_Frequency", "Games_Missed_Frequency")
+quantile_values <- c("Q1", "Q2", "Q3")  # Treatment quantiles
+
+# Function to fit MSM and calculate metrics for each quantile group
+calculate_msm_metrics <- function(data, outcome_var, quantile_column, weight_var) {
+  # Filter data for the specific quantile
+  filtered_data <- data %>% filter(!is.na(!!sym(quantile_column)))
+  
+  # Skip if no data for the quantile
+  if (nrow(filtered_data) == 0) {
+    return(tibble(
+      Outcome = outcome_var,
+      Phase = sub("_Quantile", "", quantile_columns),
+      Stratum = quantile_values,
+      Mean = NA,
+      SE = NA,
+      CI_Lower = NA,
+      CI_Upper = NA
+    ))
+  }
+  
+  # Fit MSM and extract results
+  msm_result <- fit_msm(
+    data = filtered_data,
+    outcome_var = outcome_var,
+    weight_var = weight_var,
+    covariates = covariates,
+    treatment_column = quantile_column
+  )
+  
+  msm_result %>%
+    mutate(Outcome = outcome_var, Phase = sub("_Quantile", "", quantile_column))
+}
+
+# Main loop to calculate MSM metrics
+results <- lapply(seq_along(quantile_columns), function(i) {
+  quantile_column <- quantile_columns[i]
+  weight_var <- weight_vars[i]
+  lapply(outcome_vars, function(outcome_var) {
+    calculate_msm_metrics(treatment_categories, outcome_var, quantile_column, weight_var)
+  }) %>%
+    bind_rows()
+}) %>%
+  bind_rows()
+
+# View the results
+print(results,n=nrow(results))
+
+```
+
+Below are the differences in means and tests for significance using a two sample Z test between strata for the same outcome and phase.
+
+```{r}
+# Function to test significance between two groups
+test_significance <- function(mean1, mean2, se1, se2) {
+  # Compute the test statistic
+  z_stat <- abs(mean1 - mean2) / sqrt(se1^2 + se2^2)
+  # Compute the p-value for a two-tailed test
+  p_value <- 2 * (1 - pnorm(z_stat))
+  # Return significance at the 0.01 level
+  p_value < 0.01
+}
+
+# Modified function to compare means between groups
+compare_mean_differences <- function(results) {
+  comparisons <- list()
+  
+  for (outcome in unique(results$Outcome)) {
+    for (phase in unique(results$Phase)) {
+      # Subset results for the specific outcome and phase
+      subset_results <- results %>%
+        filter(Outcome == outcome, Phase == phase)
+      
+      # Ensure we have the necessary rows for comparison
+      if (nrow(subset_results) == 3) {
+        # Extract means and SEs for each quantile
+        mean_q1 <- subset_results$Mean[1]
+        mean_q2 <- subset_results$Mean[2]
+        mean_q3 <- subset_results$Mean[3]
+        se_q1 <- subset_results$SE[1]
+        se_q2 <- subset_results$SE[2]
+        se_q3 <- subset_results$SE[3]
+        
+        # Compute differences and test significance
+        diff_q1_q2 <- mean_q1 - mean_q2
+        diff_q2_q3 <- mean_q2 - mean_q3
+        diff_q1_q3 <- mean_q1 - mean_q3
+        
+        significance_q1_q2 <- test_significance(mean_q1, mean_q2, se_q1, se_q2)
+        significance_q2_q3 <- test_significance(mean_q2, mean_q3, se_q2, se_q3)
+        significance_q1_q3 <- test_significance(mean_q1, mean_q3, se_q1, se_q3)
+        
+        # Store results
+        comparisons[[length(comparisons) + 1]] <- tibble(
+          Outcome = outcome,
+          Phase = phase,
+          Comparison = "Q1 vs Q2",
+          Difference = diff_q1_q2,
+          Significant_0.01 = significance_q1_q2
+        )
+        comparisons[[length(comparisons) + 1]] <- tibble(
+          Outcome = outcome,
+          Phase = phase,
+          Comparison = "Q2 vs Q3",
+          Difference = diff_q2_q3,
+          Significant_0.01 = significance_q2_q3
+        )
+        comparisons[[length(comparisons) + 1]] <- tibble(
+          Outcome = outcome,
+          Phase = phase,
+          Comparison = "Q1 vs Q3",
+          Difference = diff_q1_q3,
+          Significant_0.01 = significance_q1_q3
+        )
+      }
+    }
+  }
+  
+  bind_rows(comparisons)
+}
+
+# Run the comparison function on the results
+difference_results <- compare_mean_differences(results)
+
+# View the results
+print(difference_results,n=nrow(difference_results))
+
+```
+
+
+## Discussion
+
+The results in the previous section do not provide evidence that holding players out of back to back games reduces either injury frequency or frequency of games missed. In fact, depending on the season phase, many of the estimates for injury frequency and frequency of games missed were significantly higher for the groups which received treatment than the group that did not. The differences are particularly striking for the group which had a high frequency of treatment (Q3).
+
+For both injury frequency and frequency of games missed, the estimates are lower for all strata for the late season phase than both the early and mid season phases. One possible explanation for this is that some injury prone players are not included in the late season phase because they were injured in the early or mid season phase and did not play any games in the late season phase as a result. Since this occurs across all strata and not just in treated groups, there is no evidence to suggest that resting a player during one phase of the season yields better injury outcomes than another.
+
+A wide breadth of potential confounding variables that may influence both the decision to hold a player out of half of a back to back and the likelihood and severity of injury are considered in this study. However, it is critical to acknowledge that the techniques used in this study require the assumption that there are no unmeasured confounding variables and that this may be violated. In particular, the fact that the mean estimates using the MSM are often close to their unadjusted counterparts suggests that it is quite possible that there are additional confounding factors. It is a particularly difficult problem because teams are strongly incentivized to sit players that they fear are likely to be injured and this assessment may involve many variables or considerations other than those included in this study. 
+
+## References
+
+1: Bontemps, Tim. “NBA Report: No Link Between Load Management, Less Injury Risk.” ESPN, ESPN Internet Ventures, 11 Jan. 2024, www.espn.com/nba/story/_/id/39288379/nba-report-no-link-load-management-less-injury-risk. 
+
+2: Fernandez, J. (2020). airball: Schedule & Travel Related Metrics in Basketball. R package version 0.4.0. https://github.com/josedv82/airball
+
+3: Orringer, M. J., & Pandya, N. K. (2022). Acutely increased workload is correlated with significant injuries among national basketball association players. International Journal of Sports Science & Coaching, 17(3), 568-575. https://doi.org/10.1177/17479541211037037
+
+4: Teramoto M, Cross CL, Cushman DM, Maak TG, Petron DJ, Willick SE. Game injuries in relation to game schedules in the National Basketball Association. J Sci Med Sport. 2017 Mar;20(3):230-235. doi: 10.1016/j.jsams.2016.08.020. Epub 2016 Sep 1. PMID: 27622705.
+
