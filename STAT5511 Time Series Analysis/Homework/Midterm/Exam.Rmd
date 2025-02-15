@@ -1,0 +1,359 @@
+---
+title: "STAT 5511 Midterm"
+author: "Alex Ojemann"
+date: "2024-12-03"
+output: 
+  pdf_document:
+    toc: true       # Enable Table of Contents
+    toc_depth: 2    # Set depth of TOC (e.g., 2 for sections and subsections)
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Question 1 (Analysis of dat1)
+
+### Summary
+
+For the series $Y_t = X_t$ I chose an ARIMA(1,1,2) model excluding the intercept term. The parameter estimates are $\phi_1 = -0.582$, $\theta_1 = 0.5722$, and $\theta_2 = 0.4589$.
+
+```{r}
+load("mid-data.rsav")
+library(astsa)
+```
+
+```{r}
+xx <- dat1
+sarima(xx, 1,1,2,no.constant=T,details=F)
+```
+
+### Explanation
+
+The initial plot and ACF and PACF of $X_t$ suggest that we need to perform a first difference because it is not stationary. After the first difference, the ACF and PACF suggest that there is no seasonality. The significant lags of the ACF cut off for the most part after lag 4 and those of the PACF cut off after lag 5, so we fit different models on the first differenced data with a maximum p of 5 and a maximum q of 4. 15 of the 30 models had an AICc multiplied by the length of the series within 5 of the minimum, and only five had a BIC multiplied by the length of the series within 10 of the minimum. The five which met both of these criteria were ARMA(1,2), ARMA(1,3), ARMA(2,2), ARMA(2,3), and ARMA(5,0). Of these, the ARMA(1,2) was chosen because it has the second best AICc, the best BIC, and the highest LBP values. So the final model on the original series $X_t$ is ARIMA(1,1,2). The intercept was not included because it was not significant at any level.
+
+### Output
+
+```{r}
+plot(xx)
+```
+```{r}
+invisible(acf2(xx))
+```
+```{r}
+dxx <- diff(xx)
+plot(dxx)
+```
+```{r}
+invisible(acf2(dxx))
+```
+```{r}
+maxAR<-5+1
+maxMA<-4+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(dxx,p=ii-1,d=0,q=jj-1,no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+ARMA(1,2) on differenced data:
+```{r}
+sarima(dxx, 1,0,2,no.constant=F,details=T)
+```
+
+ARMA(1,3) on differenced data:
+```{r}
+sarima(dxx, 1,0,3,no.constant=F,details=T)
+```
+
+ARMA(2,2) on differenced data:
+```{r}
+sarima(dxx, 2,0,2,no.constant=F,details=T)
+```
+
+ARMA(2,3) on differenced data:
+```{r}
+sarima(dxx, 2,0,3,no.constant=F,details=T)
+```
+
+ARMA(5,0) on differenced data:
+```{r}
+sarima(dxx, 5,0,0,no.constant=F,details=T)
+```
+
+Final choice: ARMA(1,2) (ARIMA(1,1,2) on before differencing) with no intercept:
+ARMA(1,2) on differenced data:
+```{r}
+sarima(dxx, 1,0,2,no.constant=T,details=T)
+```
+
+\newpage
+
+## Question 2 (Analysis of dat2)
+
+### Summary
+
+For the series $Y_t = X_t$ I chose an ARIMA(1,0,3) model including the intercept term. The parameter estimates are $\phi_1 = 0.2522$, $\theta_1 = -0.1692$, $\theta_2 = -0.0476$, $\theta_3 = -0.3471$, and xmean = 3.1994.
+
+```{r}
+xx <- dat2
+sarima(xx, 1,0,3,no.constant=F,details=F)
+```
+
+### Explanation
+
+The initial plot and ACF and PACF of $X_t$ suggest that the series is stationary. The ACF and PACF suggest that there is no seasonality. The significant lags of the ACF cut off for the most part after lag 3 and those of the PACF cut off after lag 3, so we fit different models on the first differenced data with a maximum p of 3 and a maximum q of 3. 7 of the 16 models had an AICc multiplied by the length of the series within 10 of the minimum, and six had a BIC multiplied by the length of the series within 10 of the minimum. The six which met both of these criteria were ARMA(0,3), ARMA(1,3), ARMA(2,3), ARMA(3,0), ARMA(3,1), and ARMA(3,2). Of these, the ARMA(1,3) was chosen because it has the best AICc, the second best BIC, and the highest LBP values. So the final model on the original series $X_t$ is ARIMA(1,0,3). The intercept was included because it was signifficant at all levels.
+
+### Output
+
+```{r}
+plot(xx)
+```
+
+```{r}
+invisible(acf2(xx))
+```
+
+```{r}
+library(astsa)
+maxAR<-3+1
+maxMA<-3+1
+fits_all<-vector("list",length=maxAR)
+AICmin<-BICmin<-Inf
+for (ii in 1:maxAR){
+fits_all[[ii]]<-vector("list",length=maxMA)
+for (jj in 1:maxMA){
+fits_all[[ii]][[jj]]<-invisible(sarima(xx,p=ii-1,d=0,q=jj-1,no.constant=FALSE, details=FALSE))
+if(fits_all[[ii]][[jj]]$ICs["AICc"]<AICmin) AICmin<-fits_all[[ii]][[jj]]$ICs["AICc"]
+if(fits_all[[ii]][[jj]]$ICs["BIC"]<BICmin) BICmin<-fits_all[[ii]][[jj]]$ICs["BIC"]
+}
+}
+nn <- length(xx)
+#look at AICs and BICs
+print("check AICcs")
+## [1] "check AICcs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["AICc"] - AICmin) * nn)
+}
+}
+print("check BICs")
+## [1] "check BICs"
+for (ii in 1:maxAR){
+for(jj in 1:maxMA){
+print(paste0(ii-1,"",jj-1))
+print(((fits_all[[ii]][[jj]])$ICs["BIC"] - BICmin) * nn)
+}
+}
+```
+ARMA(0,3):
+```{r}
+sarima(xx, 0,0,3,no.constant=F,details=T)
+```
+
+ARMA(1,3):
+```{r}
+sarima(xx, 1,0,3,no.constant=F,details=T)
+```
+
+ARMA(2,3):
+```{r}
+sarima(xx, 2,0,3,no.constant=F,details=T)
+```
+
+ARMA(3,0):
+```{r}
+sarima(xx, 3,0,0,no.constant=F,details=T)
+```
+
+ARMA(3,1):
+```{r}
+sarima(xx, 3,0,1,no.constant=F,details=T)
+```
+
+ARMA(3,2):
+```{r}
+sarima(xx, 3,0,2,no.constant=F,details=T)
+```
+
+\newpage
+
+## Question 3 (Analysis of dat3)
+
+### Summary
+
+For the series $Y_t = X_t$ I chose an SARIMA(1,0,2)x(1,1,1) model excluding the intercept term. The parameter estimates are $\phi_1 = 0.4565$, $\theta_1 = 0.0006$, $\theta_2 = 0.2974$, $\Phi_1 = 0.4469$, and $\Theta_1 = -0.9728$.
+
+```{r}
+xx <- dat3
+sarima(xx, p = 1, d = 0, q = 2, P = 1, D = 1,
+Q = 1, S = 10,no.constant=F,details=F)
+```
+
+### Explanation
+
+The initial plot and ACF and PACF of $X_t$ suggest that the series is stationary so we don't need to take a non-seasonal difference but there is a seasonality of 10 so we should take a seasonal difference at lag 10. After the seasonal difference, the significant non seasonal lags of the ACF cut off for the most part after lag 4 and those of the PACF cut off after lag 3, while the significant seasonal lags of the ACF cut off for the most part after lag 2 and those of the PACF cut off after lag 2, so we fit different models on the first seasonally differenced data with a maximum p of 3, a maximum q of 4, a maximum P of 2 and a maximum Q of 2. Many of the models had AICcs very close to the minimum so only models with a BIC multipled by the length of the series within 5 of the minimum were considered. The ones which met this criteria were SARMA(1,2)x(1,1), SARMA(1,2)x(1,2), SARMA(1,2)x(2,1), SARMA(2,0)x(1,1), SARMA(2,1)x(1,1), SARMA(3,0)x(1,1), SARMA(3,0)x(1,2) and SARMA(3,0)x(2,1). Of these, the SARMA(1,2)x(1,1) was chosen because it has the best BIC and the highest LBP values. So the final model on the original series $X_t$ is SARIMA(1,0,2)x(1,1,1)[10]. The intercept was not included because it was not significant at any level. One additional note is that all models had a heavy right tail in the normal QQ plot of the standardized residuals, but there is not much we can do about this as it is caused by the large spike in the series.
+
+### Output
+
+```{r}
+plot(xx)
+```
+
+```{r}
+invisible(acf2(xx))
+```
+
+```{r}
+Dxx <- diff(xx,lag=10)
+plot(Dxx)
+```
+
+```{r}
+invisible(acf2(Dxx))
+```
+
+```{r}
+maxAR <- 3+1
+maxMA <- 4+1
+maxSAR <- 2+1
+maxSMA <- 2+1
+fits_all <- array(list(), dim = c(maxAR, maxMA, maxSAR, maxSMA))
+AICmin <- BICmin <- Inf
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+if(!(ii==4 && jj == 5 && kk == 2 && ll == 3)){ #Condition because (3,4)x(1,2) caused an error
+fits_all[[ii, jj, kk, ll]] <- astsa::sarima(Dxx, p = ii - 1, d = 0,
+q = jj - 1, P = kk - 1, D = 0, Q = ll - 1, S = 10, no.constant = F,
+details = F)
+if (fits_all[[ii, jj, kk, ll]]$ICs["AICc"] < AICmin)
+AICmin <- fits_all[[ii, jj, kk, ll]]$ICs["AICc"]
+if (fits_all[[ii, jj, kk, ll]]$ICs["BIC"] < BICmin)
+BICmin <- fits_all[[ii, jj, kk, ll]]$ICs["BIC"]
+}
+}
+}
+}
+}
+```
+```{r}
+print("AICcs")
+## [1] "AICcs"
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+if(!(ii==4 && jj == 5 && kk == 2 && ll == 3)){ #Condition because (3,4)x(1,2) caused an error
+AICdelta <- ((fits_all[[ii, jj, kk, ll]])$ICs["AICc"] - AICmin) * nn
+if (AICdelta < 10) {
+print(paste0("(", ii - 1, ", ", jj - 1, ") x (", kk - 1, ", ",
+ll - 1, ")"))
+print(AICdelta)
+}
+}
+}
+}
+}
+}
+```
+```{r}
+print("BICs")
+## [1] "BICs"
+for (ii in 1:maxAR) {
+for (jj in 1:maxMA) {
+for (kk in 1:maxSAR) {
+for (ll in 1:maxSMA) {
+if(!(ii==4 && jj == 5 && kk == 2 && ll == 3)){ #Condition because (3,4)x(1,2) caused an error
+BICdelta <- ((fits_all[[ii, jj, kk, ll]])$ICs["BIC"] - BICmin) * nn
+if (BICdelta < 14) {
+print(paste0("(", ii - 1, ", ", jj - 1, ") x (", kk - 1, ", ",
+ll - 1, ")"))
+print(BICdelta)
+}
+}
+}
+}
+}
+}
+```
+
+SARMA(1,2)x(1,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 1, d = 0, q = 2, P = 1, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+SARMA(1,2)x(1,2) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 1, d = 0, q = 2, P = 1, D = 0,
+Q = 2, S = 10,no.constant=F,details=T)
+```
+
+SARMA(1,2)x(2,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 1, d = 0, q = 2, P = 2, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+SARMA(2,0)x(1,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 2, d = 0, q = 0, P = 1, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+SARMA(2,1)x(1,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 2, d = 0, q = 1, P = 1, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+SARMA(3,0)x(1,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 3, d = 0, q = 0, P = 1, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+SARMA(3,0)x(1,2) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 3, d = 0, q = 0, P = 1, D = 0,
+Q = 2, S = 10,no.constant=F,details=T)
+```
+
+SARMA(3,0)x(2,1) on seasonally differenced data:
+```{r}
+sarima(Dxx, p = 3, d = 0, q = 0, P = 2, D = 0,
+Q = 1, S = 10,no.constant=F,details=T)
+```
+
+Final choice: SARMA(1,2)x(1,1) on seasonally differenced data with no intercept term:
+```{r}
+sarima(Dxx, p = 1, d = 0, q = 2, P = 1, D = 0,
+Q = 1, S = 10,no.constant=T,details=T)
+```
+
