@@ -1,0 +1,102 @@
+---
+title: "Homework 1"
+author: "Alex Ojemann"
+date: "2025-02-04"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE,message = FALSE, warning = FALSE)
+```
+
+## Problem 1
+
+### Part a
+
+If you win the lottery on your first try, your odds of winning the lottery on your next try using the framework of the journal example from class could be the same as before (extremely unlikely), a direct estimate from the data you have (100%), or somewhere in between. While the Bayesian approach is to say that it's somewhere in between, the lottery is designed to be random and not involve any particular skill, so in practice it is more likely the same as before.
+
+### Part b
+
+If you predict the winner of game 1 of the World Series, your odds of predicting the winner of game 2 of the World Series using the framework of the journal example from class could be the same as before (50% assuming you have no prior knowledge of your own skill), a direct estimate from the data you have (100%), or somewhere in between. In this case, the Bayesian approach of choosing somewhere in between makes a lot of sense because the direct estimate from the data suffers from an extremely small sample, but assuming the same odds as before does not take into account the data we have that suggests you may have abilities to assess the teams' chances of winning that exceeds the 50% chance of picking the winner assumed without the use of any data.
+
+## Problem 2
+
+### Part a
+
+$B = 2 / (2 + 2) = 1/2$
+
+Mean of posterior = $0/2 + 4/2 = 2$
+
+Variance of posterior = $2/2 = 1$
+
+Standard deviation of posterior = 1
+
+Black = prior, red = data given prior, blue = posterior.
+
+```{r}
+rm(list=ls())
+curve(dnorm(x,mean=0,sd=1.414),from=-5,to=10,col='black',ylim = c(0,0.4))
+curve(dnorm(x,mean=4,sd=1.414),from=-5,to=10,col='red',add=TRUE,ylim = c(0,0.4))
+curve(dnorm(x,mean=2,sd=1),from=-5,to=10,col='blue',add=TRUE,ylim = c(0,0.4))
+#the "x" in the dnorm will be replaced with numbers between "from" and "to"
+#"add=TRUE" is the command to add the new curve to the existing plot
+#If you run into issues where a subsequent curve has a higher max density,
+# you can set "ylim=c(0,something)" in the initial "curve()" statement,
+# where "something" is some number bigger than the height of your curves
+```
+
+### Part b
+
+$B = 2 / (2 + 18) = 1/10$
+
+Mean of posterior = $0/10 + 9*4/10 = 3.6$
+
+Variance of posterior = $9*2/10 = 1.8$
+
+Standard deviation of posterior = sqrt(1.8) = 1.342
+
+Black = prior, red = data given prior, blue = posterior.
+
+```{r}
+rm(list=ls())
+curve(dnorm(x,mean=0,sd=4.243),from=-10,to=15,col='black',ylim = c(0,0.4))
+curve(dnorm(x,mean=4,sd=1.414),from=-10,to=15,col='red',add=TRUE,ylim = c(0,0.4))
+curve(dnorm(x,mean=3.6,sd=1.342),from=-10,to=15,col='blue',add=TRUE,ylim = c(0,0.4))
+#the "x" in the dnorm will be replaced with numbers between "from" and "to"
+#"add=TRUE" is the command to add the new curve to the existing plot
+#If you run into issues where a subsequent curve has a higher max density,
+# you can set "ylim=c(0,something)" in the initial "curve()" statement,
+# where "something" is some number bigger than the height of your curves
+```
+
+The posterior is much closer to the data now because the variance of the prior is increased significantly. This prior would have more appeal to a frequentist statistician because the assumptions made in the prior are much weaker in this one and in frequentist statistics no prior assumptions are made at all.
+
+## Problem 3
+
+### Part a
+
+$2/6$
+
+### Part b
+
+P(blue) = P(blue|1)P(1) + P(blue|2)P(2) = .536
+
+### Part c
+
+P(2|blue) = P(blue|2)P(2) / P(blue) = $0.333 * 0.617 / 0.536 = 0.384$
+
+## Problem 4
+
+### Part a
+
+Yes, there is a statistically significant difference using this method.
+
+### Part b
+
+No, there is not a statistically significant difference using this method.
+
+### Part c
+
+These two analyses do not yield similar answers. I think the more appropriate analysis is that of part b because the proportion of counties with higher than average rates weights each county equally whether it's big or small and it may be sensitive to small samples in some of the smaller individual rural counties.
+
+
