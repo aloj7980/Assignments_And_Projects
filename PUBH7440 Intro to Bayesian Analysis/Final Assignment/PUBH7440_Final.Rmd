@@ -1,0 +1,338 @@
+---
+title: "Final"
+author: "Alex Ojemann"
+date: "2025-05-08"
+output:
+  pdf_document: default
+  html_document:
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+
+The priors for $\beta_{0rs}$ and $\beta_{1rs}$ can be considered noninformative because they are normally distributed with very small precision which mimics a uniform distribution as the precision approaches 0.
+
+The model converged reasonably well. After 5000 iterations of burn in, the history plots show no need for more burn in and resemble white noise, the density plots are somewhat bumpy but not concerningly so, and the ACF shows some autocorrelation for the first few lags but not much after that.
+
+![Beta 0 History Plots](beta0hist1.png)
+
+![Beta 0 Density Plots](beta0density1.png)
+
+![Beta 0 ACF Plots](beta0acf1.png)
+
+![Beta 1 History Plots](beta1hist1.png)
+
+![Beta 1 Density Plots](beta1density1.png)
+
+![Beta 1 ACF Plots](beta1acf1.png)
+
+The sex-specific ratio between black and white death rates can be tracked by adding the following code to the model
+
+```{r,eval=FALSE}
+for (s in 1:2) {
+  for (t in 1:10) {
+    log_ratio[s, t] <- (beta0[1, s] - beta0[2, s]) + (beta1[1, s] - beta1[2, s]) * (t - 1)
+    ratio_bw[s, t] <- exp(log_ratio[s, t])
+  }
+}
+```
+
+
+The mean of the black/white death rate ratio for each sex in each year is shown below:
+
+![Sex-specific Black/White Death Rate Ratios](ratios1.png)
+
+We can see that the ratio is smaller for men than it is for women and that it increased over time during the study period for both men and women.
+
+There are eight parameters in this model because there are four different combinations of race and sex and there are two parameters ($\beta_0$ and $\beta_1$) for each combination. This is very similar to the $p_D$ estimate in WinBUGS of 8.054.
+
+![WinBUGS DIC Estimate](dic1.png)
+
+\newpage
+## Problem 2
+
+The following code was used to create the model for this problem:
+
+```{r,eval=FALSE}
+model{
+  for (i in 1:N) {
+    Y[i] ~ dpois(nlambda[i])
+    nlambda[i] <- n[i] * lambda[i]
+    
+    eta[i] <- beta0[race[i], sex[i]] +
+              beta1[race[i], sex[i]] * (year[i] - 1) +
+              z[county[i], race[i], sex[i]] +
+              w[county[i], race[i], sex[i]] * (year[i] - 1)
+
+    log_lambda[i] ~ dnorm(eta[i], tau0[race[i], sex[i]])
+    lambda[i] <- exp(log_lambda[i])
+  }
+for(r in 1:Nr){ 
+    for(s in 1:Ng){ 
+      beta0[r,s] ~ dnorm(0,0.001)
+      beta1[r,s] ~ dnorm(0,0.001)
+      tau0[r, s] ~ dgamma(1,0.01)
+      tau.z[r, s] ~ dgamma(1,0.147)
+      tau.w[r, s] ~ dgamma(1,0.147)
+    }
+  }
+
+	# r = 1, s = 1
+z_group11[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[1,1])
+w_group11[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[1,1])
+for (i in 1:Ns) {
+  z[i,1,1] <- z_group11[i]
+  w[i,1,1] <- w_group11[i]
+}
+
+# r = 1, s = 2
+z_group12[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[1,2])
+w_group12[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[1,2])
+for (i in 1:Ns) {
+  z[i,1,2] <- z_group12[i]
+  w[i,1,2] <- w_group12[i]
+}
+
+# r = 2, s = 1
+z_group21[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[2,1])
+w_group21[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[2,1])
+for (i in 1:Ns) {
+  z[i,2,1] <- z_group21[i]
+  w[i,2,1] <- w_group21[i]
+}
+
+# r = 2, s = 2
+z_group22[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[2,2])
+w_group22[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[2,2])
+for (i in 1:Ns) {
+  z[i,2,2] <- z_group22[i]
+  w[i,2,2] <- w_group22[i]
+}
+
+for (s in 1:2) {  
+	for (t in 1:10) {    
+		log_ratio[s, t] <- (beta0[1, s] - beta0[2, s]) + (beta1[1, s] - beta1[2, s]) * (t - 1)    
+		ratio_bw[s, t] <- exp(log_ratio[s, t])  
+	}
+}
+  for (k in 1:sumNumNeigh) {
+    weights[k] <- 1
+  }
+  junk <- county[1] + Ns + Ny  + sumNumNeigh
+}
+```
+
+This model did not converge as well as the model in problem 1. The history and ACF plots both show significant autocorrelation and the density plots look much less normal, especially $\beta_1$ for white women.
+
+![Beta 0 History Plots](beta0hist2.png)
+
+![Beta 0 Density Plots](beta0density2.png)
+
+![Beta 0 ACF Plots](beta0acf2.png)
+
+![Beta 1 History Plots](beta1hist2.png)
+
+![Beta 1 Density Plots](beta1density2.png)
+
+![Beta 1 ACF Plots](beta1acf2.png)
+
+
+The DIC of this model is slightly lower than that of the previous model. The number of parameters in this model is 820 because there are 400 zs (one for each combo of county, sex, and race), 400 ws (same as z), four $\beta_0$s and $\beta_0$s as before, and four of each of the three tau parameters because there is one for each sex-race combo. This is higher than the 808.983 estimated by WinBUGS. They would be much closer if you didn't include the $\tau$ parameters, suggesting that these may not have much effect on the deviance of the model.
+
+![WinBUGS DIC Estimate](dic2.png)
+
+\newpage
+## Problem 3
+
+For this MCAR model, the $\tau_z$ and $\tau_w$ parameters from the model in the previous problem would be replaced by 4x4 covariance matrices, with only one for each race-sex combo. Each of these matrices are symmetric so they effectively only have 10 free parameters, the diagonal and one side of the diagonal, rather than 16. Since Everything else remains the same as for the model in the previous problem, the model has 832 parameters.
+
+Examining the posterior of these covariance matrices can be helpful in diagnosing whether the MCAR structure was beneficial. If there are high values outside of the diagonal, this reflects that there is significant correlation across groups so the MCAR structure is useful.
+
+\newpage
+##  Problem 4
+
+```{r,results='hide'}
+library(coda)
+samples <- read.coda(
+  output.file = "lambdas_2.txt",
+  index.file  = "index.txt"
+)
+
+```
+
+```{r}
+lambda_array <- array(samples, dim = c(500, 10, 2, 2, 100))
+lambda_t1 = lambda_array[,1,,,]
+lambda_t10 = lambda_array[,10,,,]
+#Medians not means, I just didn't want to change the names throughout the code
+lambda_means_1 <- apply(lambda_t1, c(2, 3, 4), median)
+lambda_means_10 <- apply(lambda_t10, c(2, 3, 4), median)
+```
+
+Get NC map
+```{r}
+library(maps)
+load('Code/County Shapefiles/nc.rdata')
+```
+
+Map code for 1979
+```{r,eval=FALSE}
+library(RColorBrewer)
+
+ncols <- 7
+
+for (s in 1:2) {
+  for (r in 1:2) {
+   cols=brewer.pal(ncols,'RdYlBu')[ncols:1]
+    tcuts=quantile(lambda_means_1[s, r, ]*100000,1:(ncols-1)/ncols)
+  tcolb=array(rep(lambda_means_1[s, r, ]*100000,each=ncols-1) > tcuts,
+  dim=c(ncols-1,100))
+  tcol =apply(tcolb,2,sum)+1
+    
+    filename <- paste0("lambda_r", as.numeric(r), "_s", as.numeric(s), "_t", 1, ".png")
+    
+    png(filename, width = 900, height = 300)
+    plot(nc, col=cols[tcol], border = "grey",
+         main = paste("Race", as.numeric(r), "- Sex", as.numeric(s), "- Year", 1))
+    legend('right',inset=c(-.01,0),xpd=TRUE,
+      legend=c(paste(
+      c('Below',round(tcuts[-(ncols-1)],0),'Over'),
+      c(' ',rep( ' - ',ncols-2),' '),
+      c(round(tcuts,0),round(tcuts[ncols-1],0)),sep='')),
+      fill=cols,title='Deaths per 100,000',bty='n',cex=1.5,
+      border='lightgray')
+    dev.off()
+  }
+}
+
+```
+
+
+Map code for 1988
+```{r,eval=FALSE}
+for (s in 1:2) {
+  for (r in 1:2) {
+   cols=brewer.pal(ncols,'RdYlBu')[ncols:1]
+    tcuts=quantile(lambda_means_10[s, r, ]*100000,1:(ncols-1)/ncols)
+  tcolb=array(rep(lambda_means_10[s, r, ]*100000,each=ncols-1) > tcuts,
+  dim=c(ncols-1,100))
+  tcol =apply(tcolb,2,sum)+1
+    
+    filename <- paste0("lambda_r", as.numeric(r), "_s", as.numeric(s), "_t", 10, ".png")
+    
+    png(filename, width = 900, height = 300)
+    plot(nc, col=cols[tcol], border = "grey",
+         main = paste("Race", as.numeric(r), "- Sex", as.numeric(s), "- Year", 10))
+    legend('right',inset=c(-.01,0),xpd=TRUE,
+      legend=c(paste(
+      c('Below',round(tcuts[-(ncols-1)],0),'Over'),
+      c(' ',rep( ' - ',ncols-2),' '),
+      c(round(tcuts,0),round(tcuts[ncols-1],0)),sep='')),
+      fill=cols,title='Deaths per 100,000',bty='n',cex=1.5,
+      border='lightgray')
+    dev.off()
+  }
+}
+```
+
+![Median Heart Disease Death Rate Per 100,000 for Black Women in 1979](lambda_r1_s1_t1.png)
+![Median Heart Disease Death Rate Per 100,000 for White Women in 1979](lambda_r2_s1_t1.png)
+
+![Median Heart Disease Death Rate Per 100,000 for Black Men in 1979](lambda_r1_s2_t1.png)
+
+![Median Heart Disease Death Rate Per 100,000 for White Men in 1979](lambda_r2_s2_t1.png)
+
+![Median Heart Disease Death Rate Per 100,000 for Black Women in 1988](lambda_r1_s1_t10.png)
+
+![Median Heart Disease Death Rate Per 100,000 for White Women in 1988](lambda_r2_s1_t10.png)
+
+![Median Heart Disease Death Rate Per 100,000 for Black Men in 1988](lambda_r1_s2_t10.png)
+
+![Median Heart Disease Death Rate Per 100,000 for White Men in 1988](lambda_r2_s2_t10.png)
+
+The race/sex combinations exhibit some common geographic trends in both years, but it is fairly limited. White men and women have counties with high rates in a very similar geographic region, but this differs from those of Black men and women and those of Black men and women differ from each other.
+
+Ratio map code for 1979
+```{r,eval=FALSE}
+ncols <- 7
+
+for (s in 1:2) {
+  ratio_vals <- lambda_means_1[s, 1, ] / lambda_means_1[s, 2, ]  
+
+  cols <- brewer.pal(ncols, 'RdYlBu')[ncols:1]
+  tcuts <- quantile(ratio_vals, probs = 1:(ncols - 1) / ncols, na.rm = TRUE)
+  tcolb <- array(rep(ratio_vals, each = ncols - 1) > tcuts,
+                 dim = c(ncols - 1, length(ratio_vals)))
+  tcol <- apply(tcolb, 2, sum) + 1
+
+  filename <- paste0("lambda_ratio_bw_s", s, "_t1.png")
+
+  png(filename, width = 900, height = 300)
+  plot(nc, col = cols[tcol], border = "grey",
+       main = paste("Black / White Death Rate Ratio - Sex", s, "- Year 1"))
+  legend('right', inset = c(-.01, 0), xpd = TRUE,
+         legend = paste(
+           c('Below', round(tcuts[-(ncols - 1)], 2), 'Over'),
+           c(' ', rep(' - ', ncols - 2), ' '),
+           c(round(tcuts, 2), round(tcuts[ncols - 1], 2)), sep = ''),
+         fill = cols, title = 'Lambda Ratio (Black/White)',
+         bty = 'n', cex = 1.5, border = 'lightgray')
+  dev.off()
+}
+
+```
+
+Ratio map code for 1988
+```{r,eval=FALSE}
+ncols <- 7
+
+for (s in 1:2) {
+  ratio_vals <- lambda_means_10[s, 1, ] / lambda_means_10[s, 2, ]  
+
+  cols <- brewer.pal(ncols, 'RdYlBu')[ncols:1]
+  tcuts <- quantile(ratio_vals, probs = 1:(ncols - 1) / ncols, na.rm = TRUE)
+  tcolb <- array(rep(ratio_vals, each = ncols - 1) > tcuts,
+                 dim = c(ncols - 1, length(ratio_vals)))
+  tcol <- apply(tcolb, 2, sum) + 1
+
+  filename <- paste0("lambda_ratio_bw_s", s, "_t10.png")
+
+  png(filename, width = 900, height = 300)
+  plot(nc, col = cols[tcol], border = "grey",
+       main = paste("Black / White Death Rate Ratio - Sex", s, "- Year 10"))
+  legend('right', inset = c(-.01, 0), xpd = TRUE,
+         legend = paste(
+           c('Below', round(tcuts[-(ncols - 1)], 2), 'Over'),
+           c(' ', rep(' - ', ncols - 2), ' '),
+           c(round(tcuts, 2), round(tcuts[ncols - 1], 2)), sep = ''),
+         fill = cols, title = 'Lambda Ratio (Black/White)',
+         bty = 'n', cex = 1.5, border = 'lightgray')
+  dev.off()
+}
+
+```
+
+![Black/White Ratio of Heart Disease Death Rates for Women in 1979](lambda_ratio_bw_s1_t1.png)
+
+![Black/White Ratio of Heart Disease Death Rates for Men in 1979](lambda_ratio_bw_s2_t1.png)
+
+![Black/White Ratio of Heart Disease Death Rates for Women in 1988](lambda_ratio_bw_s1_t10.png)
+
+
+![Black/White Ratio of Heart Disease Death Rates for Men in 1988](lambda_ratio_bw_s2_t10.png)
+
+There is significant clustering in these ratios. The western half of the state has much higher ratios than the eastern half. This is more pronounced for men than for women. This pattern didn't change much between 1979 and 1988 but it appears to have become slightly less significant for women.
+
+\newpage
+
+## Problem 5
+
+Models that could be used to capture more complex trends over a longer study period include piecewise linear models, which could be useful if there are sharp changes in the trend, and polynomial regression models, which could be useful if the trend is smooth but nonlinear. The piecewise linear model would use the same priors and parameters for each piece, while the polynomial regression model would include additional $\beta$ parameters with noninformative normal priors similar to the existing $\beta$s.
+
+
+
+
