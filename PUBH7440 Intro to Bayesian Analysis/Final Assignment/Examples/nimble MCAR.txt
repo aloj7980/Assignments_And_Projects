@@ -1,0 +1,37 @@
+mcar.str <- nimbleCode({
+# likelihood
+
+for (g in 1:Ng) {
+  for (i in 1:Ns) {
+    y[i, g] ~ dpois(mu[i, g])
+    mu[i, g] <- n[i, g] * exp(theta[i, g])
+    theta[i, g] ~ dnorm(beta0[g] + z[i, g], tau2.inv[g])
+  }
+
+  beta0[g] ~ dflat()
+  tau2[g] <- 1 / tau2.inv[g]
+  tau2.inv[g] ~ dgamma(1, 1/100)
+  u[1:Ns, g] ~ dcar_normal(adj = adj[], num = num[], tau = 1, zero_mean = 1)
+}
+
+Prec[1:Ng, 1:Ng] ~ dwish(R[1:Ng, 1:Ng], Ng)
+G[1:Ng, 1:Ng] <- inverse(Prec[1:Ng, 1:Ng])
+Gchol[1:Ng, 1:Ng] <- t(chol(G[1:Ng, 1:Ng]))
+
+for (i in 1:Ns) {
+  z[i, 1:Ng] <- Gchol[1:Ng, 1:Ng] %*% u[i, 1:Ng]
+}
+
+sig2[1] <- G[1, 1]
+sig2[2] <- G[2, 2]
+sig2[3] <- G[3, 3]
+sig2[4] <- G[4, 4]
+sig2[5] <- G[5, 5]
+sig2[6] <- G[6, 6]
+
+rho[1] <- G[1, 2] / sqrt(sig2[1] * sig2[2])
+rho[2] <- G[2, 3] / sqrt(sig2[2] * sig2[3])
+rho[3] <- G[3, 4] / sqrt(sig2[3] * sig2[4])
+rho[4] <- G[4, 5] / sqrt(sig2[4] * sig2[5])
+rho[5] <- G[5, 6] / sqrt(sig2[5] * sig2[6])
+})

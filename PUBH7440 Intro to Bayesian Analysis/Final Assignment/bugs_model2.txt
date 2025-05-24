@@ -1,0 +1,73 @@
+model{
+  for (i in 1:N) {
+    Y[i] ~ dpois(nlambda[i])
+    nlambda[i] <- n[i] * lambda[i]
+    
+    eta[i] <- beta0[race[i], sex[i]] +
+              beta1[race[i], sex[i]] * (year[i] - 1) +
+              z[county[i], race[i], sex[i]] +
+              w[county[i], race[i], sex[i]] * (year[i] - 1)
+
+    log_lambda[i] ~ dnorm(eta[i], tau0[race[i], sex[i]])
+    lambda[i] <- exp(log_lambda[i])
+  }
+for(r in 1:Nr){ 
+    for(s in 1:Ng){ 
+      beta0[r,s] ~ dnorm(0,0.001)
+      beta1[r,s] ~ dnorm(0,0.001)
+      tau0[r, s] ~ dgamma(1,0.01)
+      tau.z[r, s] ~ dgamma(1,0.147)
+      tau.w[r, s] ~ dgamma(1,0.147)
+    }
+  }
+
+	# r = 1, s = 1
+z_group11[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[1,1])
+w_group11[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[1,1])
+for (i in 1:Ns) {
+  z[i,1,1] <- z_group11[i]
+  w[i,1,1] <- w_group11[i]
+}
+
+# r = 1, s = 2
+z_group12[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[1,2])
+w_group12[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[1,2])
+for (i in 1:Ns) {
+  z[i,1,2] <- z_group12[i]
+  w[i,1,2] <- w_group12[i]
+}
+
+# r = 2, s = 1
+z_group21[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[2,1])
+w_group21[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[2,1])
+for (i in 1:Ns) {
+  z[i,2,1] <- z_group21[i]
+  w[i,2,1] <- w_group21[i]
+}
+
+# r = 2, s = 2
+z_group22[1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[2,2])
+w_group22[1:Ns] ~ car.normal(adj[], weights[], num[], tau.w[2,2])
+for (i in 1:Ns) {
+  z[i,2,2] <- z_group22[i]
+  w[i,2,2] <- w_group22[i]
+}
+
+for (s in 1:2) {  
+	for (t in 1:10) {    
+		log_ratio[s, t] <- (beta0[1, s] - beta0[2, s]) + (beta1[1, s] - beta1[2, s]) * (t - 1)    
+		ratio_bw[s, t] <- exp(log_ratio[s, t])  
+	}
+}
+  for (k in 1:sumNumNeigh) {
+    weights[k] <- 1
+  }
+  junk <- county[1] + Ns + Ny  + sumNumNeigh
+}
+
+#inits
+list(beta0=structure(.Data=c(0,0,0,0),.Dim=c(2,2)), 
+  beta1=structure(.Data=c(0,0,0,0),.Dim=c(2,2)),
+  tau0  = structure(.Data = c(1,1,1,1), .Dim = c(2,2)),
+  tau.z = structure(.Data = c(1,1,1,1), .Dim = c(2,2)),
+  tau.w = structure(.Data = c(1,1,1,1), .Dim = c(2,2)))

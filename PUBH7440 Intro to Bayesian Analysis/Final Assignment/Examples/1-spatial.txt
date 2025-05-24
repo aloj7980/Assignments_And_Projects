@@ -1,0 +1,42 @@
+model{
+for(i in 1:Ns){
+  for(j in 1:Ag){
+    Y[i,j] ~ dpois(theta[i,j])
+    theta[i,j] <- n[i,j] * exp(lambda[i,j])
+    lambda[i,j] ~ dnorm(mu[i,j],tau[j])
+    mu[i,j] <- beta0[j] + Z[j,i]
+  }
+}
+
+for(j in 1:Ag){
+  Z[j,1:Ns] ~ car.normal(adj[], weights[], num[], tau.z[j])
+}
+
+###########
+#Use these for mapping
+for(i in 1:Ns){
+  elambda1[i] <- exp(lambda[i,1]) * 100000
+  elambda2[i] <- exp(lambda[i,2]) * 100000
+  elambda3[i] <- exp(lambda[i,3]) * 100000
+  elambda4[i] <- exp(lambda[i,4]) * 100000
+  elambda5[i] <- exp(lambda[i,5]) * 100000
+  elambda6[i] <- exp(lambda[i,6]) * 100000
+}
+
+for(k in 1:sumNumNeigh) {
+    weights[k] <- 1
+}
+
+for(j in 1:Ag){
+  beta0[j] ~ dflat()
+  tau.z[j] ~ dgamma(1,0.147)
+  tau[j] ~ dgamma(1,0.01)
+}
+
+}
+
+#############
+#inits
+list(beta0=c(0,0,0,0,0,0),
+tau.z=c(1,1,1,1,1,1),
+tau=c(1,1,1,1,1,1))
