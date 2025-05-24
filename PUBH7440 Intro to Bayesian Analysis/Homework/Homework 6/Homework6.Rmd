@@ -51,8 +51,9 @@ theta[4]: Median = 2.994 and 95% CI = [1.328,4.781]
 
 $\alpha$ and $\beta$ are defined as follows:
 
-`a <- (theta[3] - theta[1]) / theta[1]
-`b <- (theta[4] - theta[1]) / theta[1]
+$\alpha$ <- (theta[3] - theta[1]) / theta[1]
+
+$\beta$ <- (theta[4] - theta[1]) / theta[1]
 
 The same issue with loading initial values remains and was resolved by using gen inits. The results are:
 
