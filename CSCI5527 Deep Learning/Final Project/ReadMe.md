@@ -1,0 +1,1 @@
+My final project for this course was a literature review of the evolution of CNNs and their application to audio classification. I was primarily responsible for sections 3.1 through 3.5 as well as the absrtact and introduction.
